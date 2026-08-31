@@ -232,6 +232,10 @@ int main(int argc, char** argv) {
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 6L);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 4L);
+            curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
             if (method == "POST") {
@@ -253,12 +257,12 @@ int main(int argc, char** argv) {
             curl_easy_cleanup(curl);
 
             if (res != CURLE_OK) {
-                return "{\"error\":\"" + std::string(curl_easy_strerror(res)) + "\"}";
+                return "{\"__curl_error\":\"" + escapeJs(curl_easy_strerror(res)) + "\"}";
             }
 
             return responseData.empty() ? "{}" : responseData;
         } catch (const std::exception& e) {
-            return "{\"error\":\"" + std::string(e.what()) + "\"}";
+            return "{\"__curl_error\":\"" + escapeJs(e.what()) + "\"}";
         }
     });
 

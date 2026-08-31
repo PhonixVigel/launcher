@@ -51,12 +51,12 @@ let currentLightboxIndex = 0;
 async function apiFetch(endpoint, options = {}) {
   const tryMirrors = [CURRENT_API_BASE, ...KNOWN_MIRRORS.filter(m => m !== CURRENT_API_BASE)];
   
-  let lastError = null;
+  let lastNetworkError = null;
   for (const mirrorUrl of tryMirrors) {
     try {
       const fullUrl = `${mirrorUrl}${endpoint}`;
       let data = null;
-      let isSuccess = false;
+      let networkFailed = false;
 
       // Если лаунчер запущен в нативном C++/WebKit приложении, используем прямой libcurl
       if (window.nativeApiFetch) {
@@ -68,10 +68,10 @@ async function apiFetch(endpoint, options = {}) {
         });
         const resData = await window.nativeApiFetch(payload);
         data = (typeof resData === 'string') ? JSON.parse(resData) : resData;
-        if (data && !data.error) {
-          isSuccess = true;
-        } else if (data && data.status) {
-          isSuccess = true;
+        
+        if (data && data.__curl_error) {
+          networkFailed = true;
+          lastNetworkError = new Error(data.__curl_error);
         }
       } else {
         const controller = new AbortController();
@@ -80,12 +80,9 @@ async function apiFetch(endpoint, options = {}) {
         clearTimeout(timeoutId);
 
         data = await res.json().catch(() => ({}));
-        if (res.ok || (res.status >= 400 && res.status < 500)) {
-          isSuccess = true;
-        }
       }
 
-      if (isSuccess && data) {
+      if (!networkFailed && data) {
         if (CURRENT_API_BASE !== mirrorUrl) {
           CURRENT_API_BASE = mirrorUrl;
           localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
@@ -97,12 +94,12 @@ async function apiFetch(endpoint, options = {}) {
         return data;
       }
     } catch (e) {
-      lastError = e;
+      lastNetworkError = e;
       console.warn(`[FAILOVER] Узел ${mirrorUrl} недоступен, пробуем следующее зеркало...`, e);
     }
   }
 
-  throw new Error('Все зеркала API недоступны: ' + (lastError ? lastError.message : 'Timeout'));
+  throw new Error('Все зеркала API недоступны: ' + (lastNetworkError ? lastNetworkError.message : 'Сбой сети'));
 }
 
 function updateKnownMirrors(mirrorsList) {
