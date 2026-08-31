@@ -116,6 +116,16 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
       botLastError = '';
     });
 
+    discordClient.on('error', (err) => {
+      console.error('[DISCORD BOT ERROR]:', err.message);
+      botLastError = err.message;
+    });
+
+    discordClient.on('shardError', (err) => {
+      console.error('[DISCORD BOT SHARD ERROR]:', err.message);
+      botLastError = err.message;
+    });
+
     discordClient.on('interactionCreate', async (interaction) => {
       try {
         if (interaction.isChatInputCommand()) {
@@ -128,7 +138,10 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
       }
     });
 
-    await discordClient.login(currentBotToken);
+    // Безопасный логин с таймаутом 15 секунд
+    const loginPromise = discordClient.login(currentBotToken);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout (15000ms). Проверьте прокси или настройки сети.')), 15000));
+    await Promise.race([loginPromise, timeoutPromise]);
 
     // Регистрация слэш-команд
     try {

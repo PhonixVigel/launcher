@@ -75,10 +75,18 @@ app.get('/', (req, res) => {
   });
 });
 
+// Глобальные обработчики для предотвращения падения сервера при ошибках сети
+process.on('unhandledRejection', (reason) => {
+  console.error('[SERVER SAFETY] Unhandled Rejection перехвачен:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[SERVER SAFETY] Uncaught Exception перехвачен:', err);
+});
+
 // Запуск сервера
 async function startServer() {
   await getDb(); // Инициализация SQLite базы
-  await initDiscordBot(); // Запуск Discord бота для авторизации
 
   app.listen(PORT, () => {
     console.log(`===================================================`);
@@ -87,6 +95,11 @@ async function startServer() {
     console.log(`🎮 Player Launcher: http://localhost:${PORT}/player/`);
     console.log(`⚙️ Admin Launcher: http://localhost:${PORT}/admin/`);
     console.log(`===================================================`);
+
+    // Фоновый запуск Discord-бота (не блокирует веб-сервер)
+    initDiscordBot().catch((err) => {
+      console.warn('[DISCORD BOT] Фоновая ошибка инициализации:', err.message);
+    });
   });
 }
 
