@@ -156,19 +156,21 @@ int main(int argc, char** argv) {
         return "{}";
     });
 
-    // Открытие внешней ссылки в системном браузере (Safari / Chrome)
+    // Нативное открытие внешней ссылки
     g_webview->bind("nativeOpenUrl", [](const std::string& reqJson) -> std::string {
         try {
             std::string url = "";
-            if (!reqJson.empty()) {
-                if (reqJson.front() == '"' && reqJson.back() == '"') {
-                    url = reqJson.substr(1, reqJson.length() - 2);
-                } else {
-                    auto j = json::parse(reqJson);
-                    if (j.is_string()) url = j.get<std::string>();
-                    else if (j.contains("url")) url = j["url"].get<std::string>();
-                }
+            try {
+                auto j = json::parse(reqJson);
+                if (j.is_array() && !j.empty()) {
+                    if (j[0].is_string()) url = j[0].get<std::string>();
+                    else if (j[0].is_object()) url = j[0].value("url", "");
+                } else if (j.is_string()) url = j.get<std::string>();
+                else if (j.is_object()) url = j.value("url", "");
+            } catch (...) {
+                url = reqJson;
             }
+
             if (!url.empty()) {
 #if defined(__APPLE__)
                 NSString* nsUrlStr = [NSString stringWithUTF8String:url.c_str()];
@@ -187,17 +189,36 @@ int main(int argc, char** argv) {
         std::thread([](std::string params) {
             try {
                 std::string downloadUrl = "";
-                if (!params.empty()) {
-                    if (params.front() == '"' && params.back() == '"') {
-                        downloadUrl = params.substr(1, params.length() - 2);
-                    } else {
-                        auto j = json::parse(params);
-                        if (j.is_string()) downloadUrl = j.get<std::string>();
-                        else if (j.contains("url")) downloadUrl = j["url"].get<std::string>();
+                try {
+                    auto j = json::parse(params);
+                    if (j.is_array() && !j.empty()) {
+                        if (j[0].is_string()) {
+                            std::string s = j[0].get<std::string>();
+                            if (s.rfind("http", 0) == 0) downloadUrl = s;
+                            else {
+                                try {
+                                    auto inner = json::parse(s);
+                                    downloadUrl = inner.value("url", "");
+                                } catch (...) {
+                                    downloadUrl = s;
+                                }
+                            }
+                        } else if (j[0].is_object()) {
+                            downloadUrl = j[0].value("url", "");
+                        }
+                    } else if (j.is_object()) {
+                        downloadUrl = j.value("url", "");
+                    } else if (j.is_string()) {
+                        downloadUrl = j.get<std::string>();
                     }
+                } catch (...) {
+                    downloadUrl = params;
                 }
 
-                if (downloadUrl.empty()) return;
+                if (downloadUrl.empty()) {
+                    std::cerr << "[AutoUpdater] Empty download URL from params: " << params << std::endl;
+                    return;
+                }
 
                 std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
                 std::string destFile = homeDir + "/Downloads/VozduCraft-Update.dmg";
@@ -205,7 +226,7 @@ int main(int argc, char** argv) {
                 destFile = homeDir + "/Downloads/VozduCraft-Update.zip";
 #endif
 
-                std::cout << "[AutoUpdater] Starting download from: " << downloadUrl << " to: " << destFile << std::endl;
+                std::cout << "[AutoUpdater] Downloading update from: " << downloadUrl << " to: " << destFile << std::endl;
 
                 Downloader dl;
                 bool ok = dl.downloadFile(downloadUrl, destFile, [](int64_t dlNow, int64_t dlTotal) {

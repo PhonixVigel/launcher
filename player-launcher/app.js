@@ -304,7 +304,7 @@ function showUpdateModal(data) {
       };
 
       if (window.nativeAutoUpdateLauncher) {
-        window.nativeAutoUpdateLauncher(JSON.stringify({ url: downloadUrl, version: data.latestVersion }));
+        window.nativeAutoUpdateLauncher(downloadUrl);
       } else if (window.nativeOpenUrl) {
         window.nativeOpenUrl(downloadUrl);
       } else {
