@@ -144,4 +144,49 @@ router.get('/check-update', async (req: Request, res: Response) => {
   }
 });
 
+// 4. POST /api/v1/launcher/session-ticket - Создание билета запуска лаунчером
+router.post('/session-ticket', async (req: Request, res: Response) => {
+  try {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Username required' });
+    const cleanNick = username.trim();
+    const db = await getDb();
+
+    const crypto = await import('crypto');
+    const ticketId = 'VOZDUCRAFT_TICKET_' + crypto.randomBytes(16).toString('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 минут на вход
+
+    await db.run(
+      'INSERT INTO launcher_tickets (id, username, ip_address, expires_at) VALUES (?, ?, ?, ?)',
+      [ticketId, cleanNick, req.ip || '', expiresAt]
+    );
+
+    return res.json({ success: true, ticket: ticketId, expiresInSeconds: 300 });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to create session ticket' });
+  }
+});
+
+// 5. GET /api/v1/launcher/verify-ticket - Проверка сервером Minecraft, что вход совершен с официального лаунчера
+router.get('/verify-ticket', async (req: Request, res: Response) => {
+  try {
+    const username = (req.query.username as string || '').trim();
+    if (!username) return res.json({ valid: false, reason: 'Username required' });
+
+    const db = await getDb();
+    const ticket = await db.get(
+      "SELECT * FROM launcher_tickets WHERE LOWER(username) = LOWER(?) AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1",
+      [username]
+    );
+
+    if (!ticket) {
+      return res.json({ valid: false, reason: 'No active launcher ticket' });
+    }
+
+    return res.json({ valid: true, username: ticket.username, ticketId: ticket.id });
+  } catch (error) {
+    return res.json({ valid: true }); // fail-safe
+  }
+});
+
 export default router;

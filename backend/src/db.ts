@@ -138,6 +138,18 @@ async function initDbSchema(db: Database) {
     );
   `);
 
+  // 6.1. Таблица одноразовых сессионных билетов запуска игры официальным лаунчером
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS launcher_tickets (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      ip_address TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      used INTEGER DEFAULT 0
+    );
+  `);
+
   // 7. Журнал аудита действий (для админки и будущей панели модераторов)
   await db.exec(`
     CREATE TABLE IF NOT EXISTS audit_logs (

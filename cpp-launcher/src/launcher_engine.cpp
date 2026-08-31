@@ -299,8 +299,42 @@ bool LauncherEngine::syncModpackFiles(const LaunchConfig& config,
                 progressCallback(pct, "Синхронизация мода: " + name);
             });
         }
-    } catch (...) {}
 
+        // 🛡️ АНТИЧИТ: Очистка папки mods от любых посторонних/читерских jar-файлов
+        std::unordered_set<std::string> allowedJarNames;
+        auto collectAllowed = [&](const json& filesArray, bool isOptional) {
+            if (!filesArray.is_array()) return;
+            for (const auto& fileItem : filesArray) {
+                std::string relPath = fileItem.value("filepath", "");
+                if (isOptional) {
+                    bool isSelected = false;
+                    for (const auto& opt : config.optionalMods) {
+                        if (opt == relPath) { isSelected = true; break; }
+                    }
+                    if (!isSelected) continue;
+                }
+                if (!relPath.empty()) {
+                    allowedJarNames.insert(fs::path(relPath).filename().string());
+                }
+            }
+        };
+
+        if (manifest.contains("files")) collectAllowed(manifest["files"], false);
+        if (manifest.contains("optionalFiles")) collectAllowed(manifest["optionalFiles"], true);
+
+        if (!allowedJarNames.empty() && fs::exists(modsDir)) {
+            for (const auto& entry : fs::directory_iterator(modsDir)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".jar") {
+                    std::string fName = entry.path().filename().string();
+                    if (allowedJarNames.find(fName) == allowedJarNames.end()) {
+                        std::cout << "[Security] 🛡️ Удален посторонний мод: " << fName << std::endl;
+                        try { fs::remove(entry.path()); } catch (...) {}
+                    }
+                }
+            }
+        }
+    } catch (...) {}
+    return true;
 }
 
 bool LauncherEngine::launchGame(const LaunchConfig& config,
