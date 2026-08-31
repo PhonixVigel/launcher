@@ -85,8 +85,8 @@ bool Downloader::downloadFile(const std::string& url,
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "VozduCraft-Launcher/1.0 (PrismEngine-CPP)");
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
     if (progressCallback) {
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);

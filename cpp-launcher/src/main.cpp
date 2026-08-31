@@ -205,9 +205,11 @@ int main(int argc, char** argv) {
                 destFile = homeDir + "/Downloads/VozduCraft-Update.zip";
 #endif
 
+                std::cout << "[AutoUpdater] Starting download from: " << downloadUrl << " to: " << destFile << std::endl;
+
                 Downloader dl;
                 bool ok = dl.downloadFile(downloadUrl, destFile, [](int64_t dlNow, int64_t dlTotal) {
-                    if (dlTotal > 0 && g_webview) {
+                    if (dlTotal > 0) {
                         int pct = static_cast<int>((static_cast<double>(dlNow) / dlTotal) * 100);
                         double mbNow = static_cast<double>(dlNow) / (1024.0 * 1024.0);
                         double mbTotal = static_cast<double>(dlTotal) / (1024.0 * 1024.0);
@@ -215,13 +217,26 @@ int main(int argc, char** argv) {
                                          std::to_string(pct) + ", " + 
                                          std::to_string(mbNow) + ", " + 
                                          std::to_string(mbTotal) + ");";
-                        g_webview->eval(js);
+#if defined(__APPLE__)
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            if (g_webview) g_webview->eval(js);
+                        });
+#else
+                        if (g_webview) g_webview->eval(js);
+#endif
                     }
                 });
 
-                if (ok && g_webview) {
+                if (ok) {
+                    std::cout << "[AutoUpdater] Download complete, launching: " << destFile << std::endl;
                     std::string js = "if(window.onLauncherUpdateComplete) window.onLauncherUpdateComplete();";
-                    g_webview->eval(js);
+#if defined(__APPLE__)
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (g_webview) g_webview->eval(js);
+                    });
+#else
+                    if (g_webview) g_webview->eval(js);
+#endif
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(1200));
 
@@ -233,8 +248,12 @@ int main(int argc, char** argv) {
                     ShellExecuteA(NULL, "open", destFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
                     exit(0);
 #endif
+                } else {
+                    std::cerr << "[AutoUpdater] Download failed for URL: " << downloadUrl << std::endl;
                 }
-            } catch (...) {}
+            } catch (const std::exception& e) {
+                std::cerr << "[AutoUpdater] Exception: " << e.what() << std::endl;
+            }
         }, reqJson).detach();
         return "{\"status\":\"started\"}";
     });
