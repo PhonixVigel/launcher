@@ -160,9 +160,9 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
       }
     });
 
-    // Безопасный логин с таймаутом 20 секунд
+    // Безопасный логин с таймаутом 30 секунд
     const loginPromise = discordClient.login(currentBotToken);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout (20000ms). Проверьте прокси или настройки сети.')), 20000));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout (30000ms). Проверьте прокси или настройки сети.')), 30000));
     await Promise.race([loginPromise, timeoutPromise]);
 
     // Регистрация слэш-команд
