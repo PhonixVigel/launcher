@@ -8,6 +8,7 @@ import manifestRoutes from './routes/manifest';
 import adminRoutes from './routes/admin';
 import launcherRoutes from './routes/launcher';
 import { getDb } from './db';
+import { initDiscordBot } from './discordBot';
 
 dotenv.config();
 
@@ -77,6 +78,8 @@ app.get('/', (req, res) => {
 // Запуск сервера
 async function startServer() {
   await getDb(); // Инициализация SQLite базы
+  await initDiscordBot(); // Запуск Discord бота для авторизации
+
   app.listen(PORT, () => {
     console.log(`===================================================`);
     console.log(`🚀 VozduCraft Backend API запущен на порту ${PORT}`);

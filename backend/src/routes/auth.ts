@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getDb } from '../db';
+import { sendDiscordLoginRequest } from '../discordBot';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'vozducraft_secret_key_2026_super_secure';
@@ -320,6 +321,13 @@ router.post('/discord/request-login', async (req: Request, res: Response) => {
       'INSERT INTO connection_stats (username, event_type, details, ip_address, hwid) VALUES (?, ?, ?, ?, ?)',
       [cleanNick, 'DISCORD_LOGIN_REQUEST', `Запрос авторизации в лаунчер (ID: ${requestId})`, clientIp, clientHwid]
     );
+
+    // Отправка интерактивного сообщения в Discord
+    const dmResult = await sendDiscordLoginRequest(cleanNick, clientIp, requestId);
+    if (!dmResult.success) {
+      await db.run('DELETE FROM discord_auth_requests WHERE id = ?', [requestId]);
+      return res.status(400).json({ error: dmResult.error });
+    }
 
     return res.json({
       success: true,
