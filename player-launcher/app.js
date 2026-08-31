@@ -288,11 +288,19 @@ function showUpdateModal(data) {
       if (progressZone) progressZone.classList.remove('hidden');
       if (statusText) statusText.textContent = 'Скачивание обновления...';
 
+      const logDebug = (msg) => {
+        console.log('[UpdaterDebug]', msg);
+        if (detailsText) detailsText.textContent = msg;
+      };
+
+      logDebug(`[1/3] URL: ${downloadUrl}`);
+      logDebug(`[2/3] Native: ${typeof window.nativeAutoUpdateLauncher}, OpenUrl: ${typeof window.nativeOpenUrl}`);
+
       // Обработчик живого прогресса от нативного движка
       window.onLauncherUpdateProgress = (pct, mbNow, mbTotal) => {
         if (progressBar) progressBar.style.width = `${pct}%`;
         if (percentText) percentText.textContent = `${pct}%`;
-        if (detailsText) detailsText.textContent = `${mbNow.toFixed(1)} МБ из ${mbTotal.toFixed(1)} МБ`;
+        logDebug(`[Загрузка] ${pct}% (${mbNow.toFixed(1)} / ${mbTotal.toFixed(1)} МБ)`);
       };
 
       // Обработчик завершения
@@ -300,14 +308,27 @@ function showUpdateModal(data) {
         if (progressBar) progressBar.style.width = '100%';
         if (percentText) percentText.textContent = '100%';
         if (statusText) statusText.textContent = '✅ Запуск новой версии...';
-        if (detailsText) detailsText.textContent = 'Установка завершена, лаунчер перезапускается...';
+        logDebug('✅ Установка завершена, открываем установщик...');
       };
 
-      if (window.nativeAutoUpdateLauncher) {
-        window.nativeAutoUpdateLauncher(downloadUrl);
-      } else if (window.nativeOpenUrl) {
+      // Обработчик ошибки
+      window.onLauncherUpdateError = (errMsg) => {
+        if (statusText) statusText.textContent = '❌ Ошибка загрузки';
+        logDebug(`Ошибка: ${errMsg}`);
+      };
+
+      if (typeof window.nativeAutoUpdateLauncher === 'function') {
+        logDebug('[3/3] Вызов nativeAutoUpdateLauncher...');
+        try {
+          window.nativeAutoUpdateLauncher(downloadUrl);
+        } catch (err) {
+          logDebug(`Исключение JS: ${err.message}`);
+        }
+      } else if (typeof window.nativeOpenUrl === 'function') {
+        logDebug('[3/3] Вызов nativeOpenUrl...');
         window.nativeOpenUrl(downloadUrl);
       } else {
+        logDebug('[3/3] Fallback в браузер...');
         window.open(downloadUrl, '_blank');
       }
     };

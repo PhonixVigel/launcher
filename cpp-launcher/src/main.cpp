@@ -228,10 +228,20 @@ int main(int argc, char** argv) {
 
                 std::cout << "[AutoUpdater] Downloading update from: " << downloadUrl << " to: " << destFile << std::endl;
 
+                std::string jsStart = "if(window.onLauncherUpdateProgress) window.onLauncherUpdateProgress(1, 0.1, 15.4);";
+#if defined(__APPLE__)
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (g_webview) g_webview->eval(jsStart);
+                });
+#else
+                if (g_webview) g_webview->eval(jsStart);
+#endif
+
                 Downloader dl;
                 bool ok = dl.downloadFile(downloadUrl, destFile, [](int64_t dlNow, int64_t dlTotal) {
                     if (dlTotal > 0) {
                         int pct = static_cast<int>((static_cast<double>(dlNow) / dlTotal) * 100);
+                        if (pct < 1) pct = 1;
                         double mbNow = static_cast<double>(dlNow) / (1024.0 * 1024.0);
                         double mbTotal = static_cast<double>(dlTotal) / (1024.0 * 1024.0);
                         std::string js = "if(window.onLauncherUpdateProgress) window.onLauncherUpdateProgress(" + 
@@ -266,11 +276,19 @@ int main(int argc, char** argv) {
                     system(cmd.c_str());
                     exit(0);
 #elif defined(_WIN32)
-                    ShellExecuteA(NULL, "open", destFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                    ShellExecuteA(NULL, "open", destFile.c_str(), NULL, NULL, SW_SHNORMAL);
                     exit(0);
 #endif
                 } else {
                     std::cerr << "[AutoUpdater] Download failed for URL: " << downloadUrl << std::endl;
+                    std::string errJs = "if(window.onLauncherUpdateError) window.onLauncherUpdateError('Не удалось скачать файл обновления. Проверьте сеть или ссылку.');";
+#if defined(__APPLE__)
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (g_webview) g_webview->eval(errJs);
+                    });
+#else
+                    if (g_webview) g_webview->eval(errJs);
+#endif
                 }
             } catch (const std::exception& e) {
                 std::cerr << "[AutoUpdater] Exception: " << e.what() << std::endl;
