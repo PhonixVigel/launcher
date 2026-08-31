@@ -178,6 +178,10 @@ router.get('/verify-session', async (req: Request, res: Response) => {
       isAdminBypass: Boolean(session.is_admin_bypass)
     });
   } catch (error) {
+    return res.status(500).json({ valid: false, error: 'Ошибка проверки сессии' });
+  }
+});
+
 // 4. Смена пароля администратора / пользователя
 router.post('/change-password', async (req: Request, res: Response) => {
   try {
