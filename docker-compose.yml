@@ -1,10 +1,22 @@
 services:
+  xray-proxy:
+    image: teddysun/xray:latest
+    container_name: vozducraft-xray-proxy
+    restart: unless-stopped
+    volumes:
+      - ./xray-config.json:/etc/xray/config.json
+    ports:
+      - "10808:10808"
+      - "10809:10809"
+
   vozducraft-backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: vozducraft-master-api
     restart: unless-stopped
+    depends_on:
+      - xray-proxy
     ports:
       - "3000:3000"
     environment:
@@ -13,6 +25,7 @@ services:
       - DATABASE_PATH=/app/data/vozducraft.db
       - JWT_SECRET=VOZDUCRAFT_SUPER_SECURE_JWT_SECRET_2026
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_PROXY=http://xray-proxy:10809
     volumes:
       # Постоянное хранение базы данных SQLite
       - ./data:/app/data
