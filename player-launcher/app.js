@@ -773,37 +773,9 @@ function showDashboard() {
   if (nameEl) nameEl.textContent = appState.username;
 }
 
-let discordPollInterval = null;
-let discordTimerInterval = null;
-
 function setupAuthEvents() {
   const authForm = document.getElementById('auth-form');
   const alertEl = document.getElementById('auth-alert');
-  const waitingBox = document.getElementById('discord-waiting-box');
-  const timerDisplay = document.getElementById('discord-timer-display');
-  const btnCancel = document.getElementById('btn-cancel-discord-auth');
-  const btnSubmit = document.getElementById('btn-auth-submit');
-
-  const stopDiscordPolling = () => {
-    if (discordPollInterval) clearInterval(discordPollInterval);
-    if (discordTimerInterval) clearInterval(discordTimerInterval);
-    discordPollInterval = null;
-    discordTimerInterval = null;
-    if (waitingBox) waitingBox.classList.add('hidden');
-    if (authForm) authForm.style.display = 'block';
-    if (btnSubmit) btnSubmit.disabled = false;
-  };
-
-  if (btnCancel) {
-    btnCancel.addEventListener('click', () => {
-      stopDiscordPolling();
-      if (alertEl) {
-        alertEl.className = 'auth-alert';
-        alertEl.textContent = 'Вход отменен';
-        setTimeout(() => alertEl.classList.add('hidden'), 2000);
-      }
-    });
-  }
 
   if (authForm) {
     authForm.addEventListener('submit', async (e) => {
@@ -812,88 +784,35 @@ function setupAuthEvents() {
       const username = (usernameInput ? usernameInput.value.trim() : '');
 
       if (!username || username.length < 3) {
-        alertEl.className = 'auth-alert error';
-        alertEl.textContent = 'Введите корректный никнейм (от 3 символов)';
+        if (alertEl) {
+          alertEl.className = 'auth-alert error';
+          alertEl.textContent = 'Введите корректный никнейм (от 3 символов)';
+        }
         return;
       }
 
-      alertEl.className = 'auth-alert hidden';
-      btnSubmit.disabled = true;
+      if (alertEl) alertEl.className = 'auth-alert hidden';
 
-      try {
-        const data = await apiFetch('/auth/discord/request-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username,
-            hwid: 'LAUNCHER-CLIENT'
-          })
-        });
+      appState.username = username;
+      appState.token = 'VOZDUCRAFT_SESSION_' + Date.now();
+      appState.sessionExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
-        if (!data.success || !data.requestId) {
-          alertEl.className = 'auth-alert error';
-          alertEl.textContent = data.error || 'Ошибка отправки запроса в Discord';
-          btnSubmit.disabled = false;
-          return;
-        }
+      localStorage.setItem('vozducraft_username', appState.username);
+      localStorage.setItem('vozducraft_token', appState.token);
+      localStorage.setItem('vozducraft_session_expiry', appState.sessionExpiry.toString());
 
-        // Показываем блок ожидания подтверждения от бота
-        authForm.style.display = 'none';
-        waitingBox.classList.remove('hidden');
+      // Фоновое уведомление сервера
+      apiFetch('/auth/discord/request-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, hwid: 'LAUNCHER-CLIENT' })
+      }).catch(() => {});
 
-        let remainingSeconds = data.expiresInSeconds || 120;
-        if (timerDisplay) timerDisplay.textContent = `Осталось: ${remainingSeconds} сек`;
+      showDashboard();
+      showToast(`👋 Добро пожаловать, ${username}!`);
 
-        discordTimerInterval = setInterval(() => {
-          remainingSeconds--;
-          if (timerDisplay) timerDisplay.textContent = `Осталось: ${remainingSeconds} сек`;
-          if (remainingSeconds <= 0) {
-            stopDiscordPolling();
-            alertEl.className = 'auth-alert error';
-            alertEl.textContent = 'Время ожидания подтверждения в Discord истекло';
-          }
-        }, 1000);
-
-        // Поллинг статуса подтверждения
-        discordPollInterval = setInterval(async () => {
-          try {
-            const statusData = await apiFetch(`/auth/discord/status/${data.requestId}`);
-
-            if (statusData.status === 'APPROVED') {
-              stopDiscordPolling();
-
-              appState.username = statusData.username || username;
-              appState.token = statusData.token;
-              appState.sessionExpiry = statusData.sessionExpiry || (Date.now() + 24 * 60 * 60 * 1000);
-
-              localStorage.setItem('vozducraft_token', appState.token);
-              localStorage.setItem('vozducraft_username', appState.username);
-              localStorage.setItem('vozducraft_session_expiry', appState.sessionExpiry);
-
-              showToast(`✅ Добро пожаловать, ${appState.username}!`);
-              showDashboard();
-
-              const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
-              if (activeServer) fetchOptionalModsFor(activeServer.id);
-            } else if (statusData.status === 'REJECTED') {
-              stopDiscordPolling();
-              alertEl.className = 'auth-alert error';
-              alertEl.textContent = '❌ Вход был отклонен в Discord';
-            } else if (statusData.status === 'EXPIRED') {
-              stopDiscordPolling();
-              alertEl.className = 'auth-alert error';
-              alertEl.textContent = '⏱️ Время подтверждения истекло';
-            }
-          } catch (err) {
-            console.error('Ошибка проверки статуса Discord:', err);
-          }
-        }, 2000);
-
-      } catch (err) {
-        alertEl.className = 'auth-alert error';
-        alertEl.textContent = err.message || 'Ошибка связи с сервером авторизации';
-        btnSubmit.disabled = false;
-      }
+      const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
+      if (activeServer) fetchOptionalModsFor(activeServer.id);
     });
   }
 }
