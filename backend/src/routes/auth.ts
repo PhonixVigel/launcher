@@ -440,4 +440,20 @@ router.post('/discord/callback', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/auth/discord/queue - Очередь активных запросов на вход для мода на сервере Minecraft
+router.get('/discord/queue', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    const requests = await db.all(`
+      SELECT id, username, ip_address, expires_at 
+      FROM discord_auth_requests 
+      WHERE status = 'PENDING' AND expires_at > datetime('now')
+      ORDER BY created_at ASC
+    `);
+    return res.json(requests);
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения очереди' });
+  }
+});
+
 export default router;
