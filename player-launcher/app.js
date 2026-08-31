@@ -202,6 +202,8 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
+const LAUNCHER_CURRENT_VERSION = '3.0.0';
+
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();
   setupWindowControls();
@@ -212,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDownloadListener();
   setupLightboxEvents();
   loadServerCarousel();
+  checkForLauncherUpdates();
 
   setInterval(() => {
     if (appState.servers.length > 0) {
@@ -228,6 +231,63 @@ document.addEventListener('DOMContentLoaded', () => {
     showAuth();
   }
 });
+
+// Проверка и показ окна обновления лаунчера
+async function checkForLauncherUpdates() {
+  try {
+    const data = await apiFetch('/launcher/check-update');
+    if (!data || !data.latestVersion) return;
+
+    if (data.latestVersion !== LAUNCHER_CURRENT_VERSION && isNewerVersion(data.latestVersion, LAUNCHER_CURRENT_VERSION)) {
+      showUpdateModal(data);
+    }
+  } catch (err) {
+    console.warn('Update check failed:', err);
+  }
+}
+
+function isNewerVersion(remote, local) {
+  const r = remote.split('.').map(n => parseInt(n, 10) || 0);
+  const l = local.split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(r.length, l.length); i++) {
+    const rv = r[i] || 0;
+    const lv = l[i] || 0;
+    if (rv > lv) return true;
+    if (rv < lv) return false;
+  }
+  return false;
+}
+
+function showUpdateModal(data) {
+  const modal = document.getElementById('modal-update-launcher');
+  const badge = document.getElementById('update-version-badge');
+  const notes = document.getElementById('update-release-notes');
+  const btnDownload = document.getElementById('btn-download-update');
+  const btnClose = document.getElementById('btn-close-update-modal');
+
+  if (!modal) return;
+
+  if (badge) badge.textContent = `Новая версия: v${data.latestVersion} (текущая: v${LAUNCHER_CURRENT_VERSION})`;
+  if (notes) notes.textContent = data.releaseNotes || 'Улучшена стабильность и добавлены обновления безопасности.';
+
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const downloadUrl = isMac ? (data.macDownloadUrl || data.downloadUrl) : data.downloadUrl;
+
+  if (btnDownload) {
+    btnDownload.href = downloadUrl;
+  }
+
+  if (btnClose) {
+    if (data.isMandatory) {
+      btnClose.style.display = 'none';
+    } else {
+      btnClose.style.display = 'inline-block';
+      btnClose.onclick = () => modal.classList.add('hidden');
+    }
+  }
+
+  modal.classList.remove('hidden');
+}
 
 // ----------------------------------------------------
 // 3. УПРАВЛЕНИЕ ОКНОМ И ПЕРЕТАСКИВАНИЕ (DRAG)
