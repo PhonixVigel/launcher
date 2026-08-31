@@ -1,0 +1,348 @@
+JVM info: Eclipse Adoptium - 21.0.2 - 21.0.2+13-LTS
+java.net.preferIPv4Stack=true
+Current Time: 04/08/2026 13:15:00
+Host: maven.neoforged.net [212.188.77.148]
+Host: libraries.minecraft.net [150.171.110.56]
+Host: launchermeta.mojang.com [150.171.110.56]
+Host: piston-meta.mojang.com [150.171.110.56]
+Host: sessionserver.mojang.com [150.171.110.52]
+Found java version 21.0.2
+Target Directory: /Users/maksim/.vozducraft
+Extracting json
+Considering minecraft client jar
+Downloading libraries
+Found 0 additional library directories
+Considering library net.neoforged.fancymodloader:earlydisplay:4.0.42
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/fancymodloader/earlydisplay/4.0.42/earlydisplay-4.0.42.jar
+java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:278)
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:304)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:346)
+	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:796)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:1099)
+	at java.base/sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:489)
+	at java.base/sun.security.ssl.SSLSocketInputRecord.readHeader(SSLSocketInputRecord.java:483)
+	at java.base/sun.security.ssl.SSLSocketInputRecord.decode(SSLSocketInputRecord.java:160)
+	at java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:111)
+	at java.base/sun.security.ssl.SSLSocketImpl.decode(SSLSocketImpl.java:1506)
+	at java.base/sun.security.ssl.SSLSocketImpl.readHandshakeRecord(SSLSocketImpl.java:1421)
+	at java.base/sun.security.ssl.SSLSocketImpl.startHandshake(SSLSocketImpl.java:455)
+	at java.base/sun.security.ssl.SSLSocketImpl.startHandshake(SSLSocketImpl.java:426)
+	at java.base/sun.net.www.protocol.https.HttpsClient.afterConnect(HttpsClient.java:586)
+	at java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:187)
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1675)
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1599)
+	at java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:531)
+	at java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getResponseCode(HttpsURLConnectionImpl.java:307)
+	at net.minecraftforge.installer.DownloadUtils.getConnection(DownloadUtils.java:128)
+	at net.minecraftforge.installer.Downloader.download(Downloader.java:120)
+	at net.minecraftforge.installer.DownloadUtils.downloadLibrary(DownloadUtils.java:80)
+	at net.minecraftforge.installer.actions.Action.downloadLibraries(Action.java:86)
+	at net.minecraftforge.installer.actions.ClientInstall.run(ClientInstall.java:113)
+	at net.minecraftforge.installer.SimpleInstaller.main(SimpleInstaller.java:174)
+Considering library net.neoforged.fancymodloader:loader:4.0.42
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/fancymodloader/loader/4.0.42/loader-4.0.42.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged.accesstransformers:at-modlauncher:10.0.1
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/accesstransformers/at-modlauncher/10.0.1/at-modlauncher-10.0.1.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:accesstransformers:10.0.1
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/accesstransformers/10.0.1/accesstransformers-10.0.1.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:bus:8.0.5
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/bus/8.0.5/bus-8.0.5.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:coremods:7.0.3
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/coremods/7.0.3/coremods-7.0.3.jar
+	Download completed: Checksum validated.
+Considering library cpw.mods:modlauncher:11.0.5
+Downloading library from https://maven.neoforged.net/releases/cpw/mods/modlauncher/11.0.5/modlauncher-11.0.5.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:mergetool:2.0.0:api
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/mergetool/2.0.0/mergetool-2.0.0-api.jar
+	Download completed: Checksum validated.
+Considering library com.electronwill.night-config:toml:3.8.3
+Downloading library from https://maven.neoforged.net/releases/com/electronwill/night-config/toml/3.8.3/toml-3.8.3.jar
+	Download completed: Checksum validated.
+Considering library com.electronwill.night-config:core:3.8.3
+Downloading library from https://maven.neoforged.net/releases/com/electronwill/night-config/core/3.8.3/core-3.8.3.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:JarJarSelector:0.4.1
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/JarJarSelector/0.4.1/JarJarSelector-0.4.1.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:JarJarMetadata:0.4.1
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/JarJarMetadata/0.4.1/JarJarMetadata-0.4.1.jar
+	Download completed: Checksum validated.
+Considering library org.apache.maven:maven-artifact:3.8.5
+Downloading library from https://maven.neoforged.net/releases/org/apache/maven/maven-artifact/3.8.5/maven-artifact-3.8.5.jar
+	Download completed: Checksum validated.
+Considering library net.jodah:typetools:0.6.3
+Downloading library from https://maven.neoforged.net/releases/net/jodah/typetools/0.6.3/typetools-0.6.3.jar
+	Download completed: Checksum validated.
+Considering library net.minecrell:terminalconsoleappender:1.3.0
+Downloading library from https://maven.neoforged.net/releases/net/minecrell/terminalconsoleappender/1.3.0/terminalconsoleappender-1.3.0.jar
+	Download completed: Checksum validated.
+Considering library net.fabricmc:sponge-mixin:0.15.2+mixin.0.8.7
+Downloading library from https://maven.neoforged.net/releases/net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/sponge-mixin-0.15.2+mixin.0.8.7.jar
+	Download completed: Checksum validated.
+Considering library org.openjdk.nashorn:nashorn-core:15.4
+Downloading library from https://maven.neoforged.net/releases/org/openjdk/nashorn/nashorn-core/15.4/nashorn-core-15.4.jar
+	Download completed: Checksum validated.
+Considering library org.apache.commons:commons-lang3:3.14.0
+Downloading library from https://libraries.minecraft.net/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar
+	Download completed: Checksum validated.
+Considering library cpw.mods:bootstraplauncher:2.0.2
+Downloading library from https://maven.neoforged.net/releases/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar
+	Download completed: Checksum validated.
+Considering library cpw.mods:securejarhandler:3.0.8
+Downloading library from https://maven.neoforged.net/releases/cpw/mods/securejarhandler/3.0.8/securejarhandler-3.0.8.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-commons:9.8
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-commons/9.8/asm-commons-9.8.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-util:9.8
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-util/9.8/asm-util-9.8.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-analysis:9.8
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-analysis/9.8/asm-analysis-9.8.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-tree:9.8
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-tree/9.8/asm-tree-9.8.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm:9.8
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm/9.8/asm-9.8.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:JarJarFileSystems:0.4.1
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/JarJarFileSystems/0.4.1/JarJarFileSystems-0.4.1.jar
+	Download completed: Checksum validated.
+Considering library net.sf.jopt-simple:jopt-simple:5.0.4
+Downloading library from https://libraries.minecraft.net/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar
+	Download completed: Checksum validated.
+Considering library org.slf4j:slf4j-api:2.0.9
+Downloading library from https://libraries.minecraft.net/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar
+	Download completed: Checksum validated.
+Considering library org.antlr:antlr4-runtime:4.13.1
+Downloading library from https://maven.neoforged.net/releases/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar
+	Download completed: Checksum validated.
+Considering library com.mojang:logging:1.2.7
+Downloading library from https://libraries.minecraft.net/com/mojang/logging/1.2.7/logging-1.2.7.jar
+	Download completed: Checksum validated.
+Considering library org.apache.logging.log4j:log4j-slf4j2-impl:2.22.1
+Downloading library from https://libraries.minecraft.net/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar
+	Download completed: Checksum validated.
+Considering library org.apache.logging.log4j:log4j-core:2.22.1
+Downloading library from https://libraries.minecraft.net/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar
+	Download completed: Checksum validated.
+Considering library org.apache.logging.log4j:log4j-api:2.22.1
+Downloading library from https://libraries.minecraft.net/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar
+	Download completed: Checksum validated.
+Considering library org.jline:jline-reader:3.20.0
+Downloading library from https://maven.neoforged.net/releases/org/jline/jline-reader/3.20.0/jline-reader-3.20.0.jar
+	Download completed: Checksum validated.
+Considering library org.jline:jline-terminal:3.20.0
+Downloading library from https://maven.neoforged.net/releases/org/jline/jline-terminal/3.20.0/jline-terminal-3.20.0.jar
+	Download completed: Checksum validated.
+Considering library commons-io:commons-io:2.15.1
+Downloading library from https://libraries.minecraft.net/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar
+	Download completed: Checksum validated.
+Considering library net.minecraftforge:srgutils:0.4.15
+Downloading library from https://maven.neoforged.net/releases/net/minecraftforge/srgutils/0.4.15/srgutils-0.4.15.jar
+	Download completed: Checksum validated.
+Considering library com.google.guava:guava:32.1.2-jre
+Downloading library from https://libraries.minecraft.net/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar
+	Download completed: Checksum validated.
+Considering library com.google.guava:failureaccess:1.0.1
+Downloading library from https://libraries.minecraft.net/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar
+	Download completed: Checksum validated.
+Considering library com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+Downloading library from https://libraries.minecraft.net/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar
+	Download completed: Checksum validated.
+Considering library com.google.code.findbugs:jsr305:3.0.2
+Downloading library from https://libraries.minecraft.net/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar
+	Download completed: Checksum validated.
+Considering library org.checkerframework:checker-qual:3.33.0
+Downloading library from https://libraries.minecraft.net/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar
+	Download completed: Checksum validated.
+Considering library com.google.errorprone:error_prone_annotations:2.18.0
+Downloading library from https://libraries.minecraft.net/com/google/errorprone/error_prone_annotations/2.18.0/error_prone_annotations-2.18.0.jar
+	Download completed: Checksum validated.
+Considering library com.google.j2objc:j2objc-annotations:2.8
+Downloading library from https://libraries.minecraft.net/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar
+	Download completed: Checksum validated.
+Considering library com.google.code.gson:gson:2.10.1
+Downloading library from https://libraries.minecraft.net/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar
+	Download completed: Checksum validated.
+Considering library org.codehaus.plexus:plexus-utils:3.3.0
+Downloading library from https://maven.neoforged.net/releases/org/codehaus/plexus/plexus-utils/3.3.0/plexus-utils-3.3.0.jar
+	Download completed: Checksum validated.
+Considering library com.machinezoo.noexception:noexception:1.7.1
+Downloading library from https://maven.neoforged.net/releases/com/machinezoo/noexception/noexception/1.7.1/noexception-1.7.1.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged.fancymodloader:earlydisplay:4.0.42
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/fancymodloader/earlydisplay/4.0.42/earlydisplay-4.0.42.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged.fancymodloader:loader:4.0.42
+File /Users/maksim/.vozducraft/libraries/net/neoforged/fancymodloader/loader/4.0.42/loader-4.0.42.jar exists. Checksum valid.
+Considering library net.neoforged.accesstransformers:at-modlauncher:10.0.1
+File /Users/maksim/.vozducraft/libraries/net/neoforged/accesstransformers/at-modlauncher/10.0.1/at-modlauncher-10.0.1.jar exists. Checksum valid.
+Considering library net.neoforged:accesstransformers:10.0.1
+File /Users/maksim/.vozducraft/libraries/net/neoforged/accesstransformers/10.0.1/accesstransformers-10.0.1.jar exists. Checksum valid.
+Considering library net.neoforged:bus:8.0.5
+File /Users/maksim/.vozducraft/libraries/net/neoforged/bus/8.0.5/bus-8.0.5.jar exists. Checksum valid.
+Considering library net.neoforged:coremods:7.0.3
+File /Users/maksim/.vozducraft/libraries/net/neoforged/coremods/7.0.3/coremods-7.0.3.jar exists. Checksum valid.
+Considering library cpw.mods:modlauncher:11.0.5
+File /Users/maksim/.vozducraft/libraries/cpw/mods/modlauncher/11.0.5/modlauncher-11.0.5.jar exists. Checksum valid.
+Considering library net.neoforged:mergetool:2.0.0:api
+File /Users/maksim/.vozducraft/libraries/net/neoforged/mergetool/2.0.0/mergetool-2.0.0-api.jar exists. Checksum valid.
+Considering library com.electronwill.night-config:toml:3.8.3
+File /Users/maksim/.vozducraft/libraries/com/electronwill/night-config/toml/3.8.3/toml-3.8.3.jar exists. Checksum valid.
+Considering library com.electronwill.night-config:core:3.8.3
+File /Users/maksim/.vozducraft/libraries/com/electronwill/night-config/core/3.8.3/core-3.8.3.jar exists. Checksum valid.
+Considering library net.neoforged:JarJarSelector:0.4.1
+File /Users/maksim/.vozducraft/libraries/net/neoforged/JarJarSelector/0.4.1/JarJarSelector-0.4.1.jar exists. Checksum valid.
+Considering library net.neoforged:JarJarMetadata:0.4.1
+File /Users/maksim/.vozducraft/libraries/net/neoforged/JarJarMetadata/0.4.1/JarJarMetadata-0.4.1.jar exists. Checksum valid.
+Considering library org.apache.maven:maven-artifact:3.8.5
+File /Users/maksim/.vozducraft/libraries/org/apache/maven/maven-artifact/3.8.5/maven-artifact-3.8.5.jar exists. Checksum valid.
+Considering library net.jodah:typetools:0.6.3
+File /Users/maksim/.vozducraft/libraries/net/jodah/typetools/0.6.3/typetools-0.6.3.jar exists. Checksum valid.
+Considering library net.minecrell:terminalconsoleappender:1.3.0
+File /Users/maksim/.vozducraft/libraries/net/minecrell/terminalconsoleappender/1.3.0/terminalconsoleappender-1.3.0.jar exists. Checksum valid.
+Considering library net.fabricmc:sponge-mixin:0.15.2+mixin.0.8.7
+File /Users/maksim/.vozducraft/libraries/net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/sponge-mixin-0.15.2+mixin.0.8.7.jar exists. Checksum valid.
+Considering library org.openjdk.nashorn:nashorn-core:15.4
+File /Users/maksim/.vozducraft/libraries/org/openjdk/nashorn/nashorn-core/15.4/nashorn-core-15.4.jar exists. Checksum valid.
+Considering library org.apache.commons:commons-lang3:3.14.0
+File /Users/maksim/.vozducraft/libraries/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar exists. Checksum valid.
+Considering library cpw.mods:bootstraplauncher:2.0.2
+File /Users/maksim/.vozducraft/libraries/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar exists. Checksum valid.
+Considering library cpw.mods:securejarhandler:3.0.8
+File /Users/maksim/.vozducraft/libraries/cpw/mods/securejarhandler/3.0.8/securejarhandler-3.0.8.jar exists. Checksum valid.
+Considering library org.ow2.asm:asm-commons:9.8
+File /Users/maksim/.vozducraft/libraries/org/ow2/asm/asm-commons/9.8/asm-commons-9.8.jar exists. Checksum valid.
+Considering library org.ow2.asm:asm-util:9.8
+File /Users/maksim/.vozducraft/libraries/org/ow2/asm/asm-util/9.8/asm-util-9.8.jar exists. Checksum valid.
+Considering library org.ow2.asm:asm-analysis:9.8
+File /Users/maksim/.vozducraft/libraries/org/ow2/asm/asm-analysis/9.8/asm-analysis-9.8.jar exists. Checksum valid.
+Considering library org.ow2.asm:asm-tree:9.8
+File /Users/maksim/.vozducraft/libraries/org/ow2/asm/asm-tree/9.8/asm-tree-9.8.jar exists. Checksum valid.
+Considering library org.ow2.asm:asm:9.8
+File /Users/maksim/.vozducraft/libraries/org/ow2/asm/asm/9.8/asm-9.8.jar exists. Checksum valid.
+Considering library net.neoforged:JarJarFileSystems:0.4.1
+File /Users/maksim/.vozducraft/libraries/net/neoforged/JarJarFileSystems/0.4.1/JarJarFileSystems-0.4.1.jar exists. Checksum valid.
+Considering library net.sf.jopt-simple:jopt-simple:5.0.4
+File /Users/maksim/.vozducraft/libraries/net/sf/jopt-simple/jopt-simple/5.0.4/jopt-simple-5.0.4.jar exists. Checksum valid.
+Considering library org.slf4j:slf4j-api:2.0.9
+File /Users/maksim/.vozducraft/libraries/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar exists. Checksum valid.
+Considering library org.antlr:antlr4-runtime:4.13.1
+File /Users/maksim/.vozducraft/libraries/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar exists. Checksum valid.
+Considering library com.mojang:logging:1.2.7
+File /Users/maksim/.vozducraft/libraries/com/mojang/logging/1.2.7/logging-1.2.7.jar exists. Checksum valid.
+Considering library org.apache.logging.log4j:log4j-slf4j2-impl:2.22.1
+File /Users/maksim/.vozducraft/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.1/log4j-slf4j2-impl-2.22.1.jar exists. Checksum valid.
+Considering library org.apache.logging.log4j:log4j-core:2.22.1
+File /Users/maksim/.vozducraft/libraries/org/apache/logging/log4j/log4j-core/2.22.1/log4j-core-2.22.1.jar exists. Checksum valid.
+Considering library org.apache.logging.log4j:log4j-api:2.22.1
+File /Users/maksim/.vozducraft/libraries/org/apache/logging/log4j/log4j-api/2.22.1/log4j-api-2.22.1.jar exists. Checksum valid.
+Considering library org.jline:jline-reader:3.20.0
+File /Users/maksim/.vozducraft/libraries/org/jline/jline-reader/3.20.0/jline-reader-3.20.0.jar exists. Checksum valid.
+Considering library org.jline:jline-terminal:3.20.0
+File /Users/maksim/.vozducraft/libraries/org/jline/jline-terminal/3.20.0/jline-terminal-3.20.0.jar exists. Checksum valid.
+Considering library commons-io:commons-io:2.15.1
+File /Users/maksim/.vozducraft/libraries/commons-io/commons-io/2.15.1/commons-io-2.15.1.jar exists. Checksum valid.
+Considering library net.minecraftforge:srgutils:0.4.15
+File /Users/maksim/.vozducraft/libraries/net/minecraftforge/srgutils/0.4.15/srgutils-0.4.15.jar exists. Checksum valid.
+Considering library com.google.guava:guava:32.1.2-jre
+File /Users/maksim/.vozducraft/libraries/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar exists. Checksum valid.
+Considering library com.google.guava:failureaccess:1.0.1
+File /Users/maksim/.vozducraft/libraries/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar exists. Checksum valid.
+Considering library com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+File /Users/maksim/.vozducraft/libraries/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar exists. Checksum valid.
+Considering library com.google.code.findbugs:jsr305:3.0.2
+File /Users/maksim/.vozducraft/libraries/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar exists. Checksum valid.
+Considering library org.checkerframework:checker-qual:3.33.0
+File /Users/maksim/.vozducraft/libraries/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar exists. Checksum valid.
+Considering library com.google.errorprone:error_prone_annotations:2.18.0
+File /Users/maksim/.vozducraft/libraries/com/google/errorprone/error_prone_annotations/2.18.0/error_prone_annotations-2.18.0.jar exists. Checksum valid.
+Considering library com.google.j2objc:j2objc-annotations:2.8
+File /Users/maksim/.vozducraft/libraries/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar exists. Checksum valid.
+Considering library com.google.code.gson:gson:2.10.1
+File /Users/maksim/.vozducraft/libraries/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar exists. Checksum valid.
+Considering library org.codehaus.plexus:plexus-utils:3.3.0
+File /Users/maksim/.vozducraft/libraries/org/codehaus/plexus/plexus-utils/3.3.0/plexus-utils-3.3.0.jar exists. Checksum valid.
+Considering library com.machinezoo.noexception:noexception:1.7.1
+File /Users/maksim/.vozducraft/libraries/com/machinezoo/noexception/noexception/1.7.1/noexception-1.7.1.jar exists. Checksum valid.
+Considering library net.neoforged:neoform:1.21.1-20240808.144430@zip
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/neoform/1.21.1-20240808.144430/neoform-1.21.1-20240808.144430.zip
+	Download completed: Checksum validated.
+Considering library net.neoforged.installertools:binarypatcher:2.1.2:fatjar
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/installertools/binarypatcher/2.1.2/binarypatcher-2.1.2-fatjar.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:AutoRenamingTool:2.0.3:all
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/AutoRenamingTool/2.0.3/AutoRenamingTool-2.0.3-all.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged.installertools:installertools:2.1.2
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/installertools/installertools/2.1.2/installertools-2.1.2.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:srgutils:1.0.0
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/srgutils/1.0.0/srgutils-1.0.0.jar
+	Download completed: Checksum validated.
+Considering library net.md-5:SpecialSource:1.11.0
+Downloading library from https://maven.neoforged.net/releases/net/md-5/SpecialSource/1.11.0/SpecialSource-1.11.0.jar
+	Download completed: Checksum validated.
+Considering library com.google.code.gson:gson:2.8.9
+Downloading library from https://libraries.minecraft.net/com/google/code/gson/gson/2.8.9/gson-2.8.9.jar
+	Download completed: Checksum validated.
+Considering library de.siegmar:fastcsv:2.0.0
+Downloading library from https://maven.neoforged.net/releases/de/siegmar/fastcsv/2.0.0/fastcsv-2.0.0.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-commons:9.3
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-commons/9.3/asm-commons-9.3.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged.installertools:cli-utils:2.1.2
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/installertools/cli-utils/2.1.2/cli-utils-2.1.2.jar
+	Download completed: Checksum validated.
+Considering library com.google.guava:guava:20.0
+Downloading library from https://maven.neoforged.net/releases/com/google/guava/guava/20.0/guava-20.0.jar
+	Download completed: Checksum validated.
+Considering library com.opencsv:opencsv:4.4
+Downloading library from https://maven.neoforged.net/releases/com/opencsv/opencsv/4.4/opencsv-4.4.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-analysis:9.3
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-analysis/9.3/asm-analysis-9.3.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm-tree:9.3
+Downloading library from https://maven.neoforged.net/releases/org/ow2/asm/asm-tree/9.3/asm-tree-9.3.jar
+	Download completed: Checksum validated.
+Considering library org.ow2.asm:asm:9.3
+Downloading library from https://libraries.minecraft.net/org/ow2/asm/asm/9.3/asm-9.3.jar
+	Download completed: Checksum validated.
+Considering library org.apache.commons:commons-text:1.3
+Downloading library from https://maven.neoforged.net/releases/org/apache/commons/commons-text/1.3/commons-text-1.3.jar
+	Download completed: Checksum validated.
+Considering library org.apache.commons:commons-lang3:3.8.1
+Downloading library from https://maven.neoforged.net/releases/org/apache/commons/commons-lang3/3.8.1/commons-lang3-3.8.1.jar
+	Download completed: Checksum validated.
+Considering library commons-beanutils:commons-beanutils:1.9.3
+Downloading library from https://maven.neoforged.net/releases/commons-beanutils/commons-beanutils/1.9.3/commons-beanutils-1.9.3.jar
+	Download completed: Checksum validated.
+Considering library org.apache.commons:commons-collections4:4.2
+Downloading library from https://maven.neoforged.net/releases/org/apache/commons/commons-collections4/4.2/commons-collections4-4.2.jar
+	Download completed: Checksum validated.
+Considering library commons-logging:commons-logging:1.2
+Downloading library from https://libraries.minecraft.net/commons-logging/commons-logging/1.2/commons-logging-1.2.jar
+	Download completed: Checksum validated.
+Considering library commons-collections:commons-collections:3.2.2
+Downloading library from https://maven.neoforged.net/releases/commons-collections/commons-collections/3.2.2/commons-collections-3.2.2.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged.installertools:jarsplitter:2.1.2
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/installertools/jarsplitter/2.1.2/jarsplitter-2.1.2.jar
+	Download completed: Checksum validated.
+Considering library net.neoforged:neoforge:21.1.234:universal
+Downloading library from https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.234/neoforge-21.1.234-universal.jar
+	Download completed: Checksum validated.
+These libraries failed to download. Try again.
+
+net.neoforged.fancymodloader:earlydisplay:4.0.42
+There was an error during installation

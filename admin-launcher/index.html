@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VozduCraft Admin Panel • Web Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=4.0">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Верхняя панель сайта -->
+    <header class="topbar glass-panel">
+      <div class="brand">
+        <div class="brand-logo">⚙️</div>
+        <div class="brand-info">
+          <span class="brand-name">VOZDUCRAFT</span>
+          <span class="brand-badge admin">ADMIN CONTROL DASHBOARD</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="server-time" id="server-time-display">--:--:--</div>
+        <div class="user-badge" id="topbar-user-badge">
+          <span class="avatar-mini">⚡</span>
+          <span class="admin-nick" id="topbar-admin-name">VozduHAN</span>
+        </div>
+        <button class="btn-logout" id="btn-logout" title="Выйти из системы">🚪 Выход</button>
+      </div>
+    </header>
+
+    <!-- Экран Входа в Веб-Админку -->
+    <section class="screen active" id="screen-auth">
+      <div class="auth-card glass-panel">
+        <div class="auth-header">
+          <div class="auth-icon">🛡️</div>
+          <h1 class="auth-title">Вход в Админ-Панель</h1>
+          <p class="auth-subtitle">Управление серверами, мультисборками, патчами и безопасностью</p>
+        </div>
+
+        <form id="admin-auth-form">
+          <div class="input-group">
+            <label for="admin-username">Логин Администратора</label>
+            <input type="text" id="admin-username" value="VozduHAN" required autocomplete="off">
+          </div>
+
+          <div class="input-group">
+            <label for="admin-password">Пароль</label>
+            <input type="password" id="admin-password" placeholder="••••••••" value="admin123" required>
+          </div>
+
+          <div class="auth-alert hidden" id="auth-alert"></div>
+
+          <button type="submit" class="btn-primary auth-submit-btn">Войти в Панель Управления</button>
+        </form>
+
+        <div class="auth-footer">
+          <span>VozduCraft Control System v4.0 • Multi-Server & Prism Core</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Экран Главного Дашборда Админки -->
+    <section class="screen" id="screen-admin">
+      <div class="dashboard-layout">
+        <!-- Боковое меню -->
+        <aside class="sidebar glass-panel">
+          <nav class="nav-menu">
+            <button class="nav-item active" data-tab="servers">
+              <span class="nav-icon">🌐</span>
+              <span class="nav-text">Серверы & Сборки</span>
+            </button>
+            <button class="nav-item" data-tab="modpack">
+              <span class="nav-icon">📦</span>
+              <span class="nav-text">Управление Модами</span>
+            </button>
+            <button class="nav-item" data-tab="modrinth">
+              <span class="nav-icon">🔍</span>
+              <span class="nav-text">Каталог Modrinth</span>
+            </button>
+            <button class="nav-item" data-tab="releases">
+              <span class="nav-icon">🚀</span>
+              <span class="nav-text">Патчи & Релизы</span>
+            </button>
+            <button class="nav-item" data-tab="bans">
+              <span class="nav-icon">🔨</span>
+              <span class="nav-text">Бан-лист (IP/HWID)</span>
+            </button>
+            <button class="nav-item" data-tab="mirrors">
+              <span class="nav-icon">🌍</span>
+              <span class="nav-text">Зеркала & Миграция</span>
+            </button>
+            <button class="nav-item" data-tab="analytics">
+              <span class="nav-icon">📊</span>
+              <span class="nav-text">Аналитика & Аудит</span>
+            </button>
+          </nav>
+
+          <div class="sidebar-status-box">
+            <div class="status-label">Активный сервер сборки:</div>
+            <div class="current-server-badge" id="sidebar-current-server">VozduCraft Season #2</div>
+          </div>
+        </aside>
+
+        <!-- Основная область контента -->
+        <main class="content-area">
+
+          <!-- ВКЛАДКА 1: СЕРВЕРЫ И МУЛЬТИСБОРКИ -->
+          <div class="dashboard-tab active" id="tab-servers">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Управление Серверами и Мультисборками</h2>
+                <p class="tab-subheading">Добавление независимых игровых серверов со своими IP, версиями и сборками модов</p>
+              </div>
+              <button class="btn-primary" id="btn-open-add-server">➕ Добавить Сервер</button>
+            </div>
+
+            <div class="servers-grid" id="servers-list-container">
+              <!-- Карточки серверов загружаются динамически -->
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 2: СОСТАВ СБОРКИ МОДОВ -->
+          <div class="dashboard-tab" id="tab-modpack">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Состав сборки модов</h2>
+                <p class="tab-subheading">Управление файлами модов для выбранного сервера</p>
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center;">
+                <button class="btn-primary" id="btn-open-copy-mods" style="background: linear-gradient(135deg, #a855f7, #6366f1); font-size: 13px;">📥 Позаимствовать моды из другой сборки</button>
+                <div class="server-selector-wrap">
+                  <label for="select-modpack-server">Выбранный сервер:</label>
+                  <select id="select-modpack-server" class="styled-select"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Drag & Drop Зона загрузки модов -->
+            <div class="upload-dropzone glass-panel" id="mod-dropzone">
+              <div class="dropzone-icon">📥</div>
+              <div class="dropzone-text">Перетащите файлы <b>.jar</b> или <b>.zip</b> сюда для добавления в сборку</div>
+              <div class="dropzone-sub">Файлы автоматически рассчитают SHA-256 хеш и зарегистрируются в манифесте</div>
+              <input type="file" id="file-input-mod" multiple accept=".jar,.zip" class="hidden">
+              <button class="btn-secondary" id="btn-browse-files">Выбрать файлы на диске</button>
+            </div>
+
+            <!-- Поиск и фильтрация модов -->
+            <div class="mods-toolbar glass-panel">
+              <input type="text" id="search-local-mods" class="styled-input" placeholder="🔍 Быстрый поиск среди модов сборки...">
+              <div class="mods-stats-badge" id="mods-count-badge">Всего модов: 0</div>
+            </div>
+
+            <!-- Список модов в таблице -->
+            <div class="table-container glass-panel">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Файл / Имя Мода</th>
+                    <th>Размер</th>
+                    <th>Тип</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="modpack-table-body">
+                  <!-- Загружается динамически -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 3: MODRINTH КАТАЛОГ -->
+          <div class="dashboard-tab" id="tab-modrinth">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Каталог Modrinth API</h2>
+                <p class="tab-subheading">Поиск и добавление модов NeoForge 1.21.1 напрямую в сборку</p>
+              </div>
+              <div class="server-selector-wrap">
+                <label for="select-modrinth-server">Целевой сервер:</label>
+                <select id="select-modrinth-server" class="styled-select"></select>
+              </div>
+            </div>
+
+            <div class="search-bar-wrap glass-panel">
+              <input type="text" id="modrinth-query" class="styled-input" placeholder="Введите название мода (например: Create, JEI, Iris, Farmers Delight)...">
+              <button class="btn-primary" id="btn-search-modrinth">Найти в Modrinth</button>
+            </div>
+
+            <div class="modrinth-results-grid" id="modrinth-results-container">
+              <div class="empty-state">Введите поисковый запрос для поиска модов на Modrinth</div>
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 4: ПАТЧИ И РЕЛИЗЫ ЛАУНЧЕРА -->
+          <div class="dashboard-tab" id="tab-releases">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Патчи и обновления Лаунчера</h2>
+                <p class="tab-subheading">Публикация новых версий лаунчера, автообновление клиентов</p>
+              </div>
+            </div>
+
+            <div class="grid-2col">
+              <!-- Форма создания нового релиза -->
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">🚀 Опубликовать новый патч лаунчера</h3>
+                <form id="form-publish-release">
+                  <div class="input-group">
+                    <label for="release-version">Номер версии</label>
+                    <input type="text" id="release-version" placeholder="3.1.0" required>
+                  </div>
+                  <div class="input-group">
+                    <label for="release-notes">Список изменений (Changelog)</label>
+                    <textarea id="release-notes" rows="3" placeholder="Что нового в этой версии..."></textarea>
+                  </div>
+                  <div class="input-group">
+                    <label for="release-mac-url">Прямая ссылка на macOS билд (.dmg / .zip)</label>
+                    <input type="url" id="release-mac-url" placeholder="http://185.221.213.43:3000/files/launchers/VozduCraft-macOS.dmg">
+                  </div>
+                  <div class="input-group">
+                    <label for="release-win-url">Прямая ссылка на Windows билд (.zip / .exe)</label>
+                    <input type="url" id="release-win-url" placeholder="http://185.221.213.43:3000/files/launchers/VozduCraft-Windows.zip">
+                  </div>
+                  <div class="checkbox-group">
+                    <label>
+                      <input type="checkbox" id="release-mandatory" checked>
+                      Обязательное обновление (клиенты не запустятся без обновления)
+                    </label>
+                  </div>
+                  <button type="submit" class="btn-primary full-width">Опубликовать патч</button>
+                </form>
+              </div>
+
+              <!-- Список выпущенных релизов -->
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">📜 История релизов и патчей</h3>
+                <div class="releases-history-list" id="releases-history-container">
+                  <!-- Загружается динамически -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 5: БАНЫ И БЕЗОПАСНОСТЬ -->
+          <div class="dashboard-tab" id="tab-bans">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Управление Блокировками (Бан-лист)</h2>
+                <p class="tab-subheading">Блокировка игроков по Никнейму, отпечатку HWID, IP-адресу или пулу IP (подсети)</p>
+              </div>
+            </div>
+
+            <div class="grid-2col">
+              <!-- Форма создания бана -->
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">🔨 Добавить блокировку</h3>
+                <form id="form-create-ban">
+                  <div class="input-group">
+                    <label for="ban-type">Тип блокировки</label>
+                    <select id="ban-type" class="styled-select">
+                      <option value="NICK">По Никнейму игрока (NICK)</option>
+                      <option value="HWID">По отпечатку железа (HWID)</option>
+                      <option value="IP">По IP адресу (Одиночный IP)</option>
+                      <option value="IP_RANGE">По пулу IP / подсети (CIDR, напр: 185.221.0.0/16)</option>
+                    </select>
+                  </div>
+                  <div class="input-group">
+                    <label for="ban-target">Значение блокировки</label>
+                    <input type="text" id="ban-target" placeholder="Ник / HWID / IP / CIDR" required>
+                  </div>
+                  <div class="input-group">
+                    <label for="ban-reason">Причина блокировки</label>
+                    <input type="text" id="ban-reason" placeholder="Использование читов / Нарушение правил проекта">
+                  </div>
+                  <div class="input-group">
+                    <label for="ban-duration">Срок блокировки</label>
+                    <select id="ban-duration" class="styled-select">
+                      <option value="0">Перманентно (Навсегда)</option>
+                      <option value="24">24 часа (1 день)</option>
+                      <option value="168">7 дней (1 неделя)</option>
+                      <option value="720">30 дней (1 месяц)</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="btn-danger full-width">Заблокировать</button>
+                </form>
+              </div>
+
+              <!-- Таблица активных банов -->
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">📋 Активные блокировки</h3>
+                <div class="table-container-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Тип</th>
+                        <th>Цель</th>
+                        <th>Причина</th>
+                        <th>Действие</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bans-table-body">
+                      <!-- Загружается динамически -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 6: ЗЕРКАЛА API И БЕСШОВНАЯ МИГРАЦИЯ -->
+          <div class="dashboard-tab" id="tab-mirrors">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Отказоустойчивые Зеркала API и Миграция (Failover)</h2>
+                <p class="tab-subheading">Запасные IP-адреса и гео-копии админки. При смене хостинга игрокам не нужно переустанавливать лаунчер — он автоматически переключается на новые узлы!</p>
+              </div>
+              <button class="btn-primary" id="btn-open-add-mirror">➕ Добавить Зеркало / IP</button>
+            </div>
+
+            <div class="servers-grid" id="mirrors-list-container">
+              <!-- Карточки зеркал загружаются динамически -->
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 7: АНАЛИТИКА И АУДИТ -->
+          <div class="dashboard-tab" id="tab-analytics">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">Аналитика и Журнал действий</h2>
+                <p class="tab-subheading">Мониторинг подключений, статистика и аудит работы администрации и модераторов</p>
+              </div>
+            </div>
+
+            <div class="stats-grid">
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="stat-success-joins">0</span>
+                <span class="stat-title">Успешных входов</span>
+              </div>
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="stat-failed-auths">0</span>
+                <span class="stat-title">Ошибок авторизации</span>
+              </div>
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="stat-total-bans">0</span>
+                <span class="stat-title">Активных блокировок</span>
+              </div>
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="stat-total-users">0</span>
+                <span class="stat-title">Всего пользователей</span>
+              </div>
+            </div>
+
+            <div class="grid-2col" style="margin-top: 24px;">
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">📡 Недавние подключения игроков</h3>
+                <div class="table-container-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Никнейм</th>
+                        <th>Событие</th>
+                        <th>IP / HWID</th>
+                        <th>Время</th>
+                      </tr>
+                    </thead>
+                    <tbody id="connections-table-body"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">🛡️ Журнал аудита действий (Админ / Модер)</h3>
+                <div class="table-container-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Администратор</th>
+                        <th>Действие</th>
+                        <th>Цель / Детали</th>
+                        <th>Время</th>
+                      </tr>
+                    </thead>
+                    <tbody id="audit-table-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </section>
+  </div>
+
+  <!-- Модальное окно создания / редактирования сервера -->
+  <div class="modal-overlay hidden" id="modal-server">
+    <div class="modal-card glass-panel">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-server-title">➕ Добавить новый сервер</h3>
+        <button class="modal-close" id="btn-close-server-modal">✕</button>
+      </div>
+      <form id="form-save-server">
+        <input type="hidden" id="server-edit-id" value="">
+        <div class="input-group">
+          <label for="server-name">Название сервера</label>
+          <input type="text" id="server-name" placeholder="VozduCraft Tech & Create" required>
+        </div>
+        <div class="grid-2col-inputs">
+          <div class="input-group">
+            <label for="server-ip">IP адрес / Домен</label>
+            <input type="text" id="server-ip" placeholder="185.221.213.43" required>
+          </div>
+          <div class="input-group">
+            <label for="server-port">Порт сервера</label>
+            <input type="number" id="server-port" value="25565" required>
+          </div>
+        </div>
+        <div class="grid-2col-inputs">
+          <div class="input-group">
+            <label for="server-mc-ver">Версия Minecraft</label>
+            <select id="server-mc-ver" class="styled-select">
+              <option value="1.21.1" selected>1.21.1</option>
+              <option value="1.20.4">1.20.4</option>
+              <option value="1.20.1">1.20.1</option>
+              <option value="1.19.4">1.19.4</option>
+              <option value="1.16.5">1.16.5</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="server-java-ver">Версия Java</label>
+            <select id="server-java-ver" class="styled-select">
+              <option value="21" selected>Java 21 (1.20.5+ / 1.21.1)</option>
+              <option value="17">Java 17 (1.18 - 1.20.4)</option>
+              <option value="8">Java 8 (1.7.10 - 1.16.5)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-2col-inputs">
+          <div class="input-group">
+            <label for="server-modloader">Модлоадер сборки</label>
+            <select id="server-modloader" class="styled-select">
+              <option value="neoforge" selected>NeoForge</option>
+              <option value="forge">Forge</option>
+              <option value="fabric">Fabric</option>
+              <option value="quilt">Quilt</option>
+              <option value="vanilla">Vanilla (Без модов)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="server-modloader-ver">Версия Модлоадера</label>
+            <input type="text" id="server-modloader-ver" placeholder="21.1.248 / 0.16.5" value="21.1.248" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="server-jvm-flags">Кастомные JVM-флаги запуска клиента</label>
+          <textarea id="server-jvm-flags" rows="2" placeholder="-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50"></textarea>
+        </div>
+
+        <div class="grid-2col-inputs">
+          <div class="input-group">
+            <label for="server-min-ram">Мин. RAM клиента (GB)</label>
+            <input type="number" id="server-min-ram" value="4" min="1" max="32">
+          </div>
+          <div class="input-group">
+            <label for="server-rec-ram">Рекомендуемая RAM (GB)</label>
+            <input type="number" id="server-rec-ram" value="6" min="2" max="64">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="server-game-args">Дополнительные аргументы игры (Game Arguments)</label>
+          <input type="text" id="server-game-args" placeholder="--width 1280 --height 720">
+        </div>
+
+        <div class="input-group">
+          <label for="server-desc">Описание сервера</label>
+          <textarea id="server-desc" rows="2" placeholder="Краткое описание сервера для отображения в лаунчере..."></textarea>
+        </div>
+
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="server-auto-join" checked>
+            Автоматически заходить на сервер при старте игры
+          </label>
+        </div>
+
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="server-is-default">
+            Сделать основным сервером по умолчанию
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-server-modal">Отмена</button>
+          <button type="submit" class="btn-primary">Сохранить настройки сборки</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно заимствования модов из другой сборки -->
+  <div class="modal-overlay hidden" id="modal-copy-mods">
+    <div class="modal-card glass-panel" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 class="modal-title">📥 Позаимствовать моды из другой сборки</h3>
+        <button class="modal-close" id="btn-close-copy-modal">✕</button>
+      </div>
+      <form id="form-copy-mods">
+        <div class="input-group">
+          <label for="copy-source-server">Исходный сервер (откуда скопировать):</label>
+          <select id="copy-source-server" class="styled-select"></select>
+        </div>
+
+        <div class="input-group">
+          <label>Какие моды скопировать:</label>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+              <input type="radio" name="copy-mode" value="optional" checked>
+              Только разрешённые опциональные моды (графика, FPS, шейдеры)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+              <input type="radio" name="copy-mode" value="all">
+              Все моды без исключения (полное клонирование состава)
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 24px;">
+          <button type="button" class="btn-secondary" id="btn-cancel-copy-modal">Отмена</button>
+          <button type="submit" class="btn-primary" style="background: linear-gradient(135deg, #a855f7, #6366f1);">Скопировать в текущую сборку</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно добавления зеркала / запасного IP -->
+  <div class="modal-overlay hidden" id="modal-add-mirror">
+    <div class="modal-card glass-panel" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🌍 Добавить запасной IP / Зеркало API</h3>
+        <button class="modal-close" id="btn-close-mirror-modal">✕</button>
+      </div>
+      <form id="form-add-mirror">
+        <div class="input-group">
+          <label for="mirror-name">Название узла / сервера</label>
+          <input type="text" id="mirror-name" placeholder="Резервный европейский узел #1" required>
+        </div>
+        <div class="input-group">
+          <label for="mirror-url">URL / IP с портом API</label>
+          <input type="text" id="mirror-url" placeholder="http://185.221.213.43:3000/api/v1" required>
+        </div>
+        <div class="grid-2col-inputs">
+          <div class="input-group">
+            <label for="mirror-region">Регион размещения</label>
+            <select id="mirror-region" class="styled-select">
+              <option value="Локальный">Локальный узел</option>
+              <option value="Европа (Германия)">Европа (Германия / Финляндия)</option>
+              <option value="Россия / СНГ" selected>Россия / СНГ (Москва)</option>
+              <option value="Азия / Восток">Азия (Сингапур / Токио)</option>
+              <option value="Северная Америка">Северная Америка (США)</option>
+              <option value="Global">Глобальный Anycast CDN</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="mirror-priority">Приоритет (1-100)</label>
+            <input type="number" id="mirror-priority" value="80" min="1" max="100">
+          </div>
+        </div>
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="mirror-is-primary">
+            Сделать основным сервером сразу (Мигрировать игроков)
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-mirror-modal">Отмена</button>
+          <button type="submit" class="btn-primary">Сохранить зеркало</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=6.0"></script>
+</body>
+</html>

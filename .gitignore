@@ -1,0 +1,34 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts and large binaries
+dist/
+dist_mac/
+dist_mac_admin/
+build/
+*.o
+*.app
+*.dmg
+*.zip
+*.tar.gz
+
+# Databases and Local Data
+*.db
+*.db-journal
+/data/
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local

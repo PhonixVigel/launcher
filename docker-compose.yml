@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  vozducraft-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vozducraft-master-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/vozducraft.db
+      - JWT_SECRET=VOZDUCRAFT_SUPER_SECURE_JWT_SECRET_2026
+    volumes:
+      # Постоянное хранение базы данных SQLite
+      - ./data:/app/data
+      # Постоянное хранение загруженных модов и патчей лаунчера
+      - ./backend/public/files:/app/public/files
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/manifest/servers"]
+      interval: 15s
+      timeout: 5s
+      retries: 3

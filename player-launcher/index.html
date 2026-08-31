@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VozduCraft Launcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=3.0">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Кастомный заголовок окна с перетаскиванием и большим заголовком VOZDUCRAFT -->
+    <header class="titlebar" id="app-titlebar">
+      <div class="brand">
+        <div class="brand-logo">🌌</div>
+        <span class="brand-badge">CLIENT</span>
+      </div>
+      <div class="titlebar-center-brand">VOZDUCRAFT</div>
+      <div class="window-controls">
+        <button class="win-btn win-min" id="btn-minimize" title="Свернуть">─</button>
+        <button class="win-btn win-close" id="btn-close" title="Закрыть">✕</button>
+      </div>
+    </header>
+
+    <!-- Главный экран Авторизации -->
+    <section class="screen active" id="screen-auth">
+      <div class="auth-card glass-panel">
+        <h1 class="auth-title">Добро пожаловать в VozduCraft</h1>
+        <p class="auth-subtitle">Введите никнейм для быстрого входа в игру</p>
+
+        <form id="auth-form">
+          <div class="input-group">
+            <label for="input-username">Имя пользователя (Никнейм)</label>
+            <input type="text" id="input-username" placeholder="VozduHAN" value="VozduHAN" required autocomplete="off">
+          </div>
+
+          <div class="input-group" id="password-group">
+            <label for="input-password">Пароль (необязательно)</label>
+            <input type="password" id="input-password" placeholder="••••••••">
+          </div>
+
+          <div class="auth-alert hidden" id="auth-alert"></div>
+
+          <button type="submit" class="btn-primary" id="btn-auth-submit">Войти в игру</button>
+        </form>
+
+        <div class="auth-footer">
+          <span>VozduCraft Native Desktop Client • NeoForge 1.21.1</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Главный экран Игры (Dashboard) -->
+    <section class="screen" id="screen-dashboard">
+      <!-- Боковое меню (Sidebar) -->
+      <aside class="sidebar glass-panel">
+        <div class="user-profile">
+          <div class="avatar" id="user-avatar">👤</div>
+          <div class="user-info">
+            <span class="username" id="display-username">Player</span>
+            <span class="user-status">Игрок VozduCraft</span>
+          </div>
+        </div>
+
+        <nav class="nav-menu">
+          <button class="nav-item active" data-tab="play">🎮 Играть</button>
+          <button class="nav-item" data-tab="screenshots">📸 Скриншоты</button>
+          <button class="nav-item" data-tab="mods">🧩 Опциональные моды</button>
+          <button class="nav-item" data-tab="settings">⚙️ Настройки</button>
+        </nav>
+
+        <!-- Быстрые папки (Quick Folders Dropdown) -->
+        <div class="quick-folders-dropdown">
+          <button class="btn-dropdown" id="btn-quick-folders">📁 Открыть папку ▼</button>
+          <div class="dropdown-menu hidden" id="dropdown-menu-folders">
+            <button class="dropdown-item" id="open-folder-screenshots">📸 Папка Скриншотов</button>
+            <button class="dropdown-item" id="open-folder-config">⚙️ Папка Конфигов</button>
+            <button class="dropdown-item" id="open-folder-logs">📝 Папка Логов</button>
+          </div>
+        </div>
+
+        <button class="btn-logout" id="btn-logout">🚪 Выйти из аккаунта</button>
+      </aside>
+
+      <!-- Основная контентная область -->
+      <main class="content-area">
+        <!-- Вкладка 1: ИГРАТЬ (КАРУСЕЛЬ КАРТОЧЕК СЕРВЕРОВ) -->
+        <div class="dashboard-tab active" id="tab-play">
+          <div class="carousel-wrapper">
+            <button class="carousel-nav-btn prev" id="carousel-prev-btn" title="Предыдущий сервер">‹</button>
+            <div class="server-cards-carousel" id="server-cards-container">
+              <!-- Карточки серверов рендерятся динамически -->
+            </div>
+            <button class="carousel-nav-btn next" id="carousel-next-btn" title="Следующий сервер">›</button>
+          </div>
+
+          <!-- Индикаторы пагинации серверов -->
+          <div class="carousel-dots" id="carousel-dots-container"></div>
+
+          <!-- Общая панель прогресса скачивания/проверки -->
+          <div class="progress-bar-container hidden" id="progress-container">
+            <div class="progress-info">
+              <span id="progress-text">Проверка хешей модов...</span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="progress-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Вкладка 2: СКРИНШОТЫ -->
+        <div class="dashboard-tab" id="tab-screenshots">
+          <div class="tab-header-row">
+            <div>
+              <h2 class="tab-heading">📸 Галерея скриншотов</h2>
+              <p class="tab-subheading">Все ваши внутриигровые снимки экрана с возможностью просмотра и быстрого копирования</p>
+            </div>
+            <button class="btn-dropdown" id="btn-refresh-screenshots" style="width: auto; padding: 8px 16px;">🔄 Обновить</button>
+          </div>
+
+          <div class="screenshots-grid-container" id="screenshots-grid">
+            <!-- Загружается динамически -->
+          </div>
+        </div>
+
+        <!-- Вкладка 3: ОПЦИОНАЛЬНЫЕ МОДЫ -->
+        <div class="dashboard-tab" id="tab-mods">
+          <h2 class="tab-heading">Разрешённые опциональные моды</h2>
+          <p class="tab-subheading">Включите или отключите моды для тонкой настройки производительности вашего ПК</p>
+
+          <div class="optional-mods-list" id="optional-mods-container">
+            <!-- Динамически -->
+          </div>
+        </div>
+
+        <!-- Вкладка 4: НАСТРОЙКИ -->
+        <div class="dashboard-tab" id="tab-settings">
+          <h2 class="tab-heading">Настройки клиента</h2>
+
+          <div class="settings-card glass-panel">
+            <div class="setting-item">
+              <label for="ram-slider">Выделение оперативной памяти (ОЗУ)</label>
+              <div class="ram-control">
+                <input type="range" id="ram-slider" min="4" max="16" step="1" value="6">
+                <span class="ram-value" id="ram-value-display">6 ГБ</span>
+              </div>
+              <span class="setting-help">Рекомендуется выделить минимум 6 ГБ для комфортной игры на NeoForge 1.21.1.</span>
+            </div>
+
+            <!-- Кастомный фон лаунчера -->
+            <div class="setting-item">
+              <label>🎨 Кастомный фон лаунчера (PNG / JPG)</label>
+              <div class="custom-bg-controls">
+                <input type="file" id="input-custom-bg" accept="image/png, image/jpeg, image/webp" style="display: none;">
+                <button type="button" class="btn-dropdown" id="btn-upload-bg" style="width: auto; display: inline-flex; gap: 8px; align-items: center;">🖼️ Выбрать PNG / JPG картинку</button>
+                <button type="button" class="btn-dropdown" id="btn-reset-bg" style="width: auto; display: inline-flex; gap: 8px; align-items: center; margin-left: 10px;">🔄 Сбросить фон</button>
+              </div>
+              <span class="setting-help">Вы можете загрузить любое изображение, чтобы установить его в качестве обоев интерфейса.</span>
+            </div>
+
+            <div class="setting-item">
+              <div class="toggle-container">
+                <span class="toggle-label">Отключить оптимизационные JVM флаги (Aikar/ZGC)</span>
+                <label class="switch">
+                  <input type="checkbox" id="disable-jvm-flags">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+              <span class="setting-help">Позволяет указать собственные флаги запуска или убрать стандартные.</span>
+
+              <!-- Окно кастомных параметров запуска -->
+              <div class="custom-jvm-editor hidden" id="custom-jvm-box" style="margin-top: 14px; background: rgba(0,0,0,0.3); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--panel-border);">
+                <label style="font-size: 12px; font-weight: 700; color: #fb923c; text-transform: uppercase; margin-bottom: 6px; display: block;">⚙️ Ваши кастомные параметры запуска JVM:</label>
+                <textarea id="player-custom-jvm-flags" rows="3" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--panel-border); color: #fff; padding: 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; outline: none;" placeholder="-XX:+UseG1GC -Xmx6G -Xms4G..."></textarea>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button type="button" class="btn-dropdown" id="btn-save-jvm-flags" style="width: auto; padding: 6px 14px; background: rgba(251, 146, 60, 0.2); border-color: rgba(251, 146, 60, 0.4); color: #ffedd5;">💾 Сохранить флаги</button>
+                  <button type="button" class="btn-dropdown" id="btn-reset-jvm-flags" style="width: auto; padding: 6px 14px;">🔄 Сбросить</button>
+                </div>
+                <span class="setting-help" style="color: #fda4af; margin-top: 6px; display: block; font-size: 11px;">⚠️ Флаги удаленной отладки Java (jdwp/Xdebug) заблокированы для безопасности.</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="toggle-container">
+                <span class="toggle-label">Discord Rich Presence (Статус в Discord)</span>
+                <label class="switch">
+                  <input type="checkbox" id="enable-discord-rpc" checked>
+                  <span class="slider round"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+  </div>
+
+  <!-- Полноэкранный просмотр скриншотов (Lightbox) -->
+  <div class="lightbox-overlay hidden" id="screenshots-lightbox">
+    <button class="lightbox-nav-btn prev" id="lightbox-prev-btn" title="Предыдущий (‹)">‹</button>
+    <div class="lightbox-content" id="lightbox-content-zone">
+      <img src="" alt="Screenshot" id="lightbox-img">
+      <div class="lightbox-caption" id="lightbox-caption">Скриншот</div>
+    </div>
+    <button class="lightbox-nav-btn next" id="lightbox-next-btn" title="Следующий (›)">›</button>
+  </div>
+
+  <script src="app.js?v=4.0"></script>
+</body>
+</html>

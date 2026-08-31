@@ -1,0 +1,887 @@
+// VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
+let KNOWN_MIRRORS = JSON.parse(localStorage.getItem('vozducraft_known_mirrors') || '["http://localhost:3000/api/v1", "http://89.248.236.145:3000/api/v1", "http://185.221.213.43:3000/api/v1"]');
+let CURRENT_API_BASE = localStorage.getItem('vozducraft_active_mirror') || (
+  window.location.hostname === 'localhost' || window.location.protocol === 'file:' 
+    ? 'http://localhost:3000/api/v1' 
+    : 'http://89.248.236.145:3000/api/v1'
+);
+
+let ipcRenderer = null;
+if (window.require) {
+  try {
+    ipcRenderer = window.require('electron').ipcRenderer;
+  } catch (e) {}
+}
+
+const appState = {
+  token: localStorage.getItem('vozducraft_token') || null,
+  username: localStorage.getItem('vozducraft_username') || null,
+  ramGb: parseInt(localStorage.getItem('vozducraft_ram')) || 6,
+  disableJvmFlags: localStorage.getItem('vozducraft_disable_jvm') === 'true',
+  playerCustomJvm: localStorage.getItem('vozducraft_player_custom_jvm') || '',
+  enableDiscordRpc: localStorage.getItem('vozducraft_rpc') !== 'false',
+  customBg: localStorage.getItem('vozducraft_custom_bg') || '',
+  optionalMods: [],
+  selectedOptionalMods: JSON.parse(localStorage.getItem('vozducraft_selected_opt_mods') || '[]'),
+  servers: [],
+  currentServerIndex: 0
+};
+
+let isGameLaunching = false;
+let activeLaunchingServerId = null;
+let currentScreenshots = [];
+let currentLightboxIndex = 0;
+
+// ----------------------------------------------------
+// 0. ОТКАЗОУСТОЙЧИВЫЙ FETCH С ЗЕРКАЛАМИ (FAILOVER)
+// ----------------------------------------------------
+async function apiFetch(endpoint, options = {}) {
+  // 1. Сначала пробуем текущий активный узел
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(`${CURRENT_API_BASE}${endpoint}`, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.mirrors && Array.isArray(data.mirrors)) {
+        updateKnownMirrors(data.mirrors);
+      }
+      return data;
+    }
+  } catch (e) {
+    console.warn(`[FAILOVER] Основной узел ${CURRENT_API_BASE} не отвечает. Переключение на запасные зеркала...`);
+  }
+
+  // 2. Failover: перебираем все известные зеркала
+  for (const mirrorUrl of KNOWN_MIRRORS) {
+    if (mirrorUrl === CURRENT_API_BASE) continue;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(`${mirrorUrl}${endpoint}`, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        CURRENT_API_BASE = mirrorUrl;
+        localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
+        console.log(`[FAILOVER] Успешно переключено на резервное зеркало: ${CURRENT_API_BASE}`);
+        const data = await res.json();
+        if (data.mirrors && Array.isArray(data.mirrors)) {
+          updateKnownMirrors(data.mirrors);
+        }
+        return data;
+      }
+    } catch (err) {}
+  }
+
+  throw new Error('Все зеркала API недоступны');
+}
+
+function updateKnownMirrors(mirrorsList) {
+  const urls = mirrorsList.map(m => m.url);
+  KNOWN_MIRRORS = Array.from(new Set([...urls, ...KNOWN_MIRRORS]));
+  localStorage.setItem('vozducraft_known_mirrors', JSON.stringify(KNOWN_MIRRORS));
+
+  const primary = mirrorsList.find(m => m.is_primary);
+  if (primary && primary.url && primary.url !== CURRENT_API_BASE) {
+    CURRENT_API_BASE = primary.url;
+    localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
+    console.log(`[MIGRATION] Получен новый мастер-узел проекта: ${CURRENT_API_BASE}`);
+  }
+}
+
+// ----------------------------------------------------
+// 1. ГЛОБАЛЬНЫЕ КОЛБЭКИ C++ ДВИЖКА
+// ----------------------------------------------------
+window.__VOZDUCRAFT_ON_STATUS = function(percent, text) {
+  const progressContainer = document.getElementById('progress-container');
+  const fill = document.getElementById('progress-fill');
+  const percentText = document.getElementById('progress-percent');
+  const statusText = document.getElementById('progress-text');
+
+  if (progressContainer) progressContainer.classList.remove('hidden');
+  if (fill) fill.style.width = percent + '%';
+  if (percentText) percentText.textContent = percent + '%';
+  if (statusText) statusText.textContent = text;
+
+  if (percent >= 100) {
+    updateLaunchButtonState(true);
+  }
+};
+
+window.__VOZDUCRAFT_ON_GAME_CLOSED = function(exitCode) {
+  console.log('[GAME CLOSED] Exit code:', exitCode);
+  isGameLaunching = false;
+  activeLaunchingServerId = null;
+
+  const progressContainer = document.getElementById('progress-container');
+  if (progressContainer) progressContainer.classList.add('hidden');
+
+  updateLaunchButtonState(false);
+};
+
+window.__VOZDUCRAFT_ON_LOG = function(logLine) {
+  console.log('[NATIVE LOG]', logLine);
+};
+
+function updateLaunchButtonState(isRunning) {
+  document.querySelectorAll('.btn-launch-server').forEach(btn => {
+    const sId = parseInt(btn.dataset.serverId, 10);
+    if (isRunning && sId === activeLaunchingServerId) {
+      btn.disabled = true;
+      btn.style.opacity = '0.85';
+      btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+      btn.style.boxShadow = '0 8px 30px rgba(16, 185, 129, 0.4)';
+      btn.innerHTML = '<span class="launch-icon">🎮</span><span class="launch-text">ИГРА ЗАПУЩЕНА</span>';
+    } else {
+      btn.disabled = isRunning;
+      btn.style.opacity = isRunning ? '0.5' : '1';
+      btn.style.background = '';
+      btn.style.boxShadow = '';
+      btn.innerHTML = '<span class="launch-icon">🌪️</span><span class="launch-text">Испортить атмосферу VozduCraft</span><span class="launch-icon">🌪️</span>';
+    }
+  });
+}
+
+function showToast(msg) {
+  const existing = document.getElementById('app-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'app-toast';
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(18, 22, 36, 0.95);
+    color: #fff;
+    border: 1px solid #fb923c;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 9999;
+    backdrop-filter: blur(10px);
+    transition: opacity 0.3s ease;
+  `;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// ----------------------------------------------------
+// 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
+// ----------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+  initCustomBackground();
+  setupWindowControls();
+  setupNavigation();
+  setupAuthEvents();
+  setupSettingsEvents();
+  setupQuickFoldersDropdown();
+  setupDownloadListener();
+  setupLightboxEvents();
+  loadServerCarousel();
+
+  setInterval(() => {
+    if (appState.servers.length > 0) {
+      appState.servers.forEach(s => pingServerCard(s));
+    }
+  }, 5000);
+
+  if (appState.token && appState.username) {
+    showDashboard();
+  } else {
+    showAuth();
+  }
+});
+
+// ----------------------------------------------------
+// 3. УПРАВЛЕНИЕ ОКНОМ И ПЕРЕТАСКИВАНИЕ (DRAG)
+// ----------------------------------------------------
+function setupWindowControls() {
+  const closeBtn = document.getElementById('btn-close');
+  const minBtn = document.getElementById('btn-minimize');
+  const titlebar = document.getElementById('app-titlebar');
+
+  if (titlebar) {
+    titlebar.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.window-controls') || e.target.closest('button')) return;
+      if (window.nativeDragWindow) {
+        window.nativeDragWindow();
+      }
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (window.nativeCloseWindow) {
+        window.nativeCloseWindow();
+      } else if (ipcRenderer) {
+        ipcRenderer.send('window-close');
+      } else {
+        window.close();
+      }
+    });
+  }
+
+  if (minBtn) {
+    minBtn.addEventListener('click', () => {
+      if (window.nativeMinimizeWindow) {
+        window.nativeMinimizeWindow();
+      } else if (ipcRenderer) {
+        ipcRenderer.send('window-minimize');
+      }
+    });
+  }
+}
+
+// ----------------------------------------------------
+// 4. КАСТОМНЫЙ ФОН (PNG / JPG)
+// ----------------------------------------------------
+function initCustomBackground() {
+  if (appState.customBg) {
+    applyCustomBackground(appState.customBg);
+  }
+
+  const fileInput = document.getElementById('input-custom-bg');
+  const btnUpload = document.getElementById('btn-upload-bg');
+  const btnReset = document.getElementById('btn-reset-bg');
+
+  if (btnUpload && fileInput) {
+    btnUpload.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Bg = event.target.result;
+        appState.customBg = base64Bg;
+        localStorage.setItem('vozducraft_custom_bg', base64Bg);
+        applyCustomBackground(base64Bg);
+        showToast('🎨 Новый кастомный фон установлен!');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      appState.customBg = '';
+      localStorage.removeItem('vozducraft_custom_bg');
+      document.body.style.backgroundImage = '';
+      document.body.classList.remove('has-custom-bg');
+      showToast('🔄 Фоновое изображение сброшено');
+    });
+  }
+}
+
+function applyCustomBackground(url) {
+  document.body.style.backgroundImage = `url("${url}")`;
+  document.body.classList.add('has-custom-bg');
+}
+
+// ----------------------------------------------------
+// 5. КАРУСЕЛЬ КАРТОЧЕК СЕРВЕРОВ
+// ----------------------------------------------------
+async function loadServerCarousel() {
+  try {
+    const data = await apiFetch('/manifest/servers');
+    appState.servers = data.servers || [];
+
+    if (appState.servers.length === 0) {
+      appState.servers = [
+        {
+          id: 1,
+          name: 'VozduCraft Season #2',
+          server_ip: '89.248.236.145',
+          server_port: 27123,
+          minecraft_version: '1.21.1',
+          modloader: 'neoforge',
+          modloader_version: '21.1.248',
+          java_version: 21,
+          description: 'Официальный сервер выживания VozduCraft Season #2 (170+ модов)'
+        },
+        {
+          id: 2,
+          name: 'VozduCraft Tech & Create',
+          server_ip: '185.221.213.43',
+          server_port: 25566,
+          minecraft_version: '1.21.1',
+          modloader: 'neoforge',
+          modloader_version: '21.1.248',
+          java_version: 21,
+          description: 'Индустриальный сервер с механизмами Create, авиацией и поездами'
+        }
+      ];
+    }
+
+    renderCarousel();
+    appState.servers.forEach(s => pingServerCard(s));
+  } catch (err) {
+    console.error('Ошибка загрузки списка серверов:', err);
+  }
+}
+
+function renderCarousel() {
+  const container = document.getElementById('server-cards-container');
+  const dotsContainer = document.getElementById('carousel-dots-container');
+  const prevBtn = document.getElementById('carousel-prev-btn');
+  const nextBtn = document.getElementById('carousel-next-btn');
+
+  if (!container || !dotsContainer) return;
+
+  container.innerHTML = '';
+  dotsContainer.innerHTML = '';
+
+  appState.servers.forEach((server, index) => {
+    const card = document.createElement('div');
+    card.className = 'server-carousel-card glass-panel';
+    card.dataset.serverId = server.id;
+
+    const loaderName = (server.modloader || 'NeoForge').toUpperCase();
+    const loaderVer = server.modloader_version || server.neoforge_version || '21.1.248';
+
+    card.innerHTML = `
+      <div class="server-card-top">
+        <div class="server-header">
+          <div class="server-badge online" id="server-badge-${server.id}">
+            <span class="ping-dot"></span>
+            <span id="server-badge-text-${server.id}">ONLINE</span>
+          </div>
+          <h2 class="server-title">${server.name}</h2>
+        </div>
+
+        <div class="server-address-chip">🎯 ${server.server_ip}:${server.server_port}</div>
+        <p class="server-desc">${server.description || 'Официальный игровой сервер VozduCraft'}</p>
+
+        <div class="server-stats">
+          <div class="stat-item">
+            <span class="stat-label">Игроков онлайн</span>
+            <span class="stat-value" id="online-count-${server.id}">0 / 100</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Пинг</span>
+            <span class="stat-value" id="ping-val-${server.id}">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Модлоадер</span>
+            <span class="stat-value">${loaderName} ${loaderVer}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Версия MC</span>
+            <span class="stat-value">${server.minecraft_version}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="server-card-bottom">
+        <button class="btn-launch btn-launch-server" data-server-id="${server.id}">
+          <span class="launch-icon">🌪️</span>
+          <span class="launch-text">Испортить атмосферу VozduCraft</span>
+          <span class="launch-icon">🌪️</span>
+        </button>
+      </div>
+    `;
+
+    container.appendChild(card);
+
+    const dot = document.createElement('div');
+    dot.className = `carousel-dot ${index === 0 ? 'active' : ''}`;
+    dot.dataset.index = index;
+    dot.addEventListener('click', () => scrollToServer(index));
+    dotsContainer.appendChild(dot);
+  });
+
+  document.querySelectorAll('.btn-launch-server').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const sId = parseInt(btn.dataset.serverId, 10);
+      const targetServer = appState.servers.find(x => x.id === sId) || appState.servers[0];
+      launchSelectedServer(targetServer);
+    });
+  });
+
+  if (prevBtn && nextBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (appState.currentServerIndex > 0) {
+        scrollToServer(appState.currentServerIndex - 1);
+      }
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (appState.currentServerIndex < appState.servers.length - 1) {
+        scrollToServer(appState.currentServerIndex + 1);
+      }
+    });
+  }
+
+  scrollToServer(0);
+}
+
+function scrollToServer(index) {
+  const container = document.getElementById('server-cards-container');
+  const prevBtn = document.getElementById('carousel-prev-btn');
+  const nextBtn = document.getElementById('carousel-next-btn');
+  const dots = document.querySelectorAll('.carousel-dot');
+
+  if (!container || appState.servers.length === 0) return;
+
+  appState.currentServerIndex = Math.max(0, Math.min(index, appState.servers.length - 1));
+
+  const cardWidth = container.clientWidth;
+  container.scrollTo({
+    left: appState.currentServerIndex * cardWidth,
+    behavior: 'smooth'
+  });
+
+  dots.forEach((d, i) => {
+    if (i === appState.currentServerIndex) d.classList.add('active');
+    else d.classList.remove('active');
+  });
+
+  if (prevBtn) prevBtn.disabled = appState.currentServerIndex === 0;
+  if (nextBtn) nextBtn.disabled = appState.currentServerIndex === appState.servers.length - 1;
+
+  const activeServer = appState.servers[appState.currentServerIndex];
+  if (activeServer) fetchOptionalModsFor(activeServer.id);
+}
+
+async function pingServerCard(server) {
+  const badge = document.getElementById(`server-badge-${server.id}`);
+  const badgeTxt = document.getElementById(`server-badge-text-${server.id}`);
+  const onlineCount = document.getElementById(`online-count-${server.id}`);
+  const pingVal = document.getElementById(`ping-val-${server.id}`);
+
+  try {
+    const data = await apiFetch(`/admin/servers/${server.id}/ping`);
+
+    if (data.online) {
+      if (badge) badge.className = 'server-badge online';
+      if (badgeTxt) badgeTxt.textContent = 'ONLINE';
+      if (onlineCount) onlineCount.textContent = `${data.players?.online || 0} / ${data.players?.max || 100}`;
+      if (pingVal) pingVal.textContent = `${data.ping_ms || 24} ms`;
+    } else {
+      if (badge) badge.className = 'server-badge offline';
+      if (badgeTxt) badgeTxt.textContent = 'OFFLINE';
+      if (onlineCount) onlineCount.textContent = '0 / 0';
+      if (pingVal) pingVal.textContent = '—';
+    }
+  } catch (err) {
+    if (badge) badge.className = 'server-badge offline';
+    if (onlineCount) onlineCount.textContent = '—';
+    if (pingVal) pingVal.textContent = '—';
+  }
+}
+
+// ----------------------------------------------------
+// 6. ЗАПУСК ИГРЫ С УЧЕТОМ JVM-ФЛАГОВ
+// ----------------------------------------------------
+function launchSelectedServer(server) {
+  if (isGameLaunching) return;
+  isGameLaunching = true;
+  activeLaunchingServerId = server.id;
+
+  updateLaunchButtonState(true);
+
+  const progressContainer = document.getElementById('progress-container');
+  if (progressContainer) progressContainer.classList.remove('hidden');
+
+  let finalJvmFlags = server.jvm_flags || '';
+  if (appState.disableJvmFlags) {
+    finalJvmFlags = appState.playerCustomJvm || '';
+  }
+
+  const launchPayload = {
+    username: appState.username || 'VozduHAN',
+    ram: Math.max(appState.ramGb || 6, server.min_ram_gb || 4),
+    token: appState.token || 'LOCAL-TOKEN',
+    disableJvmFlags: appState.disableJvmFlags,
+    selectedOptionalMods: appState.selectedOptionalMods,
+    serverId: server.id,
+    serverIp: server.server_ip,
+    serverPort: server.server_port,
+    modloader: server.modloader || 'neoforge',
+    neoForgeVersion: server.modloader_version || server.neoforge_version || '21.1.248',
+    minecraftVersion: server.minecraft_version || '1.21.1',
+    customJvmFlags: finalJvmFlags,
+    gameArgs: server.game_args || '',
+    autoJoinServer: server.auto_join_server !== undefined ? server.auto_join_server : 1,
+    apiBaseUrl: CURRENT_API_BASE
+  };
+
+  if (window.nativeLaunchGame) {
+    try {
+      window.nativeLaunchGame(launchPayload);
+    } catch (err) {
+      console.error('C++ nativeLaunchGame error:', err);
+    }
+  } else if (ipcRenderer) {
+    ipcRenderer.send('execute-launch', launchPayload);
+  } else {
+    window.__VOZDUCRAFT_ON_STATUS(100, 'Запуск в браузере (симуляция)');
+  }
+}
+
+// ----------------------------------------------------
+// 7. СКРИНШОТЫ И ПОЛНОЭКРАННЫЙ ПРОСМОТР (LIGHTBOX)
+// ----------------------------------------------------
+async function loadScreenshots() {
+  const container = document.getElementById('screenshots-grid');
+  if (!container) return;
+  container.innerHTML = '<div class="gallery-empty">Загрузка скриншотов...</div>';
+
+  try {
+    let shots = [];
+    if (window.nativeGetScreenshots) {
+      const res = window.nativeGetScreenshots();
+      shots = typeof res === 'string' ? JSON.parse(res) : res;
+    }
+
+    currentScreenshots = shots || [];
+    container.innerHTML = '';
+
+    if (currentScreenshots.length === 0) {
+      container.innerHTML = '<div class="gallery-empty" style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted);">📷 У вас пока нет внутриигровых скриншотов.<br>Нажмите <b>F2</b> в игре, чтобы сделать снимок!</div>';
+      return;
+    }
+
+    currentScreenshots.forEach((shot, index) => {
+      const card = document.createElement('div');
+      card.className = 'screenshot-card';
+      card.innerHTML = `
+        <div class="screenshot-thumb-wrap">
+          <img src="${shot.data}" alt="${shot.filename}">
+          <button class="btn-copy-screenshot" data-index="${index}" title="Скопировать в буфер">📋 Скопировать</button>
+        </div>
+        <div class="screenshot-meta">
+          <span class="screenshot-name">${shot.filename}</span>
+        </div>
+      `;
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-copy-screenshot')) return;
+        openLightbox(index);
+      });
+
+      card.querySelector('.btn-copy-screenshot').addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyScreenshot(shot);
+      });
+
+      container.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки скриншотов:', err);
+    container.innerHTML = '<div class="gallery-empty">Не удалось загрузить скриншоты</div>';
+  }
+}
+
+function copyScreenshot(shot) {
+  if (window.nativeCopyImageToClipboard) {
+    window.nativeCopyImageToClipboard({ path: shot.path });
+    showToast('📋 Скриншот скопирован в буфер обмена!');
+  } else {
+    navigator.clipboard.writeText(shot.filename);
+    showToast('📋 Имя файла скопировано');
+  }
+}
+
+function openLightbox(index) {
+  currentLightboxIndex = index;
+  const overlay = document.getElementById('screenshots-lightbox');
+  const img = document.getElementById('lightbox-img');
+  const caption = document.getElementById('lightbox-caption');
+
+  if (!overlay || !img || !currentScreenshots[index]) return;
+
+  img.src = currentScreenshots[index].data;
+  if (caption) caption.textContent = `${currentScreenshots[index].filename} (${index + 1} из ${currentScreenshots.length})`;
+
+  overlay.classList.remove('hidden');
+}
+
+function setupLightboxEvents() {
+  const overlay = document.getElementById('screenshots-lightbox');
+  const prevBtn = document.getElementById('lightbox-prev-btn');
+  const nextBtn = document.getElementById('lightbox-next-btn');
+
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target.closest('.lightbox-nav-btn')) return;
+      overlay.classList.add('hidden');
+    });
+  }
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentScreenshots.length === 0) return;
+      currentLightboxIndex = (currentLightboxIndex - 1 + currentScreenshots.length) % currentScreenshots.length;
+      openLightbox(currentLightboxIndex);
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentScreenshots.length === 0) return;
+      currentLightboxIndex = (currentLightboxIndex + 1) % currentScreenshots.length;
+      openLightbox(currentLightboxIndex);
+    });
+  }
+
+  document.getElementById('btn-refresh-screenshots')?.addEventListener('click', loadScreenshots);
+}
+
+// ----------------------------------------------------
+// 8. ОПЦИОНАЛЬНЫЕ МОДЫ
+// ----------------------------------------------------
+async function fetchOptionalModsFor(serverId) {
+  try {
+    const data = await apiFetch(`/manifest?serverId=${serverId}`);
+
+    const container = document.getElementById('optional-mods-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!data.optionalFiles || data.optionalFiles.length === 0) {
+      container.innerHTML = '<div class="gallery-empty">Для этого сервера нет опциональных модов</div>';
+      return;
+    }
+
+    data.optionalFiles.forEach(mod => {
+      const card = document.createElement('div');
+      card.className = 'mod-card';
+      const isChecked = appState.selectedOptionalMods.includes(mod.filepath);
+
+      card.innerHTML = `
+        <div class="mod-info">
+          <span class="mod-title">${mod.mod_name || mod.filepath}</span>
+          <span class="mod-desc">${mod.mod_description || 'Опциональный мод'}</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-filepath="${mod.filepath}" ${isChecked ? 'checked' : ''}>
+          <span class="slider round"></span>
+        </label>
+      `;
+
+      card.querySelector('input').addEventListener('change', (e) => {
+        const path = e.target.dataset.filepath;
+        if (e.target.checked) {
+          if (!appState.selectedOptionalMods.includes(path)) appState.selectedOptionalMods.push(path);
+        } else {
+          appState.selectedOptionalMods = appState.selectedOptionalMods.filter(p => p !== path);
+        }
+        localStorage.setItem('vozducraft_selected_opt_mods', JSON.stringify(appState.selectedOptionalMods));
+      });
+
+      container.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки опциональных модов:', err);
+  }
+}
+
+// ----------------------------------------------------
+// 9. НАВИГАЦИЯ И СОБЫТИЯ
+// ----------------------------------------------------
+function setupNavigation() {
+  const navItems = document.querySelectorAll('.nav-item');
+  const tabs = document.querySelectorAll('.dashboard-tab');
+
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const targetTabId = 'tab-' + item.dataset.tab;
+      navItems.forEach(n => n.classList.remove('active'));
+      tabs.forEach(t => t.classList.remove('active'));
+
+      item.classList.add('active');
+      const targetTab = document.getElementById(targetTabId);
+      if (targetTab) targetTab.classList.add('active');
+
+      if (item.dataset.tab === 'screenshots') {
+        loadScreenshots();
+      } else if (item.dataset.tab === 'mods') {
+        const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
+        if (activeServer) fetchOptionalModsFor(activeServer.id);
+      }
+    });
+  });
+
+  const logoutBtn = document.getElementById('btn-logout');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('vozducraft_token');
+      localStorage.removeItem('vozducraft_username');
+      appState.token = null;
+      appState.username = null;
+      showAuth();
+    });
+  }
+}
+
+function showAuth() {
+  document.getElementById('screen-auth')?.classList.add('active');
+  document.getElementById('screen-dashboard')?.classList.remove('active');
+}
+
+function showDashboard() {
+  document.getElementById('screen-auth')?.classList.remove('active');
+  document.getElementById('screen-dashboard')?.classList.add('active');
+  const nameEl = document.getElementById('display-username');
+  if (nameEl) nameEl.textContent = appState.username;
+}
+
+function setupAuthEvents() {
+  const authForm = document.getElementById('auth-form');
+
+  if (authForm) {
+    authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const usernameInput = document.getElementById('input-username');
+      const username = (usernameInput ? usernameInput.value.trim() : '') || 'VozduHAN';
+
+      appState.username = username;
+      appState.token = 'VOZDUCRAFT-SESSION-' + Date.now();
+      localStorage.setItem('vozducraft_token', appState.token);
+      localStorage.setItem('vozducraft_username', appState.username);
+
+      showDashboard();
+      const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
+      if (activeServer) fetchOptionalModsFor(activeServer.id);
+    });
+  }
+}
+
+function setupQuickFoldersDropdown() {
+  const btn = document.getElementById('btn-quick-folders');
+  const menu = document.getElementById('dropdown-menu-folders');
+
+  if (btn && menu) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => menu.classList.add('hidden'));
+
+    const triggerOpen = (folder) => {
+      if (window.nativeOpenFolder) {
+        window.nativeOpenFolder(folder);
+      } else if (ipcRenderer) {
+        ipcRenderer.send('open-folder', folder);
+      }
+    };
+
+    document.getElementById('open-folder-screenshots')?.addEventListener('click', () => triggerOpen('screenshots'));
+    document.getElementById('open-folder-config')?.addEventListener('click', () => triggerOpen('config'));
+    document.getElementById('open-folder-logs')?.addEventListener('click', () => triggerOpen('logs'));
+  }
+}
+
+function setupSettingsEvents() {
+  const ramSlider = document.getElementById('ram-slider');
+  const ramDisplay = document.getElementById('ram-value-display');
+  const disableJvmCb = document.getElementById('disable-jvm-flags');
+  const customJvmBox = document.getElementById('custom-jvm-box');
+  const customJvmInput = document.getElementById('player-custom-jvm-flags');
+  const btnSaveJvm = document.getElementById('btn-save-jvm-flags');
+  const btnResetJvm = document.getElementById('btn-reset-jvm-flags');
+  const enableRpcCb = document.getElementById('enable-discord-rpc');
+
+  if (customJvmInput) {
+    customJvmInput.value = localStorage.getItem('vozducraft_player_custom_jvm') || '';
+  }
+
+  if (disableJvmCb) {
+    disableJvmCb.checked = appState.disableJvmFlags;
+    if (customJvmBox) {
+      if (disableJvmCb.checked) {
+        customJvmBox.classList.remove('hidden');
+        customJvmBox.style.display = 'block';
+      } else {
+        customJvmBox.classList.add('hidden');
+        customJvmBox.style.display = 'none';
+      }
+    }
+
+    disableJvmCb.addEventListener('change', (e) => {
+      appState.disableJvmFlags = e.target.checked;
+      localStorage.setItem('vozducraft_disable_jvm', e.target.checked);
+      if (customJvmBox) {
+        if (e.target.checked) {
+          customJvmBox.classList.remove('hidden');
+          customJvmBox.style.display = 'block';
+        } else {
+          customJvmBox.classList.add('hidden');
+          customJvmBox.style.display = 'none';
+        }
+      }
+    });
+  }
+
+  if (btnSaveJvm && customJvmInput) {
+    btnSaveJvm.addEventListener('click', () => {
+      let val = customJvmInput.value;
+      if (/(-agentlib:jdwp|-Xdebug|-Xrunjdwp)/i.test(val)) {
+        alert('⚠️ Флаги отладки Java (jdwp/Xdebug) запрещены политикой безопасности.');
+        val = val.replace(/(-agentlib:jdwp[^\s]*|-Xdebug|-Xrunjdwp[^\s]*)/gi, '').trim();
+        customJvmInput.value = val;
+      }
+      appState.playerCustomJvm = val;
+      localStorage.setItem('vozducraft_player_custom_jvm', val);
+      showToast('💾 Пользовательские JVM-флаги сохранены!');
+    });
+  }
+
+  if (btnResetJvm && customJvmInput) {
+    btnResetJvm.addEventListener('click', () => {
+      customJvmInput.value = '';
+      appState.playerCustomJvm = '';
+      localStorage.removeItem('vozducraft_player_custom_jvm');
+      showToast('🔄 Сброшено на стандартные параметры');
+    });
+  }
+
+  if (ramSlider && ramDisplay) {
+    ramSlider.value = appState.ramGb;
+    ramDisplay.textContent = `${appState.ramGb} ГБ`;
+
+    ramSlider.addEventListener('input', (e) => {
+      appState.ramGb = e.target.value;
+      ramDisplay.textContent = `${e.target.value} ГБ`;
+      localStorage.setItem('vozducraft_ram', e.target.value);
+    });
+  }
+
+  if (enableRpcCb) {
+    enableRpcCb.checked = appState.enableDiscordRpc;
+    enableRpcCb.addEventListener('change', (e) => {
+      appState.enableDiscordRpc = e.target.checked;
+      localStorage.setItem('vozducraft_rpc', e.target.checked);
+    });
+  }
+}
+
+function setupDownloadListener() {
+  if (!ipcRenderer) return;
+
+  ipcRenderer.on('mc-download-status', (event, data) => {
+    window.__VOZDUCRAFT_ON_STATUS(data.percent, data.text);
+  });
+
+  ipcRenderer.on('mc-status', (event, data) => {
+    if (data.type === 'closed') {
+      window.__VOZDUCRAFT_ON_GAME_CLOSED(data.code);
+    }
+  });
+}
