@@ -1,10 +1,22 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
-let KNOWN_MIRRORS = JSON.parse(localStorage.getItem('vozducraft_known_mirrors') || '["http://localhost:3000/api/v1", "http://89.248.236.145:3000/api/v1", "http://185.221.213.43:3000/api/v1"]');
-let CURRENT_API_BASE = localStorage.getItem('vozducraft_active_mirror') || (
-  window.location.hostname === 'localhost' || window.location.protocol === 'file:' 
-    ? 'http://localhost:3000/api/v1' 
-    : 'http://89.248.236.145:3000/api/v1'
-);
+const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
+
+let storedMirrors = [];
+try {
+  storedMirrors = JSON.parse(localStorage.getItem('vozducraft_known_mirrors') || '[]');
+} catch (e) {}
+
+let KNOWN_MIRRORS = Array.from(new Set([
+  DEFAULT_PRIMARY_MIRROR,
+  ...(Array.isArray(storedMirrors) ? storedMirrors : []),
+  'http://89.248.236.145:3000/api/v1'
+])).filter(url => url && typeof url === 'string' && !url.includes('localhost'));
+
+let CURRENT_API_BASE = DEFAULT_PRIMARY_MIRROR;
+const savedMirror = localStorage.getItem('vozducraft_active_mirror');
+if (savedMirror && !savedMirror.includes('localhost')) {
+  CURRENT_API_BASE = savedMirror;
+}
 
 let ipcRenderer = null;
 if (window.require) {
@@ -37,56 +49,48 @@ let currentLightboxIndex = 0;
 // 0. ОТКАЗОУСТОЙЧИВЫЙ FETCH С ЗЕРКАЛАМИ (FAILOVER)
 // ----------------------------------------------------
 async function apiFetch(endpoint, options = {}) {
-  // 1. Сначала пробуем текущий активный узел
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`${CURRENT_API_BASE}${endpoint}`, { ...options, signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.mirrors && Array.isArray(data.mirrors)) {
-        updateKnownMirrors(data.mirrors);
-      }
-      return data;
-    }
-  } catch (e) {
-    console.warn(`[FAILOVER] Основной узел ${CURRENT_API_BASE} не отвечает. Переключение на запасные зеркала...`);
-  }
-
-  // 2. Failover: перебираем все известные зеркала
-  for (const mirrorUrl of KNOWN_MIRRORS) {
-    if (mirrorUrl === CURRENT_API_BASE) continue;
+  const tryMirrors = [CURRENT_API_BASE, ...KNOWN_MIRRORS.filter(m => m !== CURRENT_API_BASE)];
+  
+  let lastError = null;
+  for (const mirrorUrl of tryMirrors) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(`${mirrorUrl}${endpoint}`, { ...options, signal: controller.signal });
       clearTimeout(timeoutId);
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        CURRENT_API_BASE = mirrorUrl;
-        localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
-        console.log(`[FAILOVER] Успешно переключено на резервное зеркало: ${CURRENT_API_BASE}`);
-        const data = await res.json();
+        if (CURRENT_API_BASE !== mirrorUrl) {
+          CURRENT_API_BASE = mirrorUrl;
+          localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
+          console.log(`[FAILOVER] Переключено на активное зеркало: ${CURRENT_API_BASE}`);
+        }
         if (data.mirrors && Array.isArray(data.mirrors)) {
           updateKnownMirrors(data.mirrors);
         }
         return data;
+      } else if (res.status >= 400 && res.status < 500) {
+        // Ответ от рабочего сервера с ошибкой валидации/бана
+        return data;
       }
-    } catch (err) {}
+    } catch (e) {
+      lastError = e;
+      console.warn(`[FAILOVER] Узел ${mirrorUrl} недоступен, пробуем следующее зеркало...`);
+    }
   }
 
-  throw new Error('Все зеркала API недоступны');
+  throw new Error('Все зеркала API недоступны: ' + (lastError ? lastError.message : 'Timeout'));
 }
 
 function updateKnownMirrors(mirrorsList) {
-  const urls = mirrorsList.map(m => m.url);
+  const urls = mirrorsList.map(m => m.url).filter(u => u && !u.includes('localhost'));
   KNOWN_MIRRORS = Array.from(new Set([...urls, ...KNOWN_MIRRORS]));
   localStorage.setItem('vozducraft_known_mirrors', JSON.stringify(KNOWN_MIRRORS));
 
   const primary = mirrorsList.find(m => m.is_primary);
-  if (primary && primary.url && primary.url !== CURRENT_API_BASE) {
+  if (primary && primary.url && !primary.url.includes('localhost') && primary.url !== CURRENT_API_BASE) {
     CURRENT_API_BASE = primary.url;
     localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
     console.log(`[MIGRATION] Получен новый мастер-узел проекта: ${CURRENT_API_BASE}`);

@@ -1,5 +1,16 @@
 {
   "name": "vozducraft-launcher",
   "version": "1.0.0",
-  "main": "main.js"
+  "description": "VozduCraft Native Minecraft Launcher",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-packager . VozduCraft --platform=win32 --arch=x64 --out=dist_win --overwrite --asar",
+    "build:mac": "electron-packager . VozduCraft --platform=darwin --arch=arm64 --out=dist_mac --overwrite --asar"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.1",
+    "electron": "^29.1.0",
+    "electron-packager": "^17.1.2"
+  }
 }
