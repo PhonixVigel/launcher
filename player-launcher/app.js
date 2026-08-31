@@ -66,8 +66,8 @@ async function apiFetch(endpoint, options = {}) {
           headers: options.headers || { 'Content-Type': 'application/json' },
           body: typeof options.body === 'string' ? options.body : (options.body ? JSON.stringify(options.body) : '')
         });
-        const resStr = await window.nativeApiFetch(payload);
-        data = JSON.parse(resStr);
+        const resData = await window.nativeApiFetch(payload);
+        data = (typeof resData === 'string') ? JSON.parse(resData) : resData;
         if (data && !data.error) {
           isSuccess = true;
         } else if (data && data.status) {
