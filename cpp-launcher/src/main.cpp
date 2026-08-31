@@ -156,6 +156,32 @@ int main(int argc, char** argv) {
         return "{}";
     });
 
+    // Открытие внешней ссылки в системном браузере (Safari / Chrome)
+    g_webview->bind("nativeOpenUrl", [](const std::string& reqJson) -> std::string {
+        try {
+            std::string url = "";
+            if (!reqJson.empty()) {
+                if (reqJson.front() == '"' && reqJson.back() == '"') {
+                    url = reqJson.substr(1, reqJson.length() - 2);
+                } else {
+                    auto j = json::parse(reqJson);
+                    if (j.is_string()) url = j.get<std::string>();
+                    else if (j.contains("url")) url = j["url"].get<std::string>();
+                }
+            }
+            if (!url.empty()) {
+#if defined(__APPLE__)
+                NSString* nsUrlStr = [NSString stringWithUTF8String:url.c_str()];
+                NSURL* nsUrl = [NSURL URLWithString:nsUrlStr];
+                [[NSWorkspace sharedWorkspace] openURL:nsUrl];
+#elif defined(_WIN32)
+                ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#endif
+            }
+        } catch (...) {}
+        return "{}";
+    });
+
     // Получение списка игровых скриншотов
     g_webview->bind("nativeGetScreenshots", [](const std::string&) -> std::string {
         std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";

@@ -275,6 +275,17 @@ function showUpdateModal(data) {
 
   if (btnDownload) {
     btnDownload.href = downloadUrl;
+    btnDownload.onclick = (e) => {
+      e.preventDefault();
+      if (window.nativeOpenUrl) {
+        window.nativeOpenUrl(downloadUrl);
+      } else if (window.electron && window.electron.shell) {
+        window.electron.shell.openExternal(downloadUrl);
+      } else {
+        window.open(downloadUrl, '_blank');
+      }
+      showToast('🚀 Загрузка обновления запущена в браузере!');
+    };
   }
 
   if (btnClose) {
