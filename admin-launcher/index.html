@@ -92,6 +92,10 @@
               <span class="nav-icon">🌍</span>
               <span class="nav-text">Зеркала & Миграция</span>
             </button>
+            <button class="nav-item" data-tab="discord">
+              <span class="nav-icon">🤖</span>
+              <span class="nav-text">Discord-Бот</span>
+            </button>
             <button class="nav-item" data-tab="analytics">
               <span class="nav-icon">📊</span>
               <span class="nav-text">Аналитика & Аудит</span>
@@ -322,6 +326,83 @@
 
             <div class="servers-grid" id="mirrors-list-container">
               <!-- Карточки зеркал загружаются динамически -->
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 8: УПРАВЛЕНИЕ И НАСТРОЙКА DISCORD-БОТА -->
+          <div class="dashboard-tab" id="tab-discord">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">🤖 Управление Discord-Ботом Авторизации</h2>
+                <p class="tab-subheading">Настройка токена бота без перезагрузки сервера, живой статус подключения и тестовая отправка подтверждений в ЛС</p>
+              </div>
+              <button class="btn-primary" id="btn-refresh-discord-status">🔄 Обновить статус</button>
+            </div>
+
+            <!-- Живые метрики бота -->
+            <div class="stats-grid" style="margin-bottom: 24px;">
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="discord-bot-status-badge" style="font-size: 18px; color: #fb923c;">Проверка...</span>
+                <span class="stat-title">Статус Discord Клиента</span>
+              </div>
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="discord-bot-tag-display" style="font-size: 18px; color: #818cf8;">—</span>
+                <span class="stat-title">Имя / Тег Бота</span>
+              </div>
+              <div class="stat-card glass-panel">
+                <span class="stat-num" id="discord-bot-guilds-display" style="font-size: 18px;">0</span>
+                <span class="stat-title">Серверов подключено</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+              <!-- Форма настройки токена -->
+              <div class="glass-panel" style="padding: 24px; border-radius: var(--radius-lg);">
+                <h3 style="margin-bottom: 12px; color: #ffedd5; font-size: 16px;">🔑 Конфигурация Discord Bot Token</h3>
+                <form id="form-discord-config">
+                  <div class="input-group" style="margin-bottom: 16px;">
+                    <label for="discord-token-input">Токен Discord Бота (Bot Token):</label>
+                    <div style="display: flex; gap: 8px;">
+                      <input type="password" id="discord-token-input" placeholder="Вставьте ваш Bot Token..." required style="flex: 1; font-family: monospace;">
+                      <button type="button" class="btn-secondary" id="btn-toggle-token-visibility" style="padding: 8px 14px;">👁️</button>
+                    </div>
+                    <small style="color: var(--text-secondary); margin-top: 6px; display: block; font-size: 12px;">
+                      Скопируйте в <a href="https://discord.com/developers/applications" target="_blank" style="color: #818cf8; text-decoration: underline;">Discord Developer Portal</a> (Раздел Bot ➔ Reset Token).
+                    </small>
+                  </div>
+
+                  <div class="input-group" style="margin-bottom: 20px;">
+                    <label for="discord-guild-id-input">ID Discord Сервера (Опционально):</label>
+                    <input type="text" id="discord-guild-id-input" placeholder="Например: 123456789012345678">
+                  </div>
+
+                  <div id="discord-config-alert" class="hidden" style="padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;"></div>
+
+                  <button type="submit" class="btn-primary" id="btn-save-discord-config" style="width: 100%; justify-content: center;">
+                    💾 Сохранить и Переподключить Бота
+                  </button>
+                </form>
+              </div>
+
+              <!-- Форма тестирования отправки ЛС -->
+              <div class="glass-panel" style="padding: 24px; border-radius: var(--radius-lg);">
+                <h3 style="margin-bottom: 12px; color: #818cf8; font-size: 16px;">🧪 Тестовая отправка подтверждения</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+                  Отправляет реальное интерактивное сообщение с кнопками подтверждения в ЛС Discord. Игрок должен предварительно привязать никнейм командой <code style="color: #fb923c; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">/register &lt;ник&gt;</code>.
+                </p>
+                <form id="form-discord-test-dm">
+                  <div class="input-group" style="margin-bottom: 16px;">
+                    <label for="discord-test-username">Никнейм игрока для теста:</label>
+                    <input type="text" id="discord-test-username" placeholder="VozduHAN" required value="VozduHAN">
+                  </div>
+
+                  <div id="discord-test-alert" class="hidden" style="padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;"></div>
+
+                  <button type="submit" class="btn-secondary" id="btn-send-test-dm" style="width: 100%; justify-content: center;">
+                    📩 Отправить тестовое сообщение в Discord
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
 

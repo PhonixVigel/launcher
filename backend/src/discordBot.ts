@@ -14,7 +14,8 @@ import {
 } from 'discord.js';
 import { getDb } from './db';
 
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
+export let currentBotToken = '';
+export let botLastError = '';
 
 export const discordClient = new Client({
   intents: [
@@ -25,19 +26,52 @@ export const discordClient = new Client({
   partials: [Partials.Channel, Partials.Message]
 });
 
-// Инициализация и запуск Discord бота
-export async function initDiscordBot() {
-  if (!DISCORD_BOT_TOKEN) {
-    console.warn('[DISCORD BOT] Токен бота не указан, модуль пропущен.');
-    return;
-  }
+// Получение активного токена (из БД или .env)
+export async function getActiveBotToken(): Promise<string> {
+  try {
+    const db = await getDb();
+    const row = await db.get("SELECT value FROM system_settings WHERE key = 'discord_bot_token'");
+    if (row && row.value && row.value.trim()) {
+      return row.value.trim();
+    }
+  } catch (e) {}
+  return (process.env.DISCORD_BOT_TOKEN || '').trim();
+}
 
-  discordClient.on('ready', async () => {
-    console.log(`[DISCORD BOT] ✅ Успешно авторизован как ${discordClient.user?.tag}`);
+// Статус подключения бота для админ панели
+export function getDiscordBotStatus() {
+  return {
+    isReady: discordClient.isReady(),
+    tag: discordClient.user?.tag || null,
+    id: discordClient.user?.id || null,
+    guildsCount: discordClient.guilds?.cache.size || 0,
+    hasToken: Boolean(currentBotToken),
+    lastError: botLastError || null
+  };
+}
+
+// Перезапуск / подключение бота с новым токеном на лету
+export async function reloadDiscordBot(newToken?: string): Promise<{ success: boolean; message: string; error?: string }> {
+  try {
+    const tokenToUse = newToken ? newToken.trim() : await getActiveBotToken();
+    if (!tokenToUse) {
+      botLastError = 'Токен не указан';
+      return { success: false, message: 'Токен Discord-бота не указан', error: botLastError };
+    }
+
+    currentBotToken = tokenToUse;
+    botLastError = '';
+
+    // Если клиент уже авторизован - уничтожаем старую сессию
+    if (discordClient.isReady()) {
+      await discordClient.destroy();
+    }
+
+    await discordClient.login(currentBotToken);
 
     // Регистрация слэш-команд
     try {
-      const rest = new REST({ version: '10' }).setToken(DISCORD_BOT_TOKEN);
+      const rest = new REST({ version: '10' }).setToken(currentBotToken);
       const commands = [
         new SlashCommandBuilder()
           .setName('register')
@@ -63,14 +97,30 @@ export async function initDiscordBot() {
           Routes.applicationCommands(discordClient.user.id),
           { body: commands }
         );
-        console.log('[DISCORD BOT] Слэш-команды (/register, /status, /unlink) успешно зарегистрированы!');
+        console.log('[DISCORD BOT] Слэш-команды (/register, /confirm, /status, /unlink) успешно зарегистрированы!');
       }
-    } catch (e) {
-      console.error('[DISCORD BOT] Ошибка регистрации слэш-команд:', e);
+    } catch (e: any) {
+      console.error('[DISCORD BOT] Ошибка регистрации слэш-команд:', e.message);
     }
+
+    return { 
+      success: true, 
+      message: `Бот успешно подключен: ${discordClient.user?.tag}` 
+    };
+  } catch (err: any) {
+    botLastError = err.message || 'Ошибка входа в Discord';
+    console.error('[DISCORD BOT] Ошибка входа:', botLastError);
+    return { success: false, message: 'Не удалось подключить бота', error: botLastError };
+  }
+}
+
+// Инициализация при старте сервера
+export async function initDiscordBot() {
+  discordClient.on('ready', () => {
+    console.log(`[DISCORD BOT] ✅ Успешно авторизован как ${discordClient.user?.tag}`);
+    botLastError = '';
   });
 
-  // Обработка слэш-команд и кнопок
   discordClient.on('interactionCreate', async (interaction) => {
     try {
       if (interaction.isChatInputCommand()) {
@@ -83,9 +133,12 @@ export async function initDiscordBot() {
     }
   });
 
-  discordClient.login(DISCORD_BOT_TOKEN).catch(err => {
-    console.error('[DISCORD BOT] Ошибка авторизации бота по токену:', err.message);
-  });
+  const token = await getActiveBotToken();
+  if (token) {
+    await reloadDiscordBot(token);
+  } else {
+    console.warn('[DISCORD BOT] Токен бота не настроен. Настройте его в админ-панели.');
+  }
 }
 
 // Обработка команд /register, /status, /unlink

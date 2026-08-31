@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupReleasesControls();
   setupBansControls();
   setupMirrorsControls();
+  setupDiscordBotTab();
   setupChangePasswordModal();
   startClock();
 
@@ -70,6 +71,7 @@ function setupNavigation() {
       if (btn.dataset.tab === 'releases') loadReleases();
       if (btn.dataset.tab === 'bans') loadBans();
       if (btn.dataset.tab === 'mirrors') loadMirrors();
+      if (btn.dataset.tab === 'discord') loadDiscordBotStatus();
       if (btn.dataset.tab === 'analytics') loadAnalytics();
     });
   });
@@ -1119,4 +1121,171 @@ function setupChangePasswordModal() {
       }
     });
   }
+}
+
+// ----------------------------------------------------
+// 11. УПРАВЛЕНИЕ DISCORD-БОТОМ
+// ----------------------------------------------------
+async function loadDiscordBotStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/discord/status`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const badgeEl = document.getElementById('discord-bot-status-badge');
+    const tagEl = document.getElementById('discord-bot-tag-display');
+    const guildsEl = document.getElementById('discord-bot-guilds-display');
+    const tokenInput = document.getElementById('discord-token-input');
+    const guildInput = document.getElementById('discord-guild-id-input');
+
+    if (badgeEl) {
+      if (data.isReady) {
+        badgeEl.textContent = '🟢 ПОДКЛЮЧЕН';
+        badgeEl.style.color = '#22c55e';
+      } else if (data.hasConfiguredToken) {
+        badgeEl.textContent = '🔴 ОШИБКА АВТОРИЗАЦИИ';
+        badgeEl.style.color = '#ef4444';
+      } else {
+        badgeEl.textContent = '⚪ НЕ НАСТРОЕН';
+        badgeEl.style.color = '#94a3b8';
+      }
+    }
+
+    if (tagEl) {
+      tagEl.textContent = data.tag || (data.lastError ? `Ошибка: ${data.lastError}` : 'Не в сети');
+    }
+
+    if (guildsEl) {
+      guildsEl.textContent = data.guildsCount || 0;
+    }
+
+    if (guildInput && data.guildId) {
+      guildInput.value = data.guildId;
+    }
+
+    if (tokenInput && data.maskedToken && !tokenInput.value) {
+      tokenInput.placeholder = data.maskedToken;
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки статуса Discord:', err);
+  }
+}
+
+function setupDiscordBotTab() {
+  const btnRefresh = document.getElementById('btn-refresh-discord-status');
+  const btnToggleVis = document.getElementById('btn-toggle-token-visibility');
+  const tokenInput = document.getElementById('discord-token-input');
+  const formConfig = document.getElementById('form-discord-config');
+  const formTest = document.getElementById('form-discord-test-dm');
+  const configAlert = document.getElementById('discord-config-alert');
+  const testAlert = document.getElementById('discord-test-alert');
+
+  btnRefresh?.addEventListener('click', () => {
+    loadDiscordBotStatus();
+  });
+
+  btnToggleVis?.addEventListener('click', () => {
+    if (tokenInput) {
+      tokenInput.type = tokenInput.type === 'password' ? 'text' : 'password';
+      btnToggleVis.textContent = tokenInput.type === 'password' ? '👁️' : '🙈';
+    }
+  });
+
+  formConfig?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const botToken = tokenInput.value.trim();
+    const guildId = document.getElementById('discord-guild-id-input')?.value.trim() || '';
+
+    if (!botToken) {
+      alert('Введите токен бота');
+      return;
+    }
+
+    const saveBtn = document.getElementById('btn-save-discord-config');
+    const oldText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Подключение к Discord...';
+
+    configAlert.classList.add('hidden');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/discord/config`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ botToken, guildId })
+      });
+
+      const data = await res.json();
+      configAlert.classList.remove('hidden');
+
+      if (res.ok && data.success) {
+        configAlert.style.background = 'rgba(34, 197, 94, 0.2)';
+        configAlert.style.color = '#4ade80';
+        configAlert.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+        configAlert.textContent = `✅ ${data.message}`;
+        tokenInput.value = '';
+      } else {
+        configAlert.style.background = 'rgba(239, 68, 68, 0.2)';
+        configAlert.style.color = '#f87171';
+        configAlert.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        configAlert.textContent = `❌ ${data.error || 'Ошибка подключения бота'}`;
+      }
+
+      await loadDiscordBotStatus();
+    } catch (err) {
+      configAlert.classList.remove('hidden');
+      configAlert.style.background = 'rgba(239, 68, 68, 0.2)';
+      configAlert.style.color = '#f87171';
+      configAlert.textContent = '❌ Ошибка выполнения запроса к серверу';
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = oldText;
+    }
+  });
+
+  formTest?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('discord-test-username')?.value.trim();
+    if (!username) return;
+
+    const testBtn = document.getElementById('btn-send-test-dm');
+    const oldText = testBtn.textContent;
+    testBtn.disabled = true;
+    testBtn.textContent = '⏳ Отправка сообщения...';
+
+    testAlert.classList.add('hidden');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/discord/test-dm`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ username })
+      });
+
+      const data = await res.json();
+      testAlert.classList.remove('hidden');
+
+      if (res.ok && data.success) {
+        testAlert.style.background = 'rgba(34, 197, 94, 0.2)';
+        testAlert.style.color = '#4ade80';
+        testAlert.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+        testAlert.textContent = `✅ ${data.message}`;
+      } else {
+        testAlert.style.background = 'rgba(239, 68, 68, 0.2)';
+        testAlert.style.color = '#f87171';
+        testAlert.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        testAlert.textContent = `❌ ${data.error || 'Не удалось отправить сообщение'}`;
+      }
+    } catch (err) {
+      testAlert.classList.remove('hidden');
+      testAlert.style.background = 'rgba(239, 68, 68, 0.2)';
+      testAlert.style.color = '#f87171';
+      testAlert.textContent = '❌ Ошибка выполнения запроса';
+    } finally {
+      testBtn.disabled = false;
+      testBtn.textContent = oldText;
+    }
+  });
 }

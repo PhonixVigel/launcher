@@ -47,6 +47,15 @@ async function initDbSchema(db: Database) {
     );
   `);
 
+  // 1.2. Таблица системных настроек (Токены, Discord, Интеграции)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // 2. Таблица серверов (Мультисерверность и конфигурация сборок)
   await db.exec(`
     CREATE TABLE IF NOT EXISTS servers (

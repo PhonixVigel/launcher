@@ -8,6 +8,7 @@ import net from 'net';
 const router = Router();
 
 import jwt from 'jsonwebtoken';
+import { getDiscordBotStatus, reloadDiscordBot, sendDiscordLoginRequest } from '../discordBot';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'VOZDUCRAFT_SUPER_SECURE_JWT_SECRET_2026';
 
@@ -770,6 +771,105 @@ router.delete('/mirrors/:id', requireAdmin, async (req: Request, res: Response) 
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка удаления зеркала' });
+  }
+});
+
+// ----------------------------------------------------
+// 10. УПРАВЛЕНИЕ DISCORD БОТОМ ИЗ АДМИН-ПАНЕЛИ
+// ----------------------------------------------------
+
+// GET /api/v1/admin/discord/status - Получение статуса подключения бота и токена
+router.get('/discord/status', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    const tokenRow = await db.get("SELECT value FROM system_settings WHERE key = 'discord_bot_token'");
+    const guildRow = await db.get("SELECT value FROM system_settings WHERE key = 'discord_guild_id'");
+    const rawToken = (tokenRow?.value || process.env.DISCORD_BOT_TOKEN || '').trim();
+
+    const maskedToken = rawToken 
+      ? (rawToken.substring(0, 8) + '••••••••••••••••••••••••••••••••' + rawToken.substring(rawToken.length - 6))
+      : '';
+
+    const botStatus = getDiscordBotStatus();
+
+    return res.json({
+      ...botStatus,
+      maskedToken,
+      hasConfiguredToken: Boolean(rawToken),
+      guildId: guildRow?.value || ''
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения статуса Discord бота' });
+  }
+});
+
+// POST /api/v1/admin/discord/config - Сохранение нового токена и моментальный перезапуск бота
+router.post('/discord/config', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { botToken, guildId } = req.body;
+    if (!botToken || !botToken.trim()) {
+      return res.status(400).json({ error: 'Введите корректный токен Discord бота' });
+    }
+
+    const cleanToken = botToken.trim();
+    const db = await getDb();
+
+    // Сохраняем в таблицу системных настроек SQLite
+    await db.run(
+      "INSERT INTO system_settings (key, value, updated_at) VALUES ('discord_bot_token', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+      [cleanToken]
+    );
+
+    if (guildId !== undefined) {
+      await db.run(
+        "INSERT INTO system_settings (key, value, updated_at) VALUES ('discord_guild_id', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        [String(guildId).trim()]
+      );
+    }
+
+    // Перезапускаем Discord бота на лету с новым токеном
+    const reloadResult = await reloadDiscordBot(cleanToken);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'DISCORD_BOT_UPDATE', 'Bot Config', reloadResult.message, req.ip || '');
+
+    if (!reloadResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: reloadResult.error || reloadResult.message,
+        botStatus: getDiscordBotStatus()
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: reloadResult.message,
+      botStatus: getDiscordBotStatus()
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка сохранения настроек Discord: ' + (error as Error).message });
+  }
+});
+
+// POST /api/v1/admin/discord/test-dm - Тестовая отправка сообщения в ЛС игроку
+router.post('/discord/test-dm', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { username } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ error: 'Укажите никнейм игрока для теста' });
+    }
+
+    const cleanNick = username.trim();
+    const testRequestId = 'TEST-' + crypto.randomBytes(6).toString('hex');
+    const result = await sendDiscordLoginRequest(cleanNick, req.ip || '127.0.0.1', testRequestId);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    return res.json({ success: true, message: `Тестовое сообщение успешно отправлено игроку ${cleanNick} в Discord!` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка отправки теста: ' + (error as Error).message });
   }
 });
 
