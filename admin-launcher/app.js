@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupReleasesControls();
   setupBansControls();
   setupMirrorsControls();
+  setupChangePasswordModal();
   startClock();
 
   if (state.token) {
@@ -1078,4 +1079,56 @@ function renderMirrorsList() {
       }
     });
   });
+}
+
+// ----------------------------------------------------
+// 10. СМЕНА ПАРОЛЯ АДМИНИСТРАТОРА
+// ----------------------------------------------------
+function setupChangePasswordModal() {
+  const btnOpen = document.getElementById('btn-open-change-pwd');
+  const modal = document.getElementById('modal-change-password');
+  const btnClose = document.getElementById('btn-close-pwd-modal');
+  const btnCancel = document.getElementById('btn-cancel-pwd-modal');
+  const form = document.getElementById('form-change-password');
+
+  if (btnOpen && modal) {
+    btnOpen.addEventListener('click', () => {
+      form.reset();
+      modal.classList.remove('hidden');
+    });
+
+    const hide = () => modal.classList.add('hidden');
+    btnClose?.addEventListener('click', hide);
+    btnCancel?.addEventListener('click', hide);
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const currentPassword = document.getElementById('pwd-current').value;
+      const newPassword = document.getElementById('pwd-new').value;
+      const confirmPassword = document.getElementById('pwd-confirm').value;
+
+      if (newPassword !== confirmPassword) {
+        alert('Новые пароли не совпадают!');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert('✅ Пароль успешно изменен!');
+          hide();
+        } else {
+          alert(data.error || 'Ошибка смены пароля');
+        }
+      } catch (err) {
+        alert('Ошибка при выполнении запроса');
+      }
+    });
+  }
 }

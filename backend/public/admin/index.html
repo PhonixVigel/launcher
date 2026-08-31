@@ -26,6 +26,7 @@
           <span class="avatar-mini">⚡</span>
           <span class="admin-nick" id="topbar-admin-name">VozduHAN</span>
         </div>
+        <button class="btn-secondary" id="btn-open-change-pwd" style="padding: 6px 12px; font-size: 12px; margin-left: 8px;">🔑 Сменить пароль</button>
         <button class="btn-logout" id="btn-logout" title="Выйти из системы">🚪 Выход</button>
       </div>
     </header>
@@ -585,6 +586,34 @@
     </div>
   </div>
 
-  <script src="app.js?v=6.0"></script>
+  <!-- Модальное окно смены пароля -->
+  <div class="modal-overlay hidden" id="modal-change-password">
+    <div class="modal-card glass-panel" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔑 Смена пароля администратора</h3>
+        <button class="modal-close" id="btn-close-pwd-modal">✕</button>
+      </div>
+      <form id="form-change-password">
+        <div class="input-group">
+          <label for="pwd-current">Текущий пароль</label>
+          <input type="password" id="pwd-current" placeholder="••••••••" required>
+        </div>
+        <div class="input-group">
+          <label for="pwd-new">Новый пароль</label>
+          <input type="password" id="pwd-new" placeholder="Минимум 4 символа" required minlength="4">
+        </div>
+        <div class="input-group">
+          <label for="pwd-confirm">Подтвердите новый пароль</label>
+          <input type="password" id="pwd-confirm" placeholder="Повторите новый пароль" required minlength="4">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-pwd-modal">Отмена</button>
+          <button type="submit" class="btn-primary">Сохранить новый пароль</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=7.0"></script>
 </body>
 </html>

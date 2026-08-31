@@ -178,7 +178,49 @@ router.get('/verify-session', async (req: Request, res: Response) => {
       isAdminBypass: Boolean(session.is_admin_bypass)
     });
   } catch (error) {
-    return res.status(500).json({ valid: false, error: 'Ошибка проверки сессии' });
+// 4. Смена пароля администратора / пользователя
+router.post('/change-password', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Требуется авторизация' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    let username = '';
+
+    if (token === 'VOZDUHAN-ADMIN-TOKEN') {
+      username = 'VozduHAN';
+    } else {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      username = decoded.username;
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 4) {
+      return res.status(400).json({ error: 'Новый пароль должен содержать минимум 4 символа' });
+    }
+
+    const db = await getDb();
+    const user = await db.get('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', [username]);
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    // Если токен не dev-bypass, проверяем текущий пароль
+    if (token !== 'VOZDUHAN-ADMIN-TOKEN' && currentPassword) {
+      const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!isValid) {
+        return res.status(400).json({ error: 'Неверный текущий пароль' });
+      }
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
+
+    return res.json({ success: true, message: 'Пароль успешно обновлен!' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка при смене пароля' });
   }
 });
 
