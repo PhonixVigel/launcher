@@ -112,8 +112,8 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
       const agent = createProxyAgent(currentProxy);
       if (agent) {
         clientOptions.ws = { agent };
-        clientOptions.rest = { agent, proxy: currentProxy };
       }
+      clientOptions.rest = { proxy: currentProxy };
     }
 
     discordClient = new Client(clientOptions);
