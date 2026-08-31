@@ -13,8 +13,8 @@ import {
   ChatInputCommandInteraction 
 } from 'discord.js';
 import { getDb } from './db';
-
-import { setGlobalDispatcher, ProxyAgent } from 'undici';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
 export let currentBotToken = '';
 export let currentProxy = '';
@@ -28,6 +28,19 @@ export let discordClient = new Client({
   ],
   partials: [Partials.Channel, Partials.Message]
 });
+
+function createProxyAgent(proxyUrl: string): any {
+  if (!proxyUrl) return undefined;
+  try {
+    if (proxyUrl.startsWith('socks')) {
+      return new SocksProxyAgent(proxyUrl);
+    }
+    return new HttpsProxyAgent(proxyUrl);
+  } catch (e: any) {
+    console.warn('[DISCORD BOT] Ошибка создания ProxyAgent:', e.message);
+    return undefined;
+  }
+}
 
 // Получение активного токена (из БД или .env)
 export async function getActiveBotToken(): Promise<string> {
@@ -81,15 +94,6 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
     currentProxy = proxyToUse;
     botLastError = '';
 
-    if (currentProxy) {
-      try {
-        setGlobalDispatcher(new ProxyAgent(currentProxy));
-        console.log(`[DISCORD BOT] 🌐 Применен ProxyAgent для Discord: ${currentProxy}`);
-      } catch (pe: any) {
-        console.warn('[DISCORD BOT] Ошибка применения ProxyAgent:', pe.message);
-      }
-    }
-
     // Если клиент уже авторизован - уничтожаем старую сессию
     if (discordClient.isReady()) {
       await discordClient.destroy();
@@ -105,8 +109,11 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
     };
 
     if (currentProxy) {
-      clientOptions.ws = { proxy: currentProxy };
-      clientOptions.rest = { proxy: currentProxy };
+      const agent = createProxyAgent(currentProxy);
+      if (agent) {
+        clientOptions.ws = { agent };
+        clientOptions.rest = { agent, proxy: currentProxy };
+      }
     }
 
     discordClient = new Client(clientOptions);
