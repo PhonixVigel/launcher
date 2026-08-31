@@ -15,6 +15,7 @@ import {
 import { getDb } from './db';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
+import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
 export let currentBotToken = '';
 export let currentProxy = '';
@@ -94,6 +95,16 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
     currentProxy = proxyToUse;
     botLastError = '';
 
+    if (currentProxy) {
+      try {
+        const undiciAgent = new ProxyAgent(currentProxy);
+        setGlobalDispatcher(undiciAgent);
+        console.log(`[DISCORD BOT] 🌐 Global ProxyAgent активирован: ${currentProxy}`);
+      } catch (pe: any) {
+        console.warn('[DISCORD BOT] Ошибка активации Global ProxyAgent:', pe.message);
+      }
+    }
+
     // Если клиент уже авторизован - уничтожаем старую сессию
     if (discordClient.isReady()) {
       await discordClient.destroy();
@@ -113,7 +124,11 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
       if (agent) {
         clientOptions.ws = { agent };
       }
-      clientOptions.rest = { proxy: currentProxy };
+      try {
+        clientOptions.rest = { agent: new ProxyAgent(currentProxy) };
+      } catch (_) {
+        clientOptions.rest = { proxy: currentProxy };
+      }
     }
 
     discordClient = new Client(clientOptions);
@@ -145,16 +160,20 @@ export async function reloadDiscordBot(newToken?: string, newProxy?: string): Pr
       }
     });
 
-    // Безопасный логин с таймаутом 15 секунд
+    // Безопасный логин с таймаутом 20 секунд
     const loginPromise = discordClient.login(currentBotToken);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout (15000ms). Проверьте прокси или настройки сети.')), 15000));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout (20000ms). Проверьте прокси или настройки сети.')), 20000));
     await Promise.race([loginPromise, timeoutPromise]);
 
     // Регистрация слэш-команд
     try {
       const restOptions: any = { version: '10' };
       if (currentProxy) {
-        restOptions.proxy = currentProxy;
+        try {
+          restOptions.agent = new ProxyAgent(currentProxy);
+        } catch (_) {
+          restOptions.proxy = currentProxy;
+        }
       }
       const rest = new REST(restOptions).setToken(currentBotToken);
       const commands = [

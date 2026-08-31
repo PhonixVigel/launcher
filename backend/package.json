@@ -26,7 +26,8 @@
     "jsonwebtoken": "^9.0.2",
     "socks-proxy-agent": "^10.1.0",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "undici": "^5.28.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
