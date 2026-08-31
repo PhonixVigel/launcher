@@ -48,6 +48,9 @@ export async function initDiscordBot() {
               .setRequired(true)
           ),
         new SlashCommandBuilder()
+          .setName('confirm')
+          .setDescription('Подтвердить активный запрос на вход в лаунчер'),
+        new SlashCommandBuilder()
           .setName('status')
           .setDescription('Проверить статус привязанного аккаунта'),
         new SlashCommandBuilder()
@@ -122,6 +125,29 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
       content: `✅ Ник **${rawUsername}** успешно привязан к вашему Discord! Теперь вы можете нажать кнопку входа в лаунчере.`,
       ephemeral: true
     });
+  }
+
+  if (command === 'confirm') {
+    const pendingReq = await db.get(
+      `SELECT r.* FROM discord_auth_requests r
+       JOIN users u ON LOWER(u.username) = LOWER(r.username)
+       WHERE u.discord_id = ? AND r.status = 'PENDING'
+       ORDER BY r.created_at DESC LIMIT 1`,
+      [discordId]
+    );
+
+    if (pendingReq) {
+      await db.run("UPDATE discord_auth_requests SET status = 'APPROVED', discord_id = ? WHERE id = ?", [discordId, pendingReq.id]);
+      return interaction.reply({
+        content: `✅ Вход в лаунчер для **${pendingReq.username}** успешно подтвержден!`,
+        ephemeral: true
+      });
+    } else {
+      return interaction.reply({
+        content: '⚠️ У вас нет активных запросов на подтверждение входа.',
+        ephemeral: true
+      });
+    }
   }
 
   if (command === 'status') {
@@ -199,6 +225,13 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 // Отправка личного сообщения игроку в Discord
 export async function sendDiscordLoginRequest(username: string, ip: string, requestId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    if (!discordClient.isReady()) {
+      return {
+        success: false,
+        error: 'Бот Discord сейчас не подключен на сервере VDS. Убедитесь, что в файле /root/vozducraft/.env указан правильный DISCORD_BOT_TOKEN и выполнен docker compose up -d'
+      };
+    }
+
     const db = await getDb();
     
     // Ищем привязанный discord_id
@@ -210,15 +243,19 @@ export async function sendDiscordLoginRequest(username: string, ip: string, requ
     if (!user || !user.discord_id) {
       return {
         success: false,
-        error: `Ник "${username}" еще не зарегистрирован в Discord! Зайдите в Discord-сервер и напишите боту команду: /register ${username}`
+        error: `Ник "${username}" еще не привязан к Discord! Зайдите в Discord-сервер и напишите боту команду: /register ${username}`
       };
     }
 
-    const discordUser = await discordClient.users.fetch(user.discord_id).catch(() => null);
+    const discordUser = await discordClient.users.fetch(user.discord_id).catch((err) => {
+      console.error(`[DISCORD BOT] Ошибка поиска пользователя ${user.discord_id}:`, err);
+      return null;
+    });
+
     if (!discordUser) {
       return {
         success: false,
-        error: 'Не удалось найти ваш аккаунт в Discord. Проверьте правильность привязки.'
+        error: `Не удалось найти Discord-пользователя (ID: ${user.discord_id}). Проверьте привязку командой /status в Discord.`
       };
     }
 
@@ -250,7 +287,7 @@ export async function sendDiscordLoginRequest(username: string, ip: string, requ
     console.error('[DISCORD BOT] Ошибка отправки DM:', err);
     return {
       success: false,
-      error: 'Не удалось отправить сообщение в Discord! Проверьте, включены ли у вас «Личные сообщения» в настройках приватности сервера Discord.'
+      error: `Ошибка отправки в Discord: ${err.message || 'Проверьте настройки приватности ЛС или введите /confirm на сервере Discord'}`
     };
   }
 }
