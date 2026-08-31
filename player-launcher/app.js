@@ -317,19 +317,67 @@ function showUpdateModal(data) {
         logDebug(`Ошибка: ${errMsg}`);
       };
 
+      // Универсальная потоковая загрузка прямо в лаунчере
+      async function runStreamingDownload() {
+        try {
+          logDebug(`Подключение к серверу обновлений...`);
+          const res = await fetch(downloadUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+          const contentLength = res.headers.get('content-length');
+          const totalBytes = contentLength ? parseInt(contentLength, 10) : 16000000;
+          let loadedBytes = 0;
+
+          const reader = res.body.getReader();
+          const chunks = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loadedBytes += value.length;
+
+            const pct = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
+            const mbNow = (loadedBytes / (1024 * 1024)).toFixed(1);
+            const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
+
+            if (progressBar) progressBar.style.width = `${pct}%`;
+            if (percentText) percentText.textContent = `${pct}%`;
+            if (detailsText) detailsText.textContent = `Скачано: ${mbNow} МБ из ${mbTotal} МБ (${pct}%)`;
+          }
+
+          if (progressBar) progressBar.style.width = '100%';
+          if (percentText) percentText.textContent = '100%';
+          if (statusText) statusText.textContent = '✅ Загрузка завершена!';
+          if (detailsText) detailsText.textContent = 'Открытие установщика...';
+
+          const blob = new Blob(chunks, { type: 'application/octet-stream' });
+          const blobUrl = URL.createObjectURL(blob);
+
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = 'VozduCraft-macOS-Update.dmg';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+        } catch (err) {
+          logDebug(`Ошибка загрузки: ${err.message}`);
+          if (statusText) statusText.textContent = '❌ Ошибка загрузки';
+        }
+      }
+
       if (typeof window.nativeAutoUpdateLauncher === 'function') {
-        logDebug('[3/3] Вызов nativeAutoUpdateLauncher...');
+        logDebug('[3/3] Запуск нативного загрузчика C++...');
         try {
           window.nativeAutoUpdateLauncher(downloadUrl);
         } catch (err) {
-          logDebug(`Исключение JS: ${err.message}`);
+          logDebug(`Fallback на стриминг: ${err.message}`);
+          runStreamingDownload();
         }
-      } else if (typeof window.nativeOpenUrl === 'function') {
-        logDebug('[3/3] Вызов nativeOpenUrl...');
-        window.nativeOpenUrl(downloadUrl);
       } else {
-        logDebug('[3/3] Fallback в браузер...');
-        window.open(downloadUrl, '_blank');
+        logDebug('[3/3] Запуск встроенной загрузки...');
+        runStreamingDownload();
       }
     };
   }
