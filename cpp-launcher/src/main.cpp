@@ -23,6 +23,28 @@ using json = nlohmann::json;
 static std::unique_ptr<LauncherEngine> g_launcherEngine;
 static std::unique_ptr<webview::webview> g_webview;
 
+// Универсальный парсер аргументов из JS bindings (поддерживает stringified JSON, raw objects и массивы)
+json extractJsonArg(const std::string& req) {
+    try {
+        json parsed = json::parse(req);
+        if (parsed.is_array() && !parsed.empty()) {
+            if (parsed[0].is_string()) {
+                try { return json::parse(parsed[0].get<std::string>()); } catch (...) { return json::object(); }
+            }
+            if (parsed[0].is_object()) {
+                return parsed[0];
+            }
+        }
+        if (parsed.is_string()) {
+            try { return json::parse(parsed.get<std::string>()); } catch (...) { return json::object(); }
+        }
+        if (parsed.is_object()) {
+            return parsed;
+        }
+    } catch (...) {}
+    return json::object();
+}
+
 // Безопасное экранирование JS строк для выполнения в WebView
 std::string escapeJs(const std::string& str) {
     std::ostringstream o;
@@ -205,17 +227,16 @@ int main(int argc, char** argv) {
     // Нативный libcurl мост для выполнения HTTP запросов в обход любых CORS / ATS ограничений
     g_webview->bind("nativeApiFetch", [](const std::string& req) -> std::string {
         try {
-            auto parsed = json::parse(req);
-            auto pObj = parsed.is_array() && !parsed.empty() ? parsed[0] : parsed;
+            json pObj = extractJsonArg(req);
 
             std::string url = pObj.value("url", "");
             std::string method = pObj.value("method", "GET");
             std::string body = pObj.value("body", "");
 
-            if (url.empty()) return "{\"error\":\"Empty URL\"}";
+            if (url.empty()) return "{\"__curl_error\":\"Empty URL provided\"}";
 
             CURL* curl = curl_easy_init();
-            if (!curl) return "{\"error\":\"Curl initialization failed\"}";
+            if (!curl) return "{\"__curl_error\":\"Curl initialization failed\"}";
 
             std::string responseData;
             struct curl_slist* headers = NULL;
@@ -270,8 +291,7 @@ int main(int argc, char** argv) {
     g_webview->bind("nativeLaunchGame", [](const std::string& req) -> std::string {
         std::thread([req]() {
             try {
-                auto parsed = json::parse(req);
-                auto configObj = parsed.is_array() && !parsed.empty() ? parsed[0] : parsed;
+                json configObj = extractJsonArg(req);
 
                 LaunchConfig config;
                 config.username = configObj.value("username", "Player");
