@@ -264,6 +264,12 @@ function showUpdateModal(data) {
   const notes = document.getElementById('update-release-notes');
   const btnDownload = document.getElementById('btn-download-update');
   const btnClose = document.getElementById('btn-close-update-modal');
+  const buttonsZone = document.getElementById('update-buttons-zone');
+  const progressZone = document.getElementById('update-progress-zone');
+  const progressBar = document.getElementById('update-progress-bar');
+  const percentText = document.getElementById('update-percent-text');
+  const statusText = document.getElementById('update-status-text');
+  const detailsText = document.getElementById('update-details-text');
 
   if (!modal) return;
 
@@ -274,17 +280,36 @@ function showUpdateModal(data) {
   const downloadUrl = isMac ? (data.macDownloadUrl || data.downloadUrl) : data.downloadUrl;
 
   if (btnDownload) {
-    btnDownload.href = downloadUrl;
     btnDownload.onclick = (e) => {
       e.preventDefault();
-      if (window.nativeOpenUrl) {
+      
+      // Переключаем в режим прогресса
+      if (buttonsZone) buttonsZone.classList.add('hidden');
+      if (progressZone) progressZone.classList.remove('hidden');
+      if (statusText) statusText.textContent = 'Скачивание обновления...';
+
+      // Обработчик живого прогресса от нативного движка
+      window.onLauncherUpdateProgress = (pct, mbNow, mbTotal) => {
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (percentText) percentText.textContent = `${pct}%`;
+        if (detailsText) detailsText.textContent = `${mbNow.toFixed(1)} МБ из ${mbTotal.toFixed(1)} МБ`;
+      };
+
+      // Обработчик завершения
+      window.onLauncherUpdateComplete = () => {
+        if (progressBar) progressBar.style.width = '100%';
+        if (percentText) percentText.textContent = '100%';
+        if (statusText) statusText.textContent = '✅ Запуск новой версии...';
+        if (detailsText) detailsText.textContent = 'Установка завершена, лаунчер перезапускается...';
+      };
+
+      if (window.nativeAutoUpdateLauncher) {
+        window.nativeAutoUpdateLauncher(JSON.stringify({ url: downloadUrl, version: data.latestVersion }));
+      } else if (window.nativeOpenUrl) {
         window.nativeOpenUrl(downloadUrl);
-      } else if (window.electron && window.electron.shell) {
-        window.electron.shell.openExternal(downloadUrl);
       } else {
         window.open(downloadUrl, '_blank');
       }
-      showToast('🚀 Загрузка обновления запущена в браузере!');
     };
   }
 

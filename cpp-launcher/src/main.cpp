@@ -182,6 +182,63 @@ int main(int argc, char** argv) {
         return "{}";
     });
 
+    // Нативное скачивание и запуск обновления лаунчера прямо в приложении
+    g_webview->bind("nativeAutoUpdateLauncher", [](const std::string& reqJson) -> std::string {
+        std::thread([](std::string params) {
+            try {
+                std::string downloadUrl = "";
+                if (!params.empty()) {
+                    if (params.front() == '"' && params.back() == '"') {
+                        downloadUrl = params.substr(1, params.length() - 2);
+                    } else {
+                        auto j = json::parse(params);
+                        if (j.is_string()) downloadUrl = j.get<std::string>();
+                        else if (j.contains("url")) downloadUrl = j["url"].get<std::string>();
+                    }
+                }
+
+                if (downloadUrl.empty()) return;
+
+                std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
+                std::string destFile = homeDir + "/Downloads/VozduCraft-Update.dmg";
+#if defined(_WIN32)
+                destFile = homeDir + "/Downloads/VozduCraft-Update.zip";
+#endif
+
+                Downloader dl;
+                bool ok = dl.downloadFile(downloadUrl, destFile, [](int64_t dlNow, int64_t dlTotal) {
+                    if (dlTotal > 0 && g_webview) {
+                        int pct = static_cast<int>((static_cast<double>(dlNow) / dlTotal) * 100);
+                        double mbNow = static_cast<double>(dlNow) / (1024.0 * 1024.0);
+                        double mbTotal = static_cast<double>(dlTotal) / (1024.0 * 1024.0);
+                        std::string js = "if(window.onLauncherUpdateProgress) window.onLauncherUpdateProgress(" + 
+                                         std::to_string(pct) + ", " + 
+                                         std::to_string(mbNow) + ", " + 
+                                         std::to_string(mbTotal) + ");";
+                        g_webview->eval(js);
+                    }
+                });
+
+                if (ok && g_webview) {
+                    std::string js = "if(window.onLauncherUpdateComplete) window.onLauncherUpdateComplete();";
+                    g_webview->eval(js);
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+
+#if defined(__APPLE__)
+                    std::string cmd = "open \"" + destFile + "\"";
+                    system(cmd.c_str());
+                    exit(0);
+#elif defined(_WIN32)
+                    ShellExecuteA(NULL, "open", destFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                    exit(0);
+#endif
+                }
+            } catch (...) {}
+        }, reqJson).detach();
+        return "{\"status\":\"started\"}";
+    });
+
     // Получение списка игровых скриншотов
     g_webview->bind("nativeGetScreenshots", [](const std::string&) -> std::string {
         std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
