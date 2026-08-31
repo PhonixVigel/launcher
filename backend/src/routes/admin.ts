@@ -809,13 +809,21 @@ router.get('/discord/status', requireAdmin, async (req: Request, res: Response) 
 router.post('/discord/config', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { botToken, guildId, proxy } = req.body;
-    if (!botToken || !botToken.trim()) {
+    const db = await getDb();
+
+    let cleanToken = botToken ? botToken.trim() : '';
+
+    // Если токен содержит точки маскировки (••••), сохраняем текущий токен из БД
+    if (cleanToken.includes('••••') || !cleanToken) {
+      const existingTokenRow = await db.get("SELECT value FROM system_settings WHERE key = 'discord_bot_token'");
+      cleanToken = (existingTokenRow?.value || process.env.DISCORD_BOT_TOKEN || '').trim();
+    }
+
+    if (!cleanToken) {
       return res.status(400).json({ error: 'Введите корректный токен Discord бота' });
     }
 
-    const cleanToken = botToken.trim();
     const cleanProxy = proxy !== undefined ? proxy.trim() : undefined;
-    const db = await getDb();
 
     // Сохраняем в таблицу системных настроек SQLite
     await db.run(
