@@ -14,10 +14,13 @@ import {
 } from 'discord.js';
 import { getDb } from './db';
 
+import { setGlobalDispatcher, ProxyAgent } from 'undici';
+
 export let currentBotToken = '';
+export let currentProxy = '';
 export let botLastError = '';
 
-export const discordClient = new Client({
+export let discordClient = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.DirectMessages,
@@ -38,6 +41,18 @@ export async function getActiveBotToken(): Promise<string> {
   return (process.env.DISCORD_BOT_TOKEN || '').trim();
 }
 
+// Получение активного прокси (из БД или .env)
+export async function getActiveProxy(): Promise<string> {
+  try {
+    const db = await getDb();
+    const row = await db.get("SELECT value FROM system_settings WHERE key = 'discord_proxy'");
+    if (row && row.value && row.value.trim()) {
+      return row.value.trim();
+    }
+  } catch (e) {}
+  return (process.env.DISCORD_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
+}
+
 // Статус подключения бота для админ панели
 export function getDiscordBotStatus() {
   return {
@@ -46,32 +61,82 @@ export function getDiscordBotStatus() {
     id: discordClient.user?.id || null,
     guildsCount: discordClient.guilds?.cache.size || 0,
     hasToken: Boolean(currentBotToken),
+    proxy: currentProxy || null,
     lastError: botLastError || null
   };
 }
 
-// Перезапуск / подключение бота с новым токеном на лету
-export async function reloadDiscordBot(newToken?: string): Promise<{ success: boolean; message: string; error?: string }> {
+// Перезапуск / подключение бота с новым токеном и прокси на лету
+export async function reloadDiscordBot(newToken?: string, newProxy?: string): Promise<{ success: boolean; message: string; error?: string }> {
   try {
     const tokenToUse = newToken ? newToken.trim() : await getActiveBotToken();
+    const proxyToUse = newProxy !== undefined ? newProxy.trim() : await getActiveProxy();
+
     if (!tokenToUse) {
       botLastError = 'Токен не указан';
       return { success: false, message: 'Токен Discord-бота не указан', error: botLastError };
     }
 
     currentBotToken = tokenToUse;
+    currentProxy = proxyToUse;
     botLastError = '';
+
+    if (currentProxy) {
+      try {
+        setGlobalDispatcher(new ProxyAgent(currentProxy));
+        console.log(`[DISCORD BOT] 🌐 Применен ProxyAgent для Discord: ${currentProxy}`);
+      } catch (pe: any) {
+        console.warn('[DISCORD BOT] Ошибка применения ProxyAgent:', pe.message);
+      }
+    }
 
     // Если клиент уже авторизован - уничтожаем старую сессию
     if (discordClient.isReady()) {
       await discordClient.destroy();
     }
 
+    const clientOptions: any = {
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildMembers
+      ],
+      partials: [Partials.Channel, Partials.Message]
+    };
+
+    if (currentProxy) {
+      clientOptions.ws = { proxy: currentProxy };
+      clientOptions.rest = { proxy: currentProxy };
+    }
+
+    discordClient = new Client(clientOptions);
+
+    discordClient.on('ready', () => {
+      console.log(`[DISCORD BOT] ✅ Успешно авторизован как ${discordClient.user?.tag}`);
+      botLastError = '';
+    });
+
+    discordClient.on('interactionCreate', async (interaction) => {
+      try {
+        if (interaction.isChatInputCommand()) {
+          await handleSlashCommand(interaction);
+        } else if (interaction.isButton()) {
+          await handleButtonInteraction(interaction);
+        }
+      } catch (err) {
+        console.error('[DISCORD BOT] Ошибка обработки события:', err);
+      }
+    });
+
     await discordClient.login(currentBotToken);
 
     // Регистрация слэш-команд
     try {
-      const rest = new REST({ version: '10' }).setToken(currentBotToken);
+      const restOptions: any = { version: '10' };
+      if (currentProxy) {
+        restOptions.proxy = currentProxy;
+      }
+      const rest = new REST(restOptions).setToken(currentBotToken);
       const commands = [
         new SlashCommandBuilder()
           .setName('register')
@@ -110,7 +175,7 @@ export async function reloadDiscordBot(newToken?: string): Promise<{ success: bo
   } catch (err: any) {
     botLastError = err.message || 'Ошибка входа в Discord';
     console.error('[DISCORD BOT] Ошибка входа:', botLastError);
-    return { success: false, message: 'Не удалось подключить бота', error: botLastError };
+    return { success: false, message: 'Не удалось подключить бота к Discord', error: botLastError };
   }
 }
 

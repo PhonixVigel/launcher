@@ -784,6 +784,7 @@ router.get('/discord/status', requireAdmin, async (req: Request, res: Response) 
     const db = await getDb();
     const tokenRow = await db.get("SELECT value FROM system_settings WHERE key = 'discord_bot_token'");
     const guildRow = await db.get("SELECT value FROM system_settings WHERE key = 'discord_guild_id'");
+    const proxyRow = await db.get("SELECT value FROM system_settings WHERE key = 'discord_proxy'");
     const rawToken = (tokenRow?.value || process.env.DISCORD_BOT_TOKEN || '').trim();
 
     const maskedToken = rawToken 
@@ -796,22 +797,24 @@ router.get('/discord/status', requireAdmin, async (req: Request, res: Response) 
       ...botStatus,
       maskedToken,
       hasConfiguredToken: Boolean(rawToken),
-      guildId: guildRow?.value || ''
+      guildId: guildRow?.value || '',
+      proxy: proxyRow?.value || process.env.DISCORD_PROXY || ''
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка получения статуса Discord бота' });
   }
 });
 
-// POST /api/v1/admin/discord/config - Сохранение нового токена и моментальный перезапуск бота
+// POST /api/v1/admin/discord/config - Сохранение нового токена, прокси и моментальный перезапуск бота
 router.post('/discord/config', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { botToken, guildId } = req.body;
+    const { botToken, guildId, proxy } = req.body;
     if (!botToken || !botToken.trim()) {
       return res.status(400).json({ error: 'Введите корректный токен Discord бота' });
     }
 
     const cleanToken = botToken.trim();
+    const cleanProxy = proxy !== undefined ? proxy.trim() : undefined;
     const db = await getDb();
 
     // Сохраняем в таблицу системных настроек SQLite
@@ -827,8 +830,15 @@ router.post('/discord/config', requireAdmin, async (req: Request, res: Response)
       );
     }
 
-    // Перезапускаем Discord бота на лету с новым токеном
-    const reloadResult = await reloadDiscordBot(cleanToken);
+    if (cleanProxy !== undefined) {
+      await db.run(
+        "INSERT INTO system_settings (key, value, updated_at) VALUES ('discord_proxy', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        [cleanProxy]
+      );
+    }
+
+    // Перезапускаем Discord бота на лету с новым токеном и прокси
+    const reloadResult = await reloadDiscordBot(cleanToken, cleanProxy);
 
     const adminUser = (req as any).user?.username || 'Admin';
     await logAudit(adminUser, 'ADMIN', 'DISCORD_BOT_UPDATE', 'Bot Config', reloadResult.message, req.ip || '');

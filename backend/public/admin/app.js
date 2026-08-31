@@ -1139,13 +1139,14 @@ async function loadDiscordBotStatus() {
     const guildsEl = document.getElementById('discord-bot-guilds-display');
     const tokenInput = document.getElementById('discord-token-input');
     const guildInput = document.getElementById('discord-guild-id-input');
+    const proxyInput = document.getElementById('discord-proxy-input');
 
     if (badgeEl) {
       if (data.isReady) {
         badgeEl.textContent = '🟢 ПОДКЛЮЧЕН';
         badgeEl.style.color = '#22c55e';
       } else if (data.hasConfiguredToken) {
-        badgeEl.textContent = '🔴 ОШИБКА АВТОРИЗАЦИИ';
+        badgeEl.textContent = '🔴 ОШИБКА ПОДКЛЮЧЕНИЯ';
         badgeEl.style.color = '#ef4444';
       } else {
         badgeEl.textContent = '⚪ НЕ НАСТРОЕН';
@@ -1163,6 +1164,10 @@ async function loadDiscordBotStatus() {
 
     if (guildInput && data.guildId) {
       guildInput.value = data.guildId;
+    }
+
+    if (proxyInput && data.proxy) {
+      proxyInput.value = data.proxy;
     }
 
     if (tokenInput && data.maskedToken && !tokenInput.value) {
@@ -1197,8 +1202,9 @@ function setupDiscordBotTab() {
     e.preventDefault();
     const botToken = tokenInput.value.trim();
     const guildId = document.getElementById('discord-guild-id-input')?.value.trim() || '';
+    const proxy = document.getElementById('discord-proxy-input')?.value.trim() || '';
 
-    if (!botToken) {
+    if (!botToken && !tokenInput.placeholder) {
       alert('Введите токен бота');
       return;
     }
@@ -1214,7 +1220,7 @@ function setupDiscordBotTab() {
       const res = await fetch(`${API_BASE}/api/v1/admin/discord/config`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ botToken, guildId })
+        body: JSON.stringify({ botToken: botToken || tokenInput.placeholder, guildId, proxy })
       });
 
       const data = await res.json();
