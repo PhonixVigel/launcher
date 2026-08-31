@@ -33,6 +33,11 @@ app: $(TARGET)
 	@echo '  <key>CFBundlePackageType</key><string>APPL</string>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <key>CFBundleShortVersionString</key><string>2.0.0</string>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <key>NSHighResolutionCapable</key><true/>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '  <key>NSAppTransportSecurity</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '  <dict>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>NSAllowsArbitraryLoads</key><true/>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>NSAllowsLocalNetworking</key><true/>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '  </dict>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '</dict></plist>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@chmod +x $(APP_BUNDLE)/Contents/MacOS/VozduCraft-Launcher
 	@echo "macOS App Bundle successfully built with UI resources: $(APP_BUNDLE)"

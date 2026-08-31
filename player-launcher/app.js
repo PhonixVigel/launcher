@@ -54,14 +54,38 @@ async function apiFetch(endpoint, options = {}) {
   let lastError = null;
   for (const mirrorUrl of tryMirrors) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch(`${mirrorUrl}${endpoint}`, { ...options, signal: controller.signal });
-      clearTimeout(timeoutId);
+      const fullUrl = `${mirrorUrl}${endpoint}`;
+      let data = null;
+      let isSuccess = false;
 
-      const data = await res.json().catch(() => ({}));
+      // Если лаунчер запущен в нативном C++/WebKit приложении, используем прямой libcurl
+      if (window.nativeApiFetch) {
+        const payload = JSON.stringify({
+          url: fullUrl,
+          method: options.method || 'GET',
+          headers: options.headers || { 'Content-Type': 'application/json' },
+          body: typeof options.body === 'string' ? options.body : (options.body ? JSON.stringify(options.body) : '')
+        });
+        const resStr = await window.nativeApiFetch(payload);
+        data = JSON.parse(resStr);
+        if (data && !data.error) {
+          isSuccess = true;
+        } else if (data && data.status) {
+          isSuccess = true;
+        }
+      } else {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(fullUrl, { ...options, signal: controller.signal });
+        clearTimeout(timeoutId);
 
-      if (res.ok) {
+        data = await res.json().catch(() => ({}));
+        if (res.ok || (res.status >= 400 && res.status < 500)) {
+          isSuccess = true;
+        }
+      }
+
+      if (isSuccess && data) {
         if (CURRENT_API_BASE !== mirrorUrl) {
           CURRENT_API_BASE = mirrorUrl;
           localStorage.setItem('vozducraft_active_mirror', CURRENT_API_BASE);
@@ -71,13 +95,10 @@ async function apiFetch(endpoint, options = {}) {
           updateKnownMirrors(data.mirrors);
         }
         return data;
-      } else if (res.status >= 400 && res.status < 500) {
-        // Ответ от рабочего сервера с ошибкой валидации/бана
-        return data;
       }
     } catch (e) {
       lastError = e;
-      console.warn(`[FAILOVER] Узел ${mirrorUrl} недоступен, пробуем следующее зеркало...`);
+      console.warn(`[FAILOVER] Узел ${mirrorUrl} недоступен, пробуем следующее зеркало...`, e);
     }
   }
 

@@ -8,6 +8,7 @@
 #include "../include/json.hpp"
 #include "launcher_engine.hpp"
 #include "downloader.hpp"
+#include <curl/curl.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -199,6 +200,66 @@ int main(int argc, char** argv) {
         } catch (...) {}
 #endif
         return "{}";
+    });
+
+    // Нативный libcurl мост для выполнения HTTP запросов в обход любых CORS / ATS ограничений
+    g_webview->bind("nativeApiFetch", [](const std::string& req) -> std::string {
+        try {
+            auto parsed = json::parse(req);
+            auto pObj = parsed.is_array() && !parsed.empty() ? parsed[0] : parsed;
+
+            std::string url = pObj.value("url", "");
+            std::string method = pObj.value("method", "GET");
+            std::string body = pObj.value("body", "");
+
+            if (url.empty()) return "{\"error\":\"Empty URL\"}";
+
+            CURL* curl = curl_easy_init();
+            if (!curl) return "{\"error\":\"Curl initialization failed\"}";
+
+            std::string responseData;
+            struct curl_slist* headers = NULL;
+
+            if (pObj.contains("headers") && pObj["headers"].is_object()) {
+                for (auto& [key, val] : pObj["headers"].items()) {
+                    std::string h = key + ": " + val.get<std::string>();
+                    headers = curl_slist_append(headers, h.c_str());
+                }
+            } else {
+                headers = curl_slist_append(headers, "Content-Type: application/json");
+            }
+
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 6L);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+            if (method == "POST") {
+                curl_easy_setopt(curl, CURLOPT_POST, 1L);
+                if (!body.empty()) {
+                    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+                }
+            }
+
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, +[](void* contents, size_t size, size_t nmemb, void* userp) -> size_t {
+                size_t total = size * nmemb;
+                static_cast<std::string*>(userp)->append(static_cast<char*>(contents), total);
+                return total;
+            });
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
+
+            CURLcode res = curl_easy_perform(curl);
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+
+            if (res != CURLE_OK) {
+                return "{\"error\":\"" + std::string(curl_easy_strerror(res)) + "\"}";
+            }
+
+            return responseData.empty() ? "{}" : responseData;
+        } catch (const std::exception& e) {
+            return "{\"error\":\"" + std::string(e.what()) + "\"}";
+        }
     });
 
     // 1. Привязка нативного метода launchGame (C++ -> JS)
