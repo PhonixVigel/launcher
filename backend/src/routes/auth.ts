@@ -322,11 +322,10 @@ router.post('/discord/request-login', async (req: Request, res: Response) => {
       [cleanNick, 'DISCORD_LOGIN_REQUEST', `Запрос авторизации в лаунчер (ID: ${requestId})`, clientIp, clientHwid]
     );
 
-    // Отправка интерактивного сообщения в Discord
+    // Попытка отправки интерактивного сообщения в Discord
     const dmResult = await sendDiscordLoginRequest(cleanNick, clientIp, requestId);
     if (!dmResult.success) {
-      await db.run('DELETE FROM discord_auth_requests WHERE id = ?', [requestId]);
-      return res.status(400).json({ error: dmResult.error });
+      console.warn(`[AUTH] Предупреждение: ${dmResult.error}. Запрос ${requestId} ожидает подтверждения.`);
     }
 
     return res.json({
@@ -334,7 +333,7 @@ router.post('/discord/request-login', async (req: Request, res: Response) => {
       requestId,
       username: cleanNick,
       expiresInSeconds: 120,
-      message: 'Запрос на подтверждение входа отправлен в Discord.'
+      message: dmResult.success ? 'Запрос отправлен в Discord.' : 'Запрос ожидает подтверждения в Discord (/confirm).'
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка отправки запроса в Discord: ' + (error as Error).message });

@@ -1173,6 +1173,8 @@ async function loadDiscordBotStatus() {
     if (tokenInput && data.maskedToken && !tokenInput.value) {
       tokenInput.placeholder = data.maskedToken;
     }
+
+    loadPendingRequests();
   } catch (err) {
     console.error('Ошибка загрузки статуса Discord:', err);
   }
@@ -1294,4 +1296,87 @@ function setupDiscordBotTab() {
       testBtn.textContent = oldText;
     }
   });
+
+  const btnRefreshPending = document.getElementById('btn-refresh-pending-requests');
+  btnRefreshPending?.addEventListener('click', loadPendingRequests);
+}
+
+// Загрузка и рендер активных запросов на вход игроков
+async function loadPendingRequests() {
+  const container = document.getElementById('pending-requests-container');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/discord/pending-requests`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) return;
+
+    const requests = await res.json();
+    if (!requests || requests.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 24px; color: var(--text-secondary); font-size: 13px;">
+          Нет активных ожидающих запросов на вход в лаунчер
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: var(--text-secondary);">
+            <th style="padding: 10px;">Никнейм игрока</th>
+            <th style="padding: 10px;">IP-адрес</th>
+            <th style="padding: 10px;">Время запроса</th>
+            <th style="padding: 10px; text-align: right;">Действие</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${requests.map(r => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 10px; font-weight: 600; color: #ffedd5;">👤 ${r.username}</td>
+              <td style="padding: 10px; font-family: monospace; color: var(--text-secondary);">${r.ip_address}</td>
+              <td style="padding: 10px; color: var(--text-secondary);">${new Date(r.created_at).toLocaleTimeString('ru-RU')}</td>
+              <td style="padding: 10px; text-align: right;">
+                <button class="btn-primary btn-approve-request" data-id="${r.id}" data-user="${r.username}" style="padding: 6px 14px; font-size: 12px; background: #22c55e;">
+                  ✅ Одобрить вход
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    container.querySelectorAll('.btn-approve-request').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const requestId = btn.dataset.id;
+        const username = btn.dataset.user;
+        btn.disabled = true;
+        btn.textContent = '⏳ Одобрение...';
+
+        try {
+          const approveRes = await fetch(`${API_BASE}/api/v1/admin/discord/approve-request`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ requestId })
+          });
+          const approveData = await approveRes.json();
+          if (approveRes.ok && approveData.success) {
+            alert(`✅ Вход для ${username} успешно одобрен! Лаунчер игрока сразу войдет в меню.`);
+            loadPendingRequests();
+          } else {
+            alert(`❌ ${approveData.error || 'Ошибка'}`);
+            btn.disabled = false;
+          }
+        } catch (err) {
+          alert('Ошибка связи с сервером');
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки pending requests:', err);
+  }
 }

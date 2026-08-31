@@ -412,6 +412,21 @@
                 </form>
               </div>
             </div>
+
+            <!-- Блок ручного одобрения ожидающих входов -->
+            <div class="glass-panel" style="margin-top: 24px; padding: 24px; border-radius: var(--radius-lg);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                  <h3 style="color: #ffedd5; font-size: 16px;">⚡ Ожидающие запросы авторизации игроков</h3>
+                  <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Если Discord недоступен, администратор может мгновенно одобрить вход игрока вручную</p>
+                </div>
+                <button class="btn-secondary" id="btn-refresh-pending-requests" style="padding: 6px 12px; font-size: 12px;">🔄 Обновить список</button>
+              </div>
+
+              <div id="pending-requests-container">
+                <!-- Заполняется динамически -->
+              </div>
+            </div>
           </div>
 
           <!-- ВКЛАДКА 7: АНАЛИТИКА И АУДИТ -->

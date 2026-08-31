@@ -891,4 +891,71 @@ router.post('/discord/test-dm', requireAdmin, async (req: Request, res: Response
   }
 });
 
+// GET /api/v1/admin/discord/pending-requests - Получение активных запросов на вход игроков
+router.get('/discord/pending-requests', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    const requests = await db.all(`
+      SELECT * FROM discord_auth_requests 
+      WHERE status = 'PENDING' AND expires_at > datetime('now')
+      ORDER BY created_at DESC LIMIT 20
+    `);
+    return res.json(requests);
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения запросов' });
+  }
+});
+
+// POST /api/v1/admin/discord/approve-request - Ручное мгновенное одобрение входа игрока администратором
+router.post('/discord/approve-request', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { requestId } = req.body;
+    const db = await getDb();
+    const authReq = await db.get("SELECT * FROM discord_auth_requests WHERE id = ?", [requestId]);
+    if (!authReq) return res.status(404).json({ error: 'Запрос на вход не найден или истек' });
+
+    await db.run("UPDATE discord_auth_requests SET status = 'APPROVED' WHERE id = ?", [requestId]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'AUTH_FORCE_APPROVE', authReq.username, `Ручное одобрение входа в лаунчер`, req.ip || '');
+
+    return res.json({ success: true, message: `Вход для игрока ${authReq.username} успешно одобрен!` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка одобрения запроса: ' + (error as Error).message });
+  }
+});
+
+// POST /api/v1/admin/discord/simulate-auth - Эмуляция подтверждения авторизации
+router.post('/discord/simulate-auth', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Укажите никнейм' });
+    const cleanNick = username.trim();
+    const db = await getDb();
+
+    // Находим последний ожидающий запрос
+    const authReq = await db.get(
+      "SELECT id FROM discord_auth_requests WHERE LOWER(username) = LOWER(?) AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1",
+      [cleanNick]
+    );
+
+    if (authReq) {
+      await db.run("UPDATE discord_auth_requests SET status = 'APPROVED' WHERE id = ?", [authReq.id]);
+      return res.json({ success: true, message: `Вход для ${cleanNick} (запрос: ${authReq.id}) мгновенно подтвержден!` });
+    }
+
+    // Если нет запроса - создаем одобренный
+    const fakeRequestId = 'SIM-' + crypto.randomBytes(8).toString('hex');
+    const expiresAt = new Date(Date.now() + 120 * 1000).toISOString();
+    await db.run(
+      "INSERT INTO discord_auth_requests (id, username, ip_address, status, expires_at) VALUES (?, ?, '127.0.0.1', 'APPROVED', ?)",
+      [fakeRequestId, cleanNick, expiresAt]
+    );
+
+    return res.json({ success: true, requestId: fakeRequestId, message: `Создана сессия для игрока ${cleanNick}` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка эмуляции: ' + (error as Error).message });
+  }
+});
+
 export default router;
