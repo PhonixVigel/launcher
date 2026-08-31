@@ -3,7 +3,11 @@
     "loglevel": "warning"
   },
   "dns": {
-    "servers": ["1.1.1.1", "8.8.8.8"]
+    "servers": [
+      "77.88.8.8",
+      "1.1.1.1",
+      "8.8.8.8"
+    ]
   },
   "inbounds": [
     {
@@ -14,6 +18,10 @@
       "settings": {
         "auth": "noauth",
         "udp": true
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
       }
     },
     {
@@ -23,6 +31,10 @@
       "protocol": "http",
       "settings": {
         "allowTransparent": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
       }
     }
   ],
@@ -33,7 +45,7 @@
       "settings": {
         "vnext": [
           {
-            "address": "fr1.goarzain.top",
+            "address": "143.246.209.105",
             "port": 443,
             "users": [
               {
@@ -47,6 +59,7 @@
       },
       "streamSettings": {
         "network": "tcp",
+        "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
           "serverName": "fr1.goarzain.top",
