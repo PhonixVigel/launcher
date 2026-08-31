@@ -291,6 +291,9 @@ function showUpdateModal(data) {
       const logDebug = (msg) => {
         console.log('[UpdaterDebug]', msg);
         if (detailsText) detailsText.textContent = msg;
+        if (window.nativeLog) {
+          try { window.nativeLog('[UpdaterDebug] ' + (typeof msg === 'object' ? JSON.stringify(msg) : String(msg))); } catch (_) {}
+        }
       };
 
       logDebug(`[1/3] URL: ${downloadUrl}`);

@@ -22,6 +22,24 @@ using json = nlohmann::json;
 
 static std::unique_ptr<LauncherEngine> g_launcherEngine;
 static std::unique_ptr<webview::webview> g_webview;
+static std::mutex g_logMutex;
+
+void logToDebugFile(const std::string& tag, const std::string& msg) {
+    std::lock_guard<std::mutex> lock(g_logMutex);
+    std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
+    std::string logPath = homeDir + "/Desktop/vozducraft_debug.log";
+    
+    std::ofstream out(logPath, std::ios::app);
+    if (out.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S");
+        out << "[" << ss.str() << "] [" << tag << "] " << msg << "\n";
+        out.flush();
+    }
+    std::cout << "[" << tag << "] " << msg << std::endl;
+}
 
 // Универсальный парсер аргументов из JS bindings (поддерживает stringified JSON, raw objects и массивы)
 json extractJsonArg(const std::string& req) {
@@ -184,8 +202,21 @@ int main(int argc, char** argv) {
         return "{}";
     });
 
+    // Нативное логирование из JS UI в файл на Рабочем столе
+    g_webview->bind("nativeLog", [](const std::string& req) -> std::string {
+        try {
+            auto j = json::parse(req);
+            std::string msg = j.is_array() && !j.empty() ? j[0].get<std::string>() : req;
+            logToDebugFile("JS-UI", msg);
+        } catch (...) {
+            logToDebugFile("JS-UI", req);
+        }
+        return "{}";
+    });
+
     // Нативное скачивание и запуск обновления лаунчера прямо в приложении
     g_webview->bind("nativeAutoUpdateLauncher", [](const std::string& reqJson) -> std::string {
+        logToDebugFile("AutoUpdater", "Received nativeAutoUpdateLauncher call: " + reqJson);
         std::thread([](std::string params) {
             try {
                 std::string downloadUrl = "";
@@ -216,7 +247,7 @@ int main(int argc, char** argv) {
                 }
 
                 if (downloadUrl.empty()) {
-                    std::cerr << "[AutoUpdater] Empty download URL from params: " << params << std::endl;
+                    logToDebugFile("AutoUpdater", "ERROR: Empty download URL from params: " + params);
                     return;
                 }
 
@@ -226,7 +257,7 @@ int main(int argc, char** argv) {
                 destFile = homeDir + "/Downloads/VozduCraft-Update.zip";
 #endif
 
-                std::cout << "[AutoUpdater] Downloading update from: " << downloadUrl << " to: " << destFile << std::endl;
+                logToDebugFile("AutoUpdater", "Starting download from: " + downloadUrl + " to: " + destFile);
 
                 std::string jsStart = "if(window.onLauncherUpdateProgress) window.onLauncherUpdateProgress(1, 0.1, 15.4);";
 #if defined(__APPLE__)
@@ -259,7 +290,7 @@ int main(int argc, char** argv) {
                 });
 
                 if (ok) {
-                    std::cout << "[AutoUpdater] Download complete, launching: " << destFile << std::endl;
+                    logToDebugFile("AutoUpdater", "SUCCESS: Download complete! Launching: " + destFile);
                     std::string js = "if(window.onLauncherUpdateComplete) window.onLauncherUpdateComplete();";
 #if defined(__APPLE__)
                     dispatch_async(dispatch_get_main_queue(), ^{
@@ -280,7 +311,7 @@ int main(int argc, char** argv) {
                     exit(0);
 #endif
                 } else {
-                    std::cerr << "[AutoUpdater] Download failed for URL: " << downloadUrl << std::endl;
+                    logToDebugFile("AutoUpdater", "ERROR: Download failed for URL: " + downloadUrl);
                     std::string errJs = "if(window.onLauncherUpdateError) window.onLauncherUpdateError('Не удалось скачать файл обновления. Проверьте сеть или ссылку.');";
 #if defined(__APPLE__)
                     dispatch_async(dispatch_get_main_queue(), ^{
@@ -291,7 +322,7 @@ int main(int argc, char** argv) {
 #endif
                 }
             } catch (const std::exception& e) {
-                std::cerr << "[AutoUpdater] Exception: " << e.what() << std::endl;
+                logToDebugFile("AutoUpdater", "EXCEPTION: " + std::string(e.what()));
             }
         }, reqJson).detach();
         return "{\"status\":\"started\"}";
