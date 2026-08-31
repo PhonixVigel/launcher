@@ -42,12 +42,18 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Статическая папка для раздачи модов, зеркал и бинарников лаунчера
+// Статическая папка для раздачи модов, зеркал и бинарников лаунчера (с полной поддержкой CORS)
 const filesDir = path.join(__dirname, '../public/files');
 if (!fs.existsSync(filesDir)) {
   fs.mkdirSync(filesDir, { recursive: true });
 }
-app.use('/files', express.static(filesDir));
+app.use('/files', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
+  next();
+}, express.static(filesDir));
 
 // Статическая раздача релизных веб-интерфейсов лаунчеров
 const playerDir = path.join(__dirname, '../public/player');

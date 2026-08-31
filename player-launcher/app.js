@@ -362,8 +362,18 @@ function showUpdateModal(data) {
           document.body.removeChild(a);
 
         } catch (err) {
-          logDebug(`Ошибка загрузки: ${err.message}`);
-          if (statusText) statusText.textContent = '❌ Ошибка загрузки';
+          logDebug(`Ошибка потока: ${err.message}. Запуск скачивания...`);
+          try {
+            const fallbackLink = document.createElement('a');
+            fallbackLink.href = downloadUrl;
+            fallbackLink.download = 'VozduCraft-macOS.dmg';
+            document.body.appendChild(fallbackLink);
+            fallbackLink.click();
+            document.body.removeChild(fallbackLink);
+            logDebug('Запрос на загрузку файла отправлен в систему');
+          } catch (e) {
+            window.location.href = downloadUrl;
+          }
         }
       }
 
