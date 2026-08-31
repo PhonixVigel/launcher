@@ -21,13 +21,12 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const db = await getDb();
 
-    // Проверка бана HWID
-    let isBanned = null;
-    try {
-      isBanned = await db.get('SELECT id, reason FROM banned_hwids WHERE hwid = ? OR LOWER(username) = LOWER(?)', [hwid, username]);
-    } catch (e) {
-      isBanned = await db.get('SELECT id, reason FROM banned_hwids WHERE hwid = ?', [hwid]);
-    }
+    // Проверка бана HWID или Ника в таблице bans
+    const isBanned = await db.get(`
+      SELECT id, reason FROM bans 
+      WHERE (ban_type = 'HWID' AND target_value = ?)
+         OR (ban_type = 'NICK' AND LOWER(target_value) = LOWER(?))
+    `, [hwid, username]);
 
     if (isBanned) {
       await db.run(
@@ -86,13 +85,13 @@ router.post('/login', async (req: Request, res: Response) => {
     const clientHwid = hwid || 'UNKNOWN-HWID';
     const db = await getDb();
 
-    // Проверка бана HWID или Ника
-    let isBanned = null;
-    try {
-      isBanned = await db.get('SELECT id, reason FROM banned_hwids WHERE hwid = ? OR LOWER(username) = LOWER(?)', [clientHwid, username]);
-    } catch (e) {
-      isBanned = await db.get('SELECT id, reason FROM banned_hwids WHERE hwid = ?', [clientHwid]);
-    }
+    // Проверка бана Ника, HWID или IP в таблице bans
+    const isBanned = await db.get(`
+      SELECT id, reason FROM bans 
+      WHERE (ban_type = 'HWID' AND target_value = ?)
+         OR (ban_type = 'NICK' AND LOWER(target_value) = LOWER(?))
+         OR (ban_type = 'IP' AND target_value = ?)
+    `, [clientHwid, username, clientIp]);
 
     if (isBanned) {
       await db.run(
