@@ -14,7 +14,7 @@ import {
 } from 'discord.js';
 import { getDb } from './db';
 
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || 'MTUzNjQ3Mzc5MDk1ODE0MTQ4MA.G8faJR.ukv946Mxx-Lx9_YLp5T2ImKog4cEal08AAe37k';
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
 
 export const discordClient = new Client({
   intents: [

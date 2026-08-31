@@ -12,6 +12,7 @@ services:
       - NODE_ENV=production
       - DATABASE_PATH=/app/data/vozducraft.db
       - JWT_SECRET=VOZDUCRAFT_SUPER_SECURE_JWT_SECRET_2026
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
     volumes:
       # Постоянное хранение базы данных SQLite
       - ./data:/app/data
