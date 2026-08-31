@@ -61,10 +61,23 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
+// Защита от подбора паролей (Brute-force protection)
+const loginAttempts: Record<string, { count: number; blockedUntil: number }> = {};
+
 // 2. Вход (Логин)
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { username, password, hwid, isAdminApp } = req.body;
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+    // Проверка блокировки по IP после неудачных попыток
+    const attemptInfo = loginAttempts[clientIp];
+    if (attemptInfo && attemptInfo.blockedUntil > Date.now()) {
+      const waitSeconds = Math.ceil((attemptInfo.blockedUntil - Date.now()) / 1000);
+      return res.status(429).json({ 
+        error: `Слишком много неудачных попыток входа. Доступ заблокирован на ${waitSeconds} сек. для защиты от взлома.` 
+      });
+    }
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Введите никнейм и пароль' });
@@ -92,31 +105,36 @@ router.post('/login', async (req: Request, res: Response) => {
     // Проверка учетной записи
     const user = await db.get('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', [username]);
     if (!user) {
+      recordFailedAttempt(clientIp);
       await db.run(
-        'INSERT INTO connection_stats (username, event_type, details) VALUES (?, ?, ?)',
-        [username, 'FAILED_AUTH', 'Пользователь не найден']
+        'INSERT INTO connection_stats (username, event_type, details, ip_address) VALUES (?, ?, ?, ?)',
+        [username, 'FAILED_AUTH', 'Пользователь не найден', clientIp]
       );
       return res.status(401).json({ error: 'Неверный никнейм или пароль' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      recordFailedAttempt(clientIp);
       await db.run(
-        'INSERT INTO connection_stats (username, event_type, details) VALUES (?, ?, ?)',
-        [username, 'FAILED_AUTH', 'Неверный пароль']
+        'INSERT INTO connection_stats (username, event_type, details, ip_address) VALUES (?, ?, ?, ?)',
+        [username, 'FAILED_AUTH', 'Неверный пароль', clientIp]
       );
       return res.status(401).json({ error: 'Неверный никнейм или пароль' });
     }
 
-    // Если вход выполняется через Admin Launcher — проверяем роль ADMIN
-    if (isAdminApp && user.role !== 'ADMIN') {
+    // Сброс счетчика неудачных попыток при успешном входе
+    delete loginAttempts[clientIp];
+
+    // Если вход выполняется через Admin Panel — проверяем роль ADMIN / MODERATOR
+    if (isAdminApp && user.role !== 'ADMIN' && user.role !== 'MODERATOR') {
       return res.status(403).json({ error: 'Доступ запрещен. Учетная запись не имеет прав администратора.' });
     }
 
-    // Обновляем последний HWID пользователя
-    await db.run('UPDATE users SET last_hwid = ? WHERE id = ?', [clientHwid, user.id]);
+    // Обновляем последний IP и HWID пользователя
+    await db.run('UPDATE users SET last_hwid = ?, last_ip = ? WHERE id = ?', [clientHwid, clientIp, user.id]);
 
-    // Генерация JWT сессионного токена
+    // Генерация криптографического JWT сессионного токена
     const token = jwt.sign(
       { userId: user.id, username: user.username, role: user.role, hwid: clientHwid },
       JWT_SECRET,
@@ -126,13 +144,13 @@ router.post('/login', async (req: Request, res: Response) => {
     // Сохранение сессии в БД
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     await db.run(
-      'INSERT INTO sessions (username, access_token, hwid, is_admin_bypass, expires_at) VALUES (?, ?, ?, ?, ?)',
-      [user.username, token, clientHwid, user.role === 'ADMIN' ? 1 : 0, expiresAt]
+      'INSERT INTO sessions (username, access_token, hwid, ip_address, is_admin_bypass, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [user.username, token, clientHwid, clientIp, user.role === 'ADMIN' ? 1 : 0, expiresAt]
     );
 
     await db.run(
-      'INSERT INTO connection_stats (username, event_type, details) VALUES (?, ?, ?)',
-      [user.username, 'SUCCESS', `Успешная авторизация (${user.role})`]
+      'INSERT INTO connection_stats (username, event_type, details, ip_address) VALUES (?, ?, ?, ?)',
+      [user.username, 'LOGIN_SUCCESS', `Успешная авторизация (${user.role})`, clientIp]
     );
 
     return res.json({
@@ -147,6 +165,19 @@ router.post('/login', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Внутренняя ошибка сервера при входе: ' + (error as Error).message });
   }
 });
+
+function recordFailedAttempt(clientIp: string) {
+  if (!loginAttempts[clientIp]) {
+    loginAttempts[clientIp] = { count: 1, blockedUntil: 0 };
+  } else {
+    loginAttempts[clientIp].count += 1;
+  }
+
+  // Блокировка на 10 минут после 5 неудачных попыток
+  if (loginAttempts[clientIp].count >= 5) {
+    loginAttempts[clientIp].blockedUntil = Date.now() + 10 * 60 * 1000;
+  }
+}
 
 // 3. Проверка валидности сессии (Для серверного плагина VozduCraftAuthPlugin.java)
 router.get('/verify-session', async (req: Request, res: Response) => {
@@ -191,18 +222,22 @@ router.post('/change-password', async (req: Request, res: Response) => {
     }
 
     const token = authHeader.split(' ')[1];
-    let username = '';
-
-    if (token === 'VOZDUHAN-ADMIN-TOKEN') {
-      username = 'VozduHAN';
-    } else {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
-      username = decoded.username;
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: 'Недействительный или просроченный токен' });
     }
 
+    const username = decoded.username;
     const { currentPassword, newPassword } = req.body;
-    if (!newPassword || newPassword.length < 4) {
-      return res.status(400).json({ error: 'Новый пароль должен содержать минимум 4 символа' });
+
+    if (!newPassword || newPassword.length < 5) {
+      return res.status(400).json({ error: 'Новый пароль должен содержать минимум 5 символов' });
+    }
+
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Введите текущий пароль для подтверждения' });
     }
 
     const db = await getDb();
@@ -211,20 +246,22 @@ router.post('/change-password', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Пользователь не найден' });
     }
 
-    // Если токен не dev-bypass, проверяем текущий пароль
-    if (token !== 'VOZDUHAN-ADMIN-TOKEN' && currentPassword) {
-      const isValid = await bcrypt.compare(currentPassword, user.password_hash);
-      if (!isValid) {
-        return res.status(400).json({ error: 'Неверный текущий пароль' });
-      }
+    // Строгая проверка текущего пароля
+    const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValid) {
+      return res.status(400).json({ error: 'Текущий пароль указан неверно!' });
     }
 
-    const newHash = await bcrypt.hash(newPassword, 10);
+    // Хеширование нового пароля
+    const newHash = await bcrypt.hash(newPassword, 12);
     await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
+
+    // Инвалидируем старые сессии пользователя кроме текущей
+    await db.run('DELETE FROM sessions WHERE username = ? AND access_token != ?', [user.username, token]);
 
     return res.json({ success: true, message: 'Пароль успешно обновлен!' });
   } catch (error) {
-    return res.status(500).json({ error: 'Ошибка при смене пароля' });
+    return res.status(500).json({ error: 'Ошибка при смене пароля: ' + (error as Error).message });
   }
 });
 

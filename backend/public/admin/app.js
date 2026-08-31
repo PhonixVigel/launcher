@@ -111,9 +111,9 @@ function setupAuth() {
       });
 
       const data = await res.json();
-      if (res.ok && data.accessToken) {
-        state.token = data.accessToken;
-        state.adminUser = username;
+      if (res.ok && data.token) {
+        state.token = data.token;
+        state.adminUser = data.username || username;
         localStorage.setItem('vozducraft_admin_token', state.token);
         localStorage.setItem('vozducraft_admin_user', state.adminUser);
 
@@ -121,18 +121,6 @@ function setupAuth() {
         showScreen('screen-admin');
         loadDashboardData();
       } else {
-        // Fallback для локального входа разработчика
-        if (username.toLowerCase() === 'vozduhan') {
-          state.token = 'VOZDUHAN-ADMIN-TOKEN';
-          state.adminUser = 'VozduHAN';
-          localStorage.setItem('vozducraft_admin_token', state.token);
-          localStorage.setItem('vozducraft_admin_user', state.adminUser);
-          document.getElementById('topbar-admin-name').textContent = state.adminUser;
-          showScreen('screen-admin');
-          loadDashboardData();
-          return;
-        }
-
         alertEl.className = 'auth-alert error';
         alertEl.textContent = data.error || 'Неверный логин или пароль администратора';
       }

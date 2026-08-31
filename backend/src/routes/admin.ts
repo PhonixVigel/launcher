@@ -7,6 +7,10 @@ import net from 'net';
 
 const router = Router();
 
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'VOZDUCRAFT_SUPER_SECURE_JWT_SECRET_2026';
+
 // Middleware проверки прав администратора
 export const requireAdmin = async (req: Request, res: Response, next: Function) => {
   try {
@@ -17,10 +21,12 @@ export const requireAdmin = async (req: Request, res: Response, next: Function) 
 
     const token = authHeader.split(' ')[1];
     
-    // Специальный локальный токен администратора для удобства разработки
-    if (token === 'VOZDUHAN-ADMIN-TOKEN') {
-      (req as any).user = { username: 'VozduHAN', role: 'ADMIN' };
-      return next();
+    // Проверка подписи JWT токена
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (jwtErr) {
+      return res.status(401).json({ error: 'Сессия недействительна или истекла' });
     }
 
     const db = await getDb();
@@ -28,7 +34,7 @@ export const requireAdmin = async (req: Request, res: Response, next: Function) 
       SELECT s.*, u.role, u.username
       FROM sessions s
       JOIN users u ON s.username = u.username
-      WHERE s.access_token = ? AND (s.expires_at > CURRENT_TIMESTAMP OR s.is_admin_bypass = 1)
+      WHERE s.access_token = ? AND s.expires_at > CURRENT_TIMESTAMP
     `, [token]);
 
     if (!session || (session.role !== 'ADMIN' && session.role !== 'MODERATOR')) {
