@@ -33,6 +33,20 @@ async function initDbSchema(db: Database) {
     );
   `);
 
+  // 1.1. Таблица запросов авторизации через Discord бота
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS discord_auth_requests (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      discord_id TEXT,
+      ip_address TEXT,
+      status TEXT DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED, EXPIRED
+      token TEXT,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // 2. Таблица серверов (Мультисерверность и конфигурация сборок)
   await db.exec(`
     CREATE TABLE IF NOT EXISTS servers (

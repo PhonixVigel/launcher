@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { getDb } from '../db';
 
 const router = Router();
@@ -261,6 +262,174 @@ router.post('/change-password', async (req: Request, res: Response) => {
     return res.json({ success: true, message: 'Пароль успешно обновлен!' });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка при смене пароля: ' + (error as Error).message });
+  }
+});
+
+// ----------------------------------------------------
+// 5. АВТОРИЗАЦИЯ ЧЕРЕЗ DISCORD БОТА ДЛЯ ЛАУНЧЕРА
+// ----------------------------------------------------
+
+// POST /api/v1/auth/discord/request-login - Инициализация входа по никнейму
+router.post('/discord/request-login', async (req: Request, res: Response) => {
+  try {
+    const { username, hwid } = req.body;
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+    if (!username || username.trim().length < 3) {
+      return res.status(400).json({ error: 'Введите корректный никнейм (от 3 символов)' });
+    }
+
+    const cleanNick = username.trim();
+    const clientHwid = hwid || 'LAUNCHER-HWID';
+    const db = await getDb();
+
+    // Проверка блокировок по нику, HWID или IP
+    const isBanned = await db.get(`
+      SELECT id, reason FROM bans 
+      WHERE (ban_type = 'HWID' AND target_value = ?)
+         OR (ban_type = 'NICK' AND LOWER(target_value) = LOWER(?))
+         OR (ban_type = 'IP' AND target_value = ?)
+    `, [clientHwid, cleanNick, clientIp]);
+
+    if (isBanned) {
+      return res.status(403).json({ error: `Ваш аккаунт или устройство заблокированы. Причина: ${isBanned.reason}` });
+    }
+
+    // Генерация уникального ID запроса
+    const requestId = crypto.randomBytes(16).toString('hex');
+    const expiresAt = new Date(Date.now() + 120 * 1000).toISOString(); // 2 минуты на подтверждение
+
+    await db.run(`
+      INSERT INTO discord_auth_requests (id, username, ip_address, status, expires_at)
+      VALUES (?, ?, ?, 'PENDING', ?)
+    `, [requestId, cleanNick, clientIp, expiresAt]);
+
+    // Проверяем, есть ли пользователь в базе, если нет - регистрируем
+    const existingUser = await db.get('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', [cleanNick]);
+    if (!existingUser) {
+      const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+      await db.run(
+        'INSERT INTO users (username, password_hash, role, last_hwid, last_ip) VALUES (?, ?, ?, ?, ?)',
+        [cleanNick, randomPasswordHash, 'PLAYER', clientHwid, clientIp]
+      );
+    } else {
+      await db.run('UPDATE users SET last_hwid = ?, last_ip = ? WHERE id = ?', [clientHwid, clientIp, existingUser.id]);
+    }
+
+    await db.run(
+      'INSERT INTO connection_stats (username, event_type, details, ip_address, hwid) VALUES (?, ?, ?, ?, ?)',
+      [cleanNick, 'DISCORD_LOGIN_REQUEST', `Запрос авторизации в лаунчер (ID: ${requestId})`, clientIp, clientHwid]
+    );
+
+    return res.json({
+      success: true,
+      requestId,
+      username: cleanNick,
+      expiresInSeconds: 120,
+      message: 'Запрос на подтверждение входа отправлен в Discord.'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка отправки запроса в Discord: ' + (error as Error).message });
+  }
+});
+
+// GET /api/v1/auth/discord/status/:requestId - Проверка статуса подтверждения запроса
+router.get('/discord/status/:requestId', async (req: Request, res: Response) => {
+  try {
+    const { requestId } = req.params;
+    const db = await getDb();
+
+    const authReq = await db.get('SELECT * FROM discord_auth_requests WHERE id = ?', [requestId]);
+    if (!authReq) {
+      return res.status(404).json({ status: 'NOT_FOUND', error: 'Запрос авторизации не найден' });
+    }
+
+    // Проверка истечения времени
+    if (authReq.status === 'PENDING' && new Date(authReq.expires_at).getTime() < Date.now()) {
+      await db.run("UPDATE discord_auth_requests SET status = 'EXPIRED' WHERE id = ?", [requestId]);
+      return res.json({ status: 'EXPIRED', error: 'Время ожидания подтверждения истекло' });
+    }
+
+    if (authReq.status === 'REJECTED') {
+      return res.json({ status: 'REJECTED', error: 'Вход был отклонен в Discord' });
+    }
+
+    if (authReq.status === 'APPROVED') {
+      let token = authReq.token;
+      if (!token) {
+        // Генерируем 24-часовой JWT токен (86400 секунд)
+        token = jwt.sign(
+          { username: authReq.username, role: 'PLAYER' },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        await db.run('UPDATE discord_auth_requests SET token = ? WHERE id = ?', [token, requestId]);
+        
+        await db.run(
+          'INSERT INTO sessions (username, access_token, hwid, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)',
+          [authReq.username, token, 'DISCORD-LAUNCHER', authReq.ip_address || '', expiresAt]
+        );
+      }
+
+      const sessionExpiry = Date.now() + 24 * 60 * 60 * 1000;
+      return res.json({
+        status: 'APPROVED',
+        username: authReq.username,
+        token,
+        sessionExpiry
+      });
+    }
+
+    return res.json({ status: 'PENDING' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка проверки статуса' });
+  }
+});
+
+// POST /api/v1/auth/discord/callback - Подтверждение / Отклонение из Discord-бота
+router.post('/discord/callback', async (req: Request, res: Response) => {
+  try {
+    const { requestId, action, discordId } = req.body; // action: 'approve' | 'reject'
+    const db = await getDb();
+
+    const authReq = await db.get('SELECT * FROM discord_auth_requests WHERE id = ?', [requestId]);
+    if (!authReq) {
+      return res.status(404).json({ error: 'Запрос не найден' });
+    }
+
+    if (action === 'approve') {
+      // 24 часа сессия
+      const token = jwt.sign(
+        { username: authReq.username, role: 'PLAYER', discordId },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await db.run(
+        "UPDATE discord_auth_requests SET status = 'APPROVED', token = ?, discord_id = ? WHERE id = ?",
+        [token, discordId || '', requestId]
+      );
+
+      await db.run(
+        'INSERT INTO sessions (username, access_token, hwid, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)',
+        [authReq.username, token, 'DISCORD-LAUNCHER', authReq.ip_address || '', expiresAt]
+      );
+
+      await db.run(
+        'INSERT INTO connection_stats (username, event_type, details) VALUES (?, ?, ?)',
+        [authReq.username, 'DISCORD_LOGIN_APPROVED', `Вход подтвержден в Discord (${discordId || 'Web'})`]
+      );
+
+      return res.json({ success: true, message: 'Авторизация в лаунчере подтверждена!' });
+    } else {
+      await db.run("UPDATE discord_auth_requests SET status = 'REJECTED' WHERE id = ?", [requestId]);
+      return res.json({ success: true, message: 'Вход отклонен.' });
+    }
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка обработки колбэка' });
   }
 });
 

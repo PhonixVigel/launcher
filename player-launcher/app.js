@@ -16,6 +16,7 @@ if (window.require) {
 const appState = {
   token: localStorage.getItem('vozducraft_token') || null,
   username: localStorage.getItem('vozducraft_username') || null,
+  sessionExpiry: parseInt(localStorage.getItem('vozducraft_session_expiry'), 10) || 0,
   ramGb: parseInt(localStorage.getItem('vozducraft_ram')) || 6,
   disableJvmFlags: localStorage.getItem('vozducraft_disable_jvm') === 'true',
   playerCustomJvm: localStorage.getItem('vozducraft_player_custom_jvm') || '',
@@ -196,9 +197,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 5000);
 
-  if (appState.token && appState.username) {
+  if (appState.token && appState.username && appState.sessionExpiry && Date.now() < appState.sessionExpiry) {
     showDashboard();
   } else {
+    localStorage.removeItem('vozducraft_token');
+    localStorage.removeItem('vozducraft_session_expiry');
+    appState.token = null;
     showAuth();
   }
 });
@@ -722,8 +726,10 @@ function setupNavigation() {
     logoutBtn.addEventListener('click', () => {
       localStorage.removeItem('vozducraft_token');
       localStorage.removeItem('vozducraft_username');
+      localStorage.removeItem('vozducraft_session_expiry');
       appState.token = null;
       appState.username = null;
+      appState.sessionExpiry = 0;
       showAuth();
     });
   }
@@ -732,6 +738,10 @@ function setupNavigation() {
 function showAuth() {
   document.getElementById('screen-auth')?.classList.add('active');
   document.getElementById('screen-dashboard')?.classList.remove('active');
+  const waitingBox = document.getElementById('discord-waiting-box');
+  const authForm = document.getElementById('auth-form');
+  if (waitingBox) waitingBox.classList.add('hidden');
+  if (authForm) authForm.style.display = 'block';
 }
 
 function showDashboard() {
@@ -741,23 +751,127 @@ function showDashboard() {
   if (nameEl) nameEl.textContent = appState.username;
 }
 
+let discordPollInterval = null;
+let discordTimerInterval = null;
+
 function setupAuthEvents() {
   const authForm = document.getElementById('auth-form');
+  const alertEl = document.getElementById('auth-alert');
+  const waitingBox = document.getElementById('discord-waiting-box');
+  const timerDisplay = document.getElementById('discord-timer-display');
+  const btnCancel = document.getElementById('btn-cancel-discord-auth');
+  const btnSubmit = document.getElementById('btn-auth-submit');
+
+  const stopDiscordPolling = () => {
+    if (discordPollInterval) clearInterval(discordPollInterval);
+    if (discordTimerInterval) clearInterval(discordTimerInterval);
+    discordPollInterval = null;
+    discordTimerInterval = null;
+    if (waitingBox) waitingBox.classList.add('hidden');
+    if (authForm) authForm.style.display = 'block';
+    if (btnSubmit) btnSubmit.disabled = false;
+  };
+
+  if (btnCancel) {
+    btnCancel.addEventListener('click', () => {
+      stopDiscordPolling();
+      if (alertEl) {
+        alertEl.className = 'auth-alert';
+        alertEl.textContent = 'Вход отменен';
+        setTimeout(() => alertEl.classList.add('hidden'), 2000);
+      }
+    });
+  }
 
   if (authForm) {
-    authForm.addEventListener('submit', (e) => {
+    authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const usernameInput = document.getElementById('input-username');
-      const username = (usernameInput ? usernameInput.value.trim() : '') || 'VozduHAN';
+      const username = (usernameInput ? usernameInput.value.trim() : '');
 
-      appState.username = username;
-      appState.token = 'VOZDUCRAFT-SESSION-' + Date.now();
-      localStorage.setItem('vozducraft_token', appState.token);
-      localStorage.setItem('vozducraft_username', appState.username);
+      if (!username || username.length < 3) {
+        alertEl.className = 'auth-alert error';
+        alertEl.textContent = 'Введите корректный никнейм (от 3 символов)';
+        return;
+      }
 
-      showDashboard();
-      const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
-      if (activeServer) fetchOptionalModsFor(activeServer.id);
+      alertEl.className = 'auth-alert hidden';
+      btnSubmit.disabled = true;
+
+      try {
+        const data = await apiFetch('/auth/discord/request-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            hwid: 'LAUNCHER-CLIENT'
+          })
+        });
+
+        if (!data.success || !data.requestId) {
+          alertEl.className = 'auth-alert error';
+          alertEl.textContent = data.error || 'Ошибка отправки запроса в Discord';
+          btnSubmit.disabled = false;
+          return;
+        }
+
+        // Показываем блок ожидания подтверждения от бота
+        authForm.style.display = 'none';
+        waitingBox.classList.remove('hidden');
+
+        let remainingSeconds = data.expiresInSeconds || 120;
+        if (timerDisplay) timerDisplay.textContent = `Осталось: ${remainingSeconds} сек`;
+
+        discordTimerInterval = setInterval(() => {
+          remainingSeconds--;
+          if (timerDisplay) timerDisplay.textContent = `Осталось: ${remainingSeconds} сек`;
+          if (remainingSeconds <= 0) {
+            stopDiscordPolling();
+            alertEl.className = 'auth-alert error';
+            alertEl.textContent = 'Время ожидания подтверждения в Discord истекло';
+          }
+        }, 1000);
+
+        // Поллинг статуса подтверждения
+        discordPollInterval = setInterval(async () => {
+          try {
+            const statusData = await apiFetch(`/auth/discord/status/${data.requestId}`);
+
+            if (statusData.status === 'APPROVED') {
+              stopDiscordPolling();
+
+              appState.username = statusData.username || username;
+              appState.token = statusData.token;
+              appState.sessionExpiry = statusData.sessionExpiry || (Date.now() + 24 * 60 * 60 * 1000);
+
+              localStorage.setItem('vozducraft_token', appState.token);
+              localStorage.setItem('vozducraft_username', appState.username);
+              localStorage.setItem('vozducraft_session_expiry', appState.sessionExpiry);
+
+              showToast(`✅ Добро пожаловать, ${appState.username}!`);
+              showDashboard();
+
+              const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
+              if (activeServer) fetchOptionalModsFor(activeServer.id);
+            } else if (statusData.status === 'REJECTED') {
+              stopDiscordPolling();
+              alertEl.className = 'auth-alert error';
+              alertEl.textContent = '❌ Вход был отклонен в Discord';
+            } else if (statusData.status === 'EXPIRED') {
+              stopDiscordPolling();
+              alertEl.className = 'auth-alert error';
+              alertEl.textContent = '⏱️ Время подтверждения истекло';
+            }
+          } catch (err) {
+            console.error('Ошибка проверки статуса Discord:', err);
+          }
+        }, 2000);
+
+      } catch (err) {
+        alertEl.className = 'auth-alert error';
+        alertEl.textContent = err.message || 'Ошибка связи с сервером авторизации';
+        btnSubmit.disabled = false;
+      }
     });
   }
 }

@@ -24,30 +24,52 @@
       </div>
     </header>
 
-    <!-- Главный экран Авторизации -->
+    <!-- Главный экран Авторизации через Discord -->
     <section class="screen active" id="screen-auth">
-      <div class="auth-card glass-panel">
-        <h1 class="auth-title">Добро пожаловать в VozduCraft</h1>
-        <p class="auth-subtitle">Введите никнейм для быстрого входа в игру</p>
+      <div class="auth-card glass-panel" style="max-width: 440px;">
+        <div style="font-size: 40px; margin-bottom: 8px;">💬</div>
+        <h1 class="auth-title">Вход в VozduCraft</h1>
+        <p class="auth-subtitle">Безопасная авторизация через официального Discord-бота</p>
 
+        <!-- Форма ввода ника -->
         <form id="auth-form">
           <div class="input-group">
-            <label for="input-username">Имя пользователя (Никнейм)</label>
-            <input type="text" id="input-username" placeholder="VozduHAN" value="VozduHAN" required autocomplete="off">
-          </div>
-
-          <div class="input-group" id="password-group">
-            <label for="input-password">Пароль (необязательно)</label>
-            <input type="password" id="input-password" placeholder="••••••••">
+            <label for="input-username">Ваш игровой никнейм</label>
+            <input type="text" id="input-username" placeholder="Например: VozduHAN" required autocomplete="off" style="text-align: center; font-size: 16px; font-weight: 600;">
           </div>
 
           <div class="auth-alert hidden" id="auth-alert"></div>
 
-          <button type="submit" class="btn-primary" id="btn-auth-submit">Войти в игру</button>
+          <!-- Блок инструкции по регистрации -->
+          <div class="discord-instructions-box" style="background: rgba(88, 101, 242, 0.12); border: 1px solid rgba(88, 101, 242, 0.35); border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px; text-align: left;">
+            <div style="display: flex; align-items: center; gap: 8px; color: #818cf8; font-weight: 700; font-size: 12px; margin-bottom: 6px; text-transform: uppercase;">
+              <span>ℹ️ Как зарегистрироваться?</span>
+            </div>
+            <ol style="margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+              <li>Зайдите на наш <b>Discord сервер</b></li>
+              <li>Введите в чате команду: <code style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; color: #fb923c;">/register &lt;ваш_ник&gt;</code></li>
+              <li>Введите ник выше и нажмите кнопку входа</li>
+            </ol>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btn-auth-submit" style="background: linear-gradient(135deg, #5865F2, #4752C4); box-shadow: 0 6px 20px rgba(88, 101, 242, 0.35);">
+            💬 Войти через Discord
+          </button>
         </form>
 
-        <div class="auth-footer">
-          <span>VozduCraft Native Desktop Client • NeoForge 1.21.1</span>
+        <!-- Блок ожидания подтверждения от бота -->
+        <div class="discord-waiting-box hidden" id="discord-waiting-box" style="margin-top: 16px; text-align: center; padding: 20px; background: rgba(0,0,0,0.3); border-radius: var(--radius-md); border: 1px solid rgba(88, 101, 242, 0.4);">
+          <div class="loading-spinner" style="width: 32px; height: 32px; border: 3px solid rgba(88, 101, 242, 0.3); border-top-color: #818cf8; border-radius: 50%; margin: 0 auto 12px; animation: spin 1s linear infinite;"></div>
+          <h3 style="font-size: 16px; color: #ffedd5; margin-bottom: 6px;">📩 Запрос отправлен в Discord!</h3>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            Откройте личные сообщения с ботом и нажмите кнопку <b>«✅ Подтвердить вход»</b>.
+          </p>
+          <div style="font-size: 12px; font-weight: 700; color: #fb923c; margin-bottom: 14px;" id="discord-timer-display">Осталось: 60 сек</div>
+          <button type="button" class="btn-secondary" id="btn-cancel-discord-auth" style="padding: 6px 16px; font-size: 12px;">Отмена</button>
+        </div>
+
+        <div class="auth-footer" style="margin-top: 18px;">
+          <span>Сессия сохраняется на 24 часа • Автоматический вход</span>
         </div>
       </div>
     </section>
