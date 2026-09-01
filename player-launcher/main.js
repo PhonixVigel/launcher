@@ -339,6 +339,24 @@ function createWindow() {
         await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-21.1.234-client.jar`, neoForgeClientJarPath, null).catch(() => {});
       }
 
+      // Скачивание ForgeWrapper
+      const fwJar = path.join(libsDir, 'io', 'github', 'zekerzhayard', 'ForgeWrapper', 'prism-2026-08-01', 'ForgeWrapper-prism-2026-08-01.jar');
+      if (!fs.existsSync(fwJar) || fs.statSync(fwJar).size < 1000) {
+        fs.mkdirSync(path.dirname(fwJar), { recursive: true });
+        await downloadFile('https://files.prismlauncher.org/maven/io/github/zekerzhayard/ForgeWrapper/prism-2026-08-01/ForgeWrapper-prism-2026-08-01.jar', fwJar, null).catch(async () => {
+          await downloadFile('http://185.221.213.43:3000/files/launchers/ForgeWrapper-prism-2026-08-01.jar', fwJar, null).catch(() => {});
+        });
+      }
+
+      // Скачивание NeoForge Installer
+      const forgewrapperInstallerJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', '21.1.234', 'neoforge-21.1.234-installer.jar');
+      if (!fs.existsSync(forgewrapperInstallerJar) || fs.statSync(forgewrapperInstallerJar).size < 1000) {
+        fs.mkdirSync(path.dirname(forgewrapperInstallerJar), { recursive: true });
+        await downloadFile('https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.234/neoforge-21.1.234-installer.jar', forgewrapperInstallerJar, null).catch(async () => {
+          await downloadFile('http://185.221.213.43:3000/files/launchers/neoforge-21.1.234-installer.jar', forgewrapperInstallerJar, null).catch(() => {});
+        });
+      }
+
       // 4. Формирование Classpath
       sendStatus(90, 'Построение путей и запуск FML...');
       const modulePathEntries = [];
@@ -367,6 +385,10 @@ function createWindow() {
           jvmCpEntries.push(p);
         }
       }
+
+      if (fs.existsSync(fwJar)) {
+        jvmCpEntries.push(fwJar);
+      }
       
       const pathSeparator = isWin ? ';' : ':';
       
@@ -391,8 +413,6 @@ function createWindow() {
       const macFlags = isMac ? ['-XstartOnFirstThread'] : [];
       const mainClass = 'io.github.zekerzhayard.forgewrapper.installer.Main';
       const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;minecraft-1.21.1-client.jar,neoforge-21.1.234-client.jar`;
-
-      const forgewrapperInstallerJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', '21.1.234', 'neoforge-21.1.234-installer.jar');
 
       const jvmArgs = [
         `-Dforgewrapper.minecraft=${mcJarPath}`,

@@ -1515,7 +1515,7 @@ async function loadDebugLogs() {
         <td style="color: var(--text-secondary); font-size: 12px;">${((l.size || 0) / 1024).toFixed(1)} КБ</td>
         <td>
           <button class="btn-secondary btn-sm btn-view-debug" data-id="${l.id}" data-user="${l.username}" data-time="${l.created_at}">👁️ Просмотр</button>
-          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/debug-logs/${l.id}/download" target="_blank" style="text-decoration: none; display: inline-block;">💾 .log</a>
+          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/debug-logs/${l.id}/download?token=${encodeURIComponent(localStorage.getItem('adminToken') || '')}" target="_blank" style="text-decoration: none; display: inline-block;">💾 .log</a>
           <button class="btn-danger btn-sm btn-del-debug" data-id="${l.id}">🗑️</button>
         </td>
       </tr>
@@ -1577,7 +1577,7 @@ async function loadCrashReports() {
         <td style="color: var(--text-secondary); font-size: 12px;">${((c.size || 0) / 1024).toFixed(1)} КБ</td>
         <td>
           <button class="btn-secondary btn-sm btn-view-crash" data-id="${c.id}" data-user="${c.username}" data-file="${c.crash_filename}">👁️ Просмотр</button>
-          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/crash-reports/${c.id}/download" target="_blank" style="text-decoration: none; display: inline-block;">💾 .txt</a>
+          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/crash-reports/${c.id}/download?token=${encodeURIComponent(localStorage.getItem('adminToken') || '')}" target="_blank" style="text-decoration: none; display: inline-block;">💾 .txt</a>
           <button class="btn-danger btn-sm btn-del-crash" data-id="${c.id}">🗑️</button>
         </td>
       </tr>
