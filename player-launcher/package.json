@@ -1,16 +1,45 @@
 {
   "name": "vozducraft-launcher",
-  "version": "1.0.0",
+  "version": "3.0.4",
   "description": "VozduCraft Native Minecraft Launcher",
   "main": "main.js",
+  "author": "VozduCraft",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-packager . VozduCraft --platform=win32 --arch=x64 --out=dist_win --overwrite --asar",
-    "build:mac": "electron-packager . VozduCraft --platform=darwin --arch=arm64 --out=dist_mac --overwrite --asar"
+    "build:win": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "ru.vozducraft.launcher",
+    "productName": "VozduCraft",
+    "directories": {
+      "output": "../dist_win"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VozduCraft",
+      "artifactName": "VozduCraft-Windows-Setup.exe",
+      "runAfterFinish": true
+    },
+    "files": [
+      "index.html",
+      "app.js",
+      "main.js",
+      "styles.css",
+      "package.json",
+      "assets/**/*",
+      "meta/**/*"
+    ]
   },
   "devDependencies": {
-    "@electron/packager": "^18.3.1",
     "electron": "^29.1.0",
-    "electron-packager": "^17.1.2"
+    "electron-builder": "^26.15.3"
   }
 }
