@@ -400,7 +400,6 @@ function createWindow() {
         if (pLower.includes('gson-2.8.9')) continue;
         if (pLower.includes('neoforge-21.1.234-universal.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-srg.jar')) continue;
-        if (pLower.includes('client-1.21.1-20240808.144430-extra.jar')) continue;
         if (pLower.includes('minecraft-1.21.1-client.jar')) continue;
         
         if (

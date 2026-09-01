@@ -442,14 +442,20 @@ function showUpdateModal(data) {
                 if (destFile.toLowerCase().endsWith('.exe')) {
                   const { spawn } = window.require('child_process');
                   try {
-                    const installer = spawn(destFile, ['/S'], {
+                    // Запуск установщика с таймаутом 1 сек для освобождения файлов текущим процессом
+                    const installer = spawn('cmd.exe', ['/c', `timeout /t 1 /nobreak >nul & "${destFile}" /S`], {
                       detached: true,
-                      stdio: 'ignore'
+                      stdio: 'ignore',
+                      windowsHide: true
                     });
                     installer.unref();
+
                     setTimeout(() => {
-                      window.close();
-                    }, 1200);
+                      const electronApp = window.require('electron').remote?.app || window.require('@electron/remote')?.app;
+                      if (electronApp) electronApp.exit(0);
+                      else if (window.require('process')) window.require('process').exit(0);
+                      else window.close();
+                    }, 400);
                   } catch (e) {
                     electron.shell.openPath(destFile);
                   }
