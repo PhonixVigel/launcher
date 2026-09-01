@@ -365,11 +365,21 @@ int main(int argc, char** argv) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1200));
 
 #if defined(__APPLE__)
-                    std::string cmd = "open \"" + destFile + "\"";
-                    system(cmd.c_str());
+                    std::string updateScript = 
+                        "(sleep 1 && "
+                        "hdiutil detach /tmp/VozduCraftMount 2>/dev/null || true; "
+                        "hdiutil detach /Volumes/VozduCraft 2>/dev/null || true; "
+                        "mkdir -p /tmp/VozduCraftMount && "
+                        "hdiutil attach \"" + destFile + "\" -nobrowse -mountpoint /tmp/VozduCraftMount && "
+                        "rm -rf /Applications/VozduCraft.app 2>/dev/null || true && "
+                        "cp -R /tmp/VozduCraftMount/VozduCraft.app /Applications/ && "
+                        "hdiutil detach /tmp/VozduCraftMount 2>/dev/null || true && "
+                        "open -n /Applications/VozduCraft.app) &";
+                    logToDebugFile("AutoUpdater", "Running macOS seamless update script: " + updateScript);
+                    system(updateScript.c_str());
                     exit(0);
 #elif defined(_WIN32)
-                    ShellExecuteA(NULL, "open", destFile.c_str(), NULL, NULL, SW_SHNORMAL);
+                    ShellExecuteA(NULL, "open", destFile.c_str(), "/S", NULL, SW_SHNORMAL);
                     exit(0);
 #endif
                 } else {
