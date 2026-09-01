@@ -65,6 +65,14 @@ function downloadFile(url, dest, onProgress) {
           return;
         }
 
+        if (response.statusCode !== 200 && response.statusCode !== 206) {
+          safeClose(() => {
+            try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (_) {}
+            reject(new Error(`HTTP ${response.statusCode} for ${url}`));
+          });
+          return;
+        }
+
         const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
         let downloadedBytes = 0;
 
@@ -75,11 +83,19 @@ function downloadFile(url, dest, onProgress) {
           }
         });
 
+        response.on('error', (err) => {
+          req.destroy(err);
+        });
+
         response.pipe(file);
 
         file.on('finish', () => {
           safeClose(() => resolve(dest));
         });
+      });
+
+      req.setTimeout(8000, () => {
+        req.destroy(new Error(`Timeout (8s) downloading: ${url}`));
       });
 
       req.on('error', (err) => {
@@ -271,21 +287,40 @@ function createWindow() {
       if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
       if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
 
-      // 3. Загрузка библиотек
+      // 3. Быстрая параллельная загрузка библиотек с пулом воркеров
       sendStatus(30, 'Синхронизация библиотек...');
       let downloaded = 0;
-      for (const lib of allLibsToDownload) {
-        if (!fs.existsSync(lib.dest) || fs.statSync(lib.dest).size < 100) {
-           fs.mkdirSync(path.dirname(lib.dest), { recursive: true });
-           await downloadFile(lib.url, lib.dest, null).catch(e => {
-               console.log(`Failed to download ${lib.url}: ${e.message}`);
-           });
-        }
-        downloaded++;
-        if (downloaded % 10 === 0) {
-            sendStatus(30 + Math.floor((downloaded / allLibsToDownload.length) * 40), `[Библиотеки] ${downloaded}/${allLibsToDownload.length}`);
+      const concurrency = 16;
+      const queue = [...allLibsToDownload];
+
+      async function downloadWorker() {
+        while (queue.length > 0) {
+          const lib = queue.shift();
+          if (!lib) break;
+          try {
+            if (!fs.existsSync(lib.dest) || fs.statSync(lib.dest).size < 100) {
+              fs.mkdirSync(path.dirname(lib.dest), { recursive: true });
+              await downloadFile(lib.url, lib.dest, null).catch(e => {
+                logToDisk(`[Lib Warning] ${lib.url}: ${e.message}`);
+              });
+            }
+          } catch (err) {
+            logToDisk(`[Lib Warning] ${lib.url}: ${err.message}`);
+          }
+          downloaded++;
+          if (downloaded % 5 === 0 || downloaded === allLibsToDownload.length) {
+            const pct = 30 + Math.floor((downloaded / allLibsToDownload.length) * 45);
+            sendStatus(pct, `[Библиотеки] ${downloaded}/${allLibsToDownload.length}`);
+          }
         }
       }
+
+      const workers = [];
+      const numWorkers = Math.min(concurrency, allLibsToDownload.length);
+      for (let i = 0; i < numWorkers; i++) {
+        workers.push(downloadWorker());
+      }
+      await Promise.all(workers);
 
       // Скачивание клиента Minecraft
       const mcJarPath = path.join(libsDir, 'net', 'minecraft', 'client', '1.21.1', 'minecraft-1.21.1-client.jar');
