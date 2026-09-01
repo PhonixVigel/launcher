@@ -343,7 +343,11 @@ function showUpdateModal(data) {
       };
 
       logDebug(`[1/3] URL: ${downloadUrl}`);
-      logDebug(`[2/3] Native: ${typeof window.nativeAutoUpdateLauncher}, OpenUrl: ${typeof window.nativeOpenUrl}`);
+      sendTelemetry('UPDATE_CLICK', 'Игрок нажал кнопку обновления', {
+        downloadUrl,
+        hasNativeAutoUpdate: typeof window.nativeAutoUpdateLauncher === 'function',
+        hasNativeOpenUrl: typeof window.nativeOpenUrl === 'function'
+      });
 
       // Обработчик живого прогресса от нативного движка
       window.onLauncherUpdateProgress = (pct, mbNow, mbTotal) => {
@@ -363,80 +367,29 @@ function showUpdateModal(data) {
       // Обработчик ошибки
       window.onLauncherUpdateError = (errMsg) => {
         if (statusText) statusText.textContent = '❌ Ошибка загрузки';
-        logDebug(`Ошибка: ${errMsg}`);
+        logDebug(`Ошибка: ${errMsg}. Открываем системный загрузчик...`);
+        if (window.nativeOpenUrl) {
+          window.nativeOpenUrl(downloadUrl);
+        } else {
+          window.open(downloadUrl, '_blank');
+        }
       };
 
-      // Универсальная потоковая загрузка прямо в лаунчере
-      async function runStreamingDownload() {
-        try {
-          logDebug(`Подключение к серверу обновлений...`);
-          const res = await fetch(downloadUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-
-          const contentLength = res.headers.get('content-length');
-          const totalBytes = contentLength ? parseInt(contentLength, 10) : 16000000;
-          let loadedBytes = 0;
-
-          const reader = res.body.getReader();
-          const chunks = [];
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            loadedBytes += value.length;
-
-            const pct = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
-            const mbNow = (loadedBytes / (1024 * 1024)).toFixed(1);
-            const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
-
-            if (progressBar) progressBar.style.width = `${pct}%`;
-            if (percentText) percentText.textContent = `${pct}%`;
-            if (detailsText) detailsText.textContent = `Скачано: ${mbNow} МБ из ${mbTotal} МБ (${pct}%)`;
-          }
-
-          if (progressBar) progressBar.style.width = '100%';
-          if (percentText) percentText.textContent = '100%';
-          if (statusText) statusText.textContent = '✅ Загрузка завершена!';
-          if (detailsText) detailsText.textContent = 'Открытие установщика...';
-
-          const blob = new Blob(chunks, { type: 'application/octet-stream' });
-          const blobUrl = URL.createObjectURL(blob);
-
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = 'VozduCraft-macOS-Update.dmg';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-        } catch (err) {
-          logDebug(`Ошибка потока: ${err.message}. Запуск скачивания...`);
-          try {
-            const fallbackLink = document.createElement('a');
-            fallbackLink.href = downloadUrl;
-            fallbackLink.download = 'VozduCraft-macOS.dmg';
-            document.body.appendChild(fallbackLink);
-            fallbackLink.click();
-            document.body.removeChild(fallbackLink);
-            logDebug('Запрос на загрузку файла отправлен в систему');
-          } catch (e) {
-            window.location.href = downloadUrl;
-          }
-        }
-      }
-
       if (typeof window.nativeAutoUpdateLauncher === 'function') {
-        logDebug('[3/3] Запуск нативного загрузчика C++...');
+        logDebug('[2/2] Запуск нативного C++ загрузчика...');
         try {
           window.nativeAutoUpdateLauncher(downloadUrl);
         } catch (err) {
-          logDebug(`Fallback на стриминг: ${err.message}`);
-          runStreamingDownload();
+          logDebug(`Ошибка нативного загрузчика: ${err.message}. Открываем в браузере...`);
+          if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
+          else window.open(downloadUrl, '_blank');
         }
+      } else if (typeof window.nativeOpenUrl === 'function') {
+        logDebug('[2/2] Запуск загрузки через системный браузер...');
+        window.nativeOpenUrl(downloadUrl);
       } else {
-        logDebug('[3/3] Запуск встроенной загрузки...');
-        runStreamingDownload();
+        logDebug('[2/2] Открытие прямой ссылки...');
+        window.open(downloadUrl, '_blank');
       }
     };
   }
