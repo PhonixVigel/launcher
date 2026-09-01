@@ -213,7 +213,9 @@ function createWindow() {
         logToDisk(`✅ Обнаружена среда исполнения Eclipse Adoptium 21: ${javaBinaryPath}`);
       } else {
         logToDisk('Среда Eclipse Adoptium 21 не найдена. Загрузка официального пакета Temurin 21 JDK...');
-        const javaUrl = isMac ? 'http://185.221.213.43:3000/files/launchers/java21-mac.tar.gz' : 'http://185.221.213.43:3000/files/launchers/java21-win.zip';
+        const javaUrl = isMac
+          ? 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.2_13.tar.gz'
+          : 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_x64_windows_hotspot_21.0.2_13.zip';
         const tempDest = path.join(os.tmpdir(), isMac ? 'temurin21.tar.gz' : 'temurin21.zip');
         
         sendStatus(10, 'Загрузка Eclipse Adoptium Temurin 21 JDK...');
@@ -476,6 +478,45 @@ function createWindow() {
         fs.writeFileSync(gameLogFile, `=== СТАРТ ИГРОВОГО ЛОГА [${new Date().toISOString()}] ===\n`);
       } catch (_) {}
 
+      function reportCrashToServer(code, errDetail) {
+        try {
+          let logContent = `Exit Code: ${code}\nDetail: ${errDetail || 'None'}\nJava Path: ${javaBinaryPath}\n`;
+          try {
+            if (fs.existsSync(gameLogFile)) {
+              logContent += '\n--- GAME LOG (LAST 8KB) ---\n' + fs.readFileSync(gameLogFile, 'utf8').slice(-8000);
+            }
+          } catch (_) {}
+          try {
+            const launcherLog = path.join(gamePath, 'launcher.log');
+            if (fs.existsSync(launcherLog)) {
+              logContent += '\n--- LAUNCHER LOG (LAST 4KB) ---\n' + fs.readFileSync(launcherLog, 'utf8').slice(-4000);
+            }
+          } catch (_) {}
+
+          const payload = JSON.stringify({
+            username: username,
+            os: isWin ? 'Windows' : 'macOS',
+            launcher_version: '3.0.6',
+            event_type: 'CRASH',
+            log_content: logContent
+          });
+
+          const postReq = http.request({
+            hostname: '185.221.213.43',
+            port: 3000,
+            path: '/api/v1/launcher/debug-log',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(payload)
+            }
+          }, () => {});
+          postReq.on('error', () => {});
+          postReq.write(payload);
+          postReq.end();
+        } catch (_) {}
+      }
+
       const mcProcess = require('child_process').spawn(javaBinaryPath, finalArgs, { cwd: gamePath, shell: false, env: process.env });
       mcProcess.stdout?.on('data', (data) => {
         const str = data.toString();
@@ -489,16 +530,40 @@ function createWindow() {
       });
       mcProcess.on('error', (err) => {
         logToDisk(`[FATAL PROCESS ERROR] ${err.message}`);
+        reportCrashToServer(-1, err.message);
         if (mainWindow) mainWindow.webContents.send('mc-error', { error: err.message });
         sendClosed(-1);
       });
       mcProcess.on('close', (code) => {
         logToDisk(`Игровой процесс завершился с кодом: ${code}`);
+        if (code !== 0) reportCrashToServer(code);
         sendClosed(code);
       });
       sendStatus(100, 'Minecraft успешно запущен!');
     } catch (err) {
       logToDisk(`[CRITICAL ERROR] ${err.message}`);
+      try {
+        const payload = JSON.stringify({
+          username: launchData?.username || 'Player',
+          os: isWin ? 'Windows' : 'macOS',
+          launcher_version: '3.0.6',
+          event_type: 'CRASH',
+          log_content: `Launcher Exception: ${err.message}\nStack: ${err.stack}`
+        });
+        const postReq = http.request({
+          hostname: '185.221.213.43',
+          port: 3000,
+          path: '/api/v1/launcher/debug-log',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload)
+          }
+        }, () => {});
+        postReq.on('error', () => {});
+        postReq.write(payload);
+        postReq.end();
+      } catch (_) {}
       sendStatus(0, 'Ошибка: ' + err.message);
       sendClosed(-1);
     }
