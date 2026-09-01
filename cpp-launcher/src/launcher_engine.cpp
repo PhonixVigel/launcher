@@ -62,6 +62,52 @@ std::string LauncherEngine::generateOfflineUuid(const std::string& username) con
 }
 
 std::string LauncherEngine::detectJava21() {
+#if defined(_WIN32)
+    // 1. Стандартные пути Java 21 на Windows
+    const char* progFiles = getenv("ProgramFiles");
+    const char* progFilesX86 = getenv("ProgramFiles(x86)");
+    const char* localAppData = getenv("LOCALAPPDATA");
+
+    std::vector<std::string> searchDirs;
+    if (progFiles) {
+        searchDirs.push_back(std::string(progFiles) + "/Eclipse Adoptium");
+        searchDirs.push_back(std::string(progFiles) + "/Java");
+        searchDirs.push_back(std::string(progFiles) + "/BellSoft");
+        searchDirs.push_back(std::string(progFiles) + "/Zulu");
+    }
+    if (progFilesX86) {
+        searchDirs.push_back(std::string(progFilesX86) + "/Eclipse Adoptium");
+        searchDirs.push_back(std::string(progFilesX86) + "/Java");
+    }
+    if (localAppData) {
+        searchDirs.push_back(std::string(localAppData) + "/Programs/Eclipse Adoptium");
+    }
+
+    for (const auto& base : searchDirs) {
+        if (!fs::exists(base)) continue;
+        for (const auto& entry : fs::directory_iterator(base)) {
+            if (entry.is_directory()) {
+                std::string p = entry.path().string();
+                if (p.find("21") != std::string::npos) {
+                    std::string javaw = p + "/bin/javaw.exe";
+                    std::string java = p + "/bin/java.exe";
+                    if (fs::exists(javaw)) return javaw;
+                    if (fs::exists(java)) return java;
+                }
+            }
+        }
+    }
+
+    const char* envHome = getenv("JAVA_HOME");
+    if (envHome) {
+        std::string javaw = std::string(envHome) + "/bin/javaw.exe";
+        std::string java = std::string(envHome) + "/bin/java.exe";
+        if (fs::exists(javaw)) return javaw;
+        if (fs::exists(java)) return java;
+    }
+
+    return "javaw.exe";
+#else
     // 1. Попытка через macOS /usr/libexec/java_home
     FILE* pipe = popen("/usr/libexec/java_home -v 21 2>/dev/null", "r");
     if (pipe) {
@@ -103,6 +149,7 @@ std::string LauncherEngine::detectJava21() {
     }
 
     return "java";
+#endif
 }
 
 bool LauncherEngine::prepareGameDirectories(const std::string& gameDir) {
@@ -346,7 +393,13 @@ bool LauncherEngine::launchGame(const LaunchConfig& config,
         return false;
     }
 
-    std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
+    std::string homeDir = "";
+#if defined(_WIN32)
+    const char* appData = getenv("APPDATA");
+    homeDir = appData ? appData : "C:";
+#else
+    homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
+#endif
     std::string gameDir = config.gameDir.empty() ? (homeDir + "/.vozducraft") : config.gameDir;
 
     progressCallback(5, "Подготовка игровых директорий...");
@@ -414,7 +467,11 @@ bool LauncherEngine::launchGame(const LaunchConfig& config,
         }
     }
 
+#if defined(_WIN32)
+    char pathSep = ';';
+#else
     char pathSep = ':';
+#endif
     std::string modulePathStr = "";
     for (size_t i = 0; i < uniqueModulePathEntries.size(); ++i) {
         if (i > 0) modulePathStr += pathSep;
