@@ -27,6 +27,9 @@ public:
     // Скачивание ответа в строку (для API запросов)
     std::string downloadToString(const std::string& url, const std::vector<std::string>& headers = {});
 
+    // Отправка POST JSON запроса (для телеметрии и краш-репортов)
+    std::string postJson(const std::string& url, const std::string& jsonBody, const std::vector<std::string>& headers = {});
+
     // Получение прямой ссылки на скачивание с Яндекс.Диска
     std::string resolveYandexDiskUrl(const std::string& publicUrl);
 

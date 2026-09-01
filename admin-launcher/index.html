@@ -92,13 +92,21 @@
               <span class="nav-icon">🌍</span>
               <span class="nav-text">Зеркала & Миграция</span>
             </button>
-            <button class="nav-item" data-tab="discord">
-              <span class="nav-icon">🤖</span>
-              <span class="nav-text">Discord-Бот</span>
+            <button class="nav-item" data-tab="bypasses">
+              <span class="nav-icon">📱</span>
+              <span class="nav-text">Мобильные байпасы</span>
+            </button>
+            <button class="nav-item" data-tab="debug-logs">
+              <span class="nav-icon">🔍</span>
+              <span class="nav-text">Дебаг лаунчеров</span>
+            </button>
+            <button class="nav-item" data-tab="crash-reports">
+              <span class="nav-icon">💥</span>
+              <span class="nav-text">Логи крашей</span>
             </button>
             <button class="nav-item" data-tab="analytics">
               <span class="nav-icon">📊</span>
-              <span class="nav-text">Аналитика & Аудит</span>
+              <span class="nav-text">Аналитика & Логи</span>
             </button>
           </nav>
 
@@ -494,6 +502,135 @@
             </div>
           </div>
 
+          <!-- Вкладка 7: Мобильные байпасы (PojavLauncher / телефоны) -->
+          <div class="tab-content" id="tab-bypasses">
+            <div class="tab-header">
+              <div>
+                <h2 class="tab-title">📱 Мобильные байпасы (Вход без официального лаунчера)</h2>
+                <p class="tab-subtitle">Разрешение на вход для игроков с телефонов, PojavLauncher и мобильных клиентов</p>
+              </div>
+            </div>
+
+            <div class="panel-grid-2col">
+              <div class="panel-card glass-panel">
+                <h3 class="panel-title">➕ Выдать мобильный байпас игроку</h3>
+                <form id="form-grant-bypass">
+                  <div class="input-group">
+                    <label for="bypass-username">Никнейм игрока (точно как в игре)</label>
+                    <input type="text" id="bypass-username" placeholder="MobilePlayer" required>
+                  </div>
+                  <div class="input-group">
+                    <label for="bypass-reason">Причина / Устройство</label>
+                    <input type="text" id="bypass-reason" placeholder="PojavLauncher (Android / iOS)" value="PojavLauncher (телефон)">
+                  </div>
+                  <div class="input-group">
+                    <label for="bypass-days">Срок действия</label>
+                    <select id="bypass-days" class="styled-select">
+                      <option value="0" selected>Бессрочно (Постоянно)</option>
+                      <option value="7">7 дней</option>
+                      <option value="30">30 дней</option>
+                      <option value="90">90 дней</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">📱 Выдать байпас</button>
+                </form>
+              </div>
+
+              <div class="panel-card glass-panel">
+                <div class="panel-header-with-action">
+                  <h3 class="panel-title">📋 Активные мобильные байпасы</h3>
+                  <button class="btn-secondary btn-sm" id="btn-refresh-bypasses">🔄 Обновить</button>
+                </div>
+                <div class="table-container-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Игрок</th>
+                        <th>Причина</th>
+                        <th>Кем выдан</th>
+                        <th>Истекает</th>
+                        <th>Действие</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bypasses-table-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Вкладка 8: Скрытый дебаг лаунчеров игроков (хранение 3 дня) -->
+          <div class="tab-content" id="tab-debug-logs">
+            <div class="tab-header">
+              <div>
+                <h2 class="tab-title">🔍 Дебаг лаунчеров игроков</h2>
+                <p class="tab-subtitle">Автоматически присылаемые логи работы лаунчера для поиска и решения проблем (хранятся 3 дня)</p>
+              </div>
+              <div class="header-actions">
+                <input type="text" id="search-debug-player" placeholder="Поиск по нику игрока..." class="styled-input-search">
+                <select id="filter-debug-os" class="styled-select" style="width: 140px;">
+                  <option value="" selected>Все ОС</option>
+                  <option value="mac">macOS</option>
+                  <option value="win">Windows</option>
+                  <option value="linux">Linux</option>
+                </select>
+                <button class="btn-secondary" id="btn-refresh-debug-logs">🔄 Обновить</button>
+              </div>
+            </div>
+
+            <div class="panel-card glass-panel">
+              <div class="table-container-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Время</th>
+                      <th>Игрок</th>
+                      <th>ОС</th>
+                      <th>Версия</th>
+                      <th>Событие</th>
+                      <th>Размер</th>
+                      <th>Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody id="debug-logs-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Вкладка 9: Краш-репорты Minecraft (/crash-reports, хранение 3 дня) -->
+          <div class="tab-content" id="tab-crash-reports">
+            <div class="tab-header">
+              <div>
+                <h2 class="tab-title">💥 Логи крашей Minecraft</h2>
+                <p class="tab-subtitle">Краш-отчеты из папки /crash-reports, присылаемые клиентом при падении игры (хранятся 3 дня)</p>
+              </div>
+              <div class="header-actions">
+                <input type="text" id="search-crash-player" placeholder="Поиск по нику игрока..." class="styled-input-search">
+                <button class="btn-secondary" id="btn-refresh-crash-reports">🔄 Обновить</button>
+              </div>
+            </div>
+
+            <div class="panel-card glass-panel">
+              <div class="table-container-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Время</th>
+                      <th>Игрок</th>
+                      <th>ОС</th>
+                      <th>Сервер</th>
+                      <th>Файл краш-отчета</th>
+                      <th>Размер</th>
+                      <th>Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody id="crash-reports-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </main>
       </div>
     </section>
@@ -715,6 +852,24 @@
           <button type="submit" class="btn-primary">Сохранить новый пароль</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно детального просмотра логов / краш-репортов -->
+  <div class="modal-overlay hidden" id="modal-log-viewer">
+    <div class="modal-card glass-panel" style="max-width: 850px; width: 90%;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="log-viewer-title">📄 Просмотр лога</h3>
+        <button class="modal-close" id="btn-close-log-viewer">✕</button>
+      </div>
+      <div class="log-viewer-meta" id="log-viewer-meta" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;"></div>
+      <div style="max-height: 480px; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+        <pre id="log-viewer-content" style="font-family: monospace; font-size: 12px; color: #a5d6a7; white-space: pre-wrap; word-break: break-all; margin: 0;"></pre>
+      </div>
+      <div class="modal-actions" style="margin-top: 16px;">
+        <button type="button" class="btn-secondary" id="btn-copy-log-content">📋 Копировать текст</button>
+        <a id="btn-download-log-file" class="btn-primary" href="#" target="_blank" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">💾 Скачать файл</a>
+      </div>
     </div>
   </div>
 

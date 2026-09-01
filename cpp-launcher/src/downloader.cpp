@@ -136,6 +136,41 @@ std::string Downloader::downloadToString(const std::string& url, const std::vect
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "VozduCraft-Launcher/1.0 (PrismEngine-CPP)");
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (chunk) curl_slist_free_all(chunk);
+    curl_easy_cleanup(curl);
+
+    if (res == CURLE_OK) {
+        return responseString;
+    }
+    return "";
+}
+
+std::string Downloader::postJson(const std::string& url, const std::string& jsonBody, const std::vector<std::string>& headers) {
+    CURL* curl = curl_easy_init();
+    if (!curl) return "";
+
+    std::string responseString;
+    struct curl_slist* chunk = nullptr;
+    chunk = curl_slist_append(chunk, "Content-Type: application/json");
+    for (const auto& h : headers) {
+        chunk = curl_slist_append(chunk, h.c_str());
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonBody.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeStringCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseString);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "VozduCraft-Launcher/1.0 (PrismEngine-CPP)");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
     CURLcode res = curl_easy_perform(curl);
     if (chunk) curl_slist_free_all(chunk);

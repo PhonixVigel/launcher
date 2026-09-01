@@ -150,6 +150,50 @@ async function initDbSchema(db: Database) {
     );
   `);
 
+  // 6.2. Таблица разрешений на вход с мобильных устройств (PojavLauncher / телефоны)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS launcher_bypasses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      reason TEXT DEFAULT 'Мобильный клиент (телефон)',
+      created_by TEXT DEFAULT 'ADMIN',
+      expires_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // 6.3. Таблица дебаг-логов лаунчеров (хранение 3 дня)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS launcher_debug_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      os TEXT,
+      launcher_version TEXT,
+      event_type TEXT DEFAULT 'INFO',
+      log_content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // 6.4. Таблица краш-репортов Minecraft (только /crash-reports, хранение 3 дня)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS launcher_crash_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      os TEXT,
+      server_id INTEGER DEFAULT 1,
+      crash_filename TEXT NOT NULL,
+      report_content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Автоматическая очистка старых логов (TTL 3 дня)
+  try {
+    await db.run("DELETE FROM launcher_debug_logs WHERE created_at < datetime('now', '-3 days')");
+    await db.run("DELETE FROM launcher_crash_reports WHERE created_at < datetime('now', '-3 days')");
+  } catch (_) {}
+
   // 7. Журнал аудита действий (для админки и будущей панели модераторов)
   await db.exec(`
     CREATE TABLE IF NOT EXISTS audit_logs (

@@ -174,6 +174,23 @@ router.get('/verify-ticket', async (req: Request, res: Response) => {
     if (!username) return res.json({ valid: false, reason: 'Username required' });
 
     const db = await getDb();
+
+    // 5.1. Проверка наличия мобильного байпаса (телефон / PojavLauncher)
+    const bypass = await db.get(
+      "SELECT * FROM launcher_bypasses WHERE LOWER(username) = LOWER(?) AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1",
+      [username]
+    );
+
+    if (bypass) {
+      return res.json({
+        valid: true,
+        bypass: true,
+        reason: bypass.reason || 'Мобильный байпас активен',
+        username: bypass.username
+      });
+    }
+
+    // 5.2. Проверка билета запуска официального лаунчера
     const ticket = await db.get(
       "SELECT * FROM launcher_tickets WHERE LOWER(username) = LOWER(?) AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1",
       [username]
@@ -186,6 +203,54 @@ router.get('/verify-ticket', async (req: Request, res: Response) => {
     return res.json({ valid: true, username: ticket.username, ticketId: ticket.id });
   } catch (error) {
     return res.json({ valid: true }); // fail-safe
+  }
+});
+
+// 6. POST /api/v1/launcher/debug-log - Прием скрытого дебаг-лога от лаунчера игрока
+router.post('/debug-log', async (req: Request, res: Response) => {
+  try {
+    const { username, os, launcher_version, event_type, log_content } = req.body;
+    if (!log_content) return res.status(400).json({ error: 'Log content required' });
+
+    const db = await getDb();
+    const cleanNick = (username || 'Anonymous').trim();
+
+    await db.run(
+      'INSERT INTO launcher_debug_logs (username, os, launcher_version, event_type, log_content) VALUES (?, ?, ?, ?, ?)',
+      [cleanNick, os || 'Unknown OS', launcher_version || '3.1.0', event_type || 'INFO', String(log_content)]
+    );
+
+    // Авто-очистка логов старше 3 дней
+    await db.run("DELETE FROM launcher_debug_logs WHERE created_at < datetime('now', '-3 days')");
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to save debug log' });
+  }
+});
+
+// 7. POST /api/v1/launcher/crash-report - Прием краш-репорта из папки /crash-reports
+router.post('/crash-report', async (req: Request, res: Response) => {
+  try {
+    const { username, os, server_id, crash_filename, report_content } = req.body;
+    if (!report_content || !crash_filename) {
+      return res.status(400).json({ error: 'Filename and report content required' });
+    }
+
+    const db = await getDb();
+    const cleanNick = (username || 'Player').trim();
+
+    await db.run(
+      'INSERT INTO launcher_crash_reports (username, os, server_id, crash_filename, report_content) VALUES (?, ?, ?, ?, ?)',
+      [cleanNick, os || 'Unknown OS', server_id || 1, crash_filename, String(report_content)]
+    );
+
+    // Авто-очистка краш-репортов старше 3 дней
+    await db.run("DELETE FROM launcher_crash_reports WHERE created_at < datetime('now', '-3 days')");
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to save crash report' });
   }
 });
 

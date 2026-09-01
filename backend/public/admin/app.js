@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setupBansControls();
   setupMirrorsControls();
   setupDiscordBotTab();
+  setupBypassesControls();
+  setupDebugLogsControls();
+  setupCrashReportsControls();
+  setupLogViewerModal();
   setupChangePasswordModal();
   startClock();
 
@@ -61,7 +65,7 @@ function setupNavigation() {
       btn.classList.add('active');
 
       const targetTabId = `tab-${btn.dataset.tab}`;
-      document.querySelectorAll('.dashboard-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content, .dashboard-tab').forEach(t => t.classList.remove('active'));
       const targetTab = document.getElementById(targetTabId);
       if (targetTab) targetTab.classList.add('active');
 
@@ -72,6 +76,9 @@ function setupNavigation() {
       if (btn.dataset.tab === 'bans') loadBans();
       if (btn.dataset.tab === 'mirrors') loadMirrors();
       if (btn.dataset.tab === 'discord') loadDiscordBotStatus();
+      if (btn.dataset.tab === 'bypasses') loadBypasses();
+      if (btn.dataset.tab === 'debug-logs') loadDebugLogs();
+      if (btn.dataset.tab === 'crash-reports') loadCrashReports();
       if (btn.dataset.tab === 'analytics') loadAnalytics();
     });
   });
@@ -1379,4 +1386,284 @@ async function loadPendingRequests() {
   } catch (err) {
     console.error('Ошибка загрузки pending requests:', err);
   }
+}
+
+// ----------------------------------------------------
+// 10. МОБИЛЬНЫЕ БАЙПАСЫ (PojavLauncher / Телефоны)
+// ----------------------------------------------------
+function setupBypassesControls() {
+  const form = document.getElementById('form-grant-bypass');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('bypass-username').value.trim();
+      const reason = document.getElementById('bypass-reason').value.trim();
+      const days = document.getElementById('bypass-days').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/launcher/bypasses`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ username, reason, days })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert(`✅ Мобильный байпас для ${username} успешно выдан!`);
+          document.getElementById('bypass-username').value = '';
+          loadBypasses();
+        } else {
+          alert(`❌ ${data.error || 'Ошибка'}`);
+        }
+      } catch (err) {
+        alert('Ошибка связи с сервером');
+      }
+    });
+  }
+
+  const refreshBtn = document.getElementById('btn-refresh-bypasses');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', loadBypasses);
+  }
+}
+
+async function loadBypasses() {
+  const tbody = document.getElementById('bypasses-table-body');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/launcher/bypasses`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    const list = data.bypasses || [];
+
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Нет активных мобильных байпасов</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = list.map(b => `
+      <tr>
+        <td style="font-weight: 600; color: #ffedd5;">📱 ${b.username}</td>
+        <td>${b.reason || 'PojavLauncher'}</td>
+        <td>${b.created_by || 'ADMIN'}</td>
+        <td>${b.expires_at ? new Date(b.expires_at).toLocaleDateString('ru-RU') : 'Бессрочно'}</td>
+        <td>
+          <button class="btn-danger btn-sm btn-revoke-bypass" data-id="${b.id}" data-user="${b.username}">🗑️ Отозвать</button>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('.btn-revoke-bypass').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Отозвать мобильный байпас для ${btn.dataset.user}?`)) return;
+        try {
+          const delRes = await fetch(`${API_BASE}/api/v1/admin/launcher/bypasses/${btn.dataset.id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          if (delRes.ok) {
+            loadBypasses();
+          }
+        } catch (_) {}
+      });
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки байпасов:', err);
+  }
+}
+
+// ----------------------------------------------------
+// 11. ДЕБАГ-ЛОГИ ЛАУНЧЕРОВ (Хранение 3 дня)
+// ----------------------------------------------------
+function setupDebugLogsControls() {
+  const searchInput = document.getElementById('search-debug-player');
+  const filterOs = document.getElementById('filter-debug-os');
+  const refreshBtn = document.getElementById('btn-refresh-debug-logs');
+
+  if (searchInput) searchInput.addEventListener('input', () => debounce(loadDebugLogs, 300)());
+  if (filterOs) filterOs.addEventListener('change', loadDebugLogs);
+  if (refreshBtn) refreshBtn.addEventListener('click', loadDebugLogs);
+}
+
+async function loadDebugLogs() {
+  const tbody = document.getElementById('debug-logs-table-body');
+  if (!tbody) return;
+
+  const username = document.getElementById('search-debug-player')?.value.trim() || '';
+  const os = document.getElementById('filter-debug-os')?.value || '';
+
+  try {
+    const url = new URL(`${API_BASE}/api/v1/admin/debug-logs`);
+    if (username) url.searchParams.set('username', username);
+    if (os) url.searchParams.set('os', os);
+
+    const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+    const data = await res.json();
+    const logs = data.logs || [];
+
+    if (logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">Логи не найдены</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = logs.map(l => `
+      <tr>
+        <td style="font-family: monospace; font-size: 12px; color: var(--text-secondary);">${new Date(l.created_at).toLocaleString('ru-RU')}</td>
+        <td style="font-weight: 600; color: #bae6fd;">👤 ${l.username}</td>
+        <td><span class="badge" style="background: rgba(59,130,246,0.2); color: #93c5fd;">${l.os || 'OS'}</span></td>
+        <td style="font-family: monospace;">v${l.launcher_version || '3.1.0'}</td>
+        <td><span class="badge" style="background: ${l.event_type === 'ERROR' ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}; color: ${l.event_type === 'ERROR' ? '#fca5a5' : '#86efac'};">${l.event_type || 'INFO'}</span></td>
+        <td style="color: var(--text-secondary); font-size: 12px;">${((l.size || 0) / 1024).toFixed(1)} КБ</td>
+        <td>
+          <button class="btn-secondary btn-sm btn-view-debug" data-id="${l.id}" data-user="${l.username}" data-time="${l.created_at}">👁️ Просмотр</button>
+          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/debug-logs/${l.id}/download" target="_blank" style="text-decoration: none; display: inline-block;">💾 .log</a>
+          <button class="btn-danger btn-sm btn-del-debug" data-id="${l.id}">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('.btn-view-debug').forEach(btn => {
+      btn.addEventListener('click', () => openLogViewer('debug', btn.dataset.id, btn.dataset.user, btn.dataset.time));
+    });
+
+    tbody.querySelectorAll('.btn-del-debug').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Удалить эту запись лога?')) return;
+        await fetch(`${API_BASE}/api/v1/admin/debug-logs/${btn.dataset.id}`, { method: 'DELETE', headers: getAuthHeaders() });
+        loadDebugLogs();
+      });
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки дебаг-логов:', err);
+  }
+}
+
+// ----------------------------------------------------
+// 12. КРАШ-РЕПОРТЫ MINECRAFT (/crash-reports, Хранение 3 дня)
+// ----------------------------------------------------
+function setupCrashReportsControls() {
+  const searchInput = document.getElementById('search-crash-player');
+  const refreshBtn = document.getElementById('btn-refresh-crash-reports');
+
+  if (searchInput) searchInput.addEventListener('input', () => debounce(loadCrashReports, 300)());
+  if (refreshBtn) refreshBtn.addEventListener('click', loadCrashReports);
+}
+
+async function loadCrashReports() {
+  const tbody = document.getElementById('crash-reports-table-body');
+  if (!tbody) return;
+
+  const username = document.getElementById('search-crash-player')?.value.trim() || '';
+
+  try {
+    const url = new URL(`${API_BASE}/api/v1/admin/crash-reports`);
+    if (username) url.searchParams.set('username', username);
+
+    const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+    const data = await res.json();
+    const reports = data.reports || [];
+
+    if (reports.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">Краш-репорты отсутствуют</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = reports.map(c => `
+      <tr>
+        <td style="font-family: monospace; font-size: 12px; color: var(--text-secondary);">${new Date(c.created_at).toLocaleString('ru-RU')}</td>
+        <td style="font-weight: 600; color: #fca5a5;">💥 ${c.username}</td>
+        <td><span class="badge" style="background: rgba(239,68,68,0.2); color: #fca5a5;">${c.os || 'OS'}</span></td>
+        <td>#${c.server_id || 1}</td>
+        <td style="font-family: monospace; font-size: 12px;">${c.crash_filename}</td>
+        <td style="color: var(--text-secondary); font-size: 12px;">${((c.size || 0) / 1024).toFixed(1)} КБ</td>
+        <td>
+          <button class="btn-secondary btn-sm btn-view-crash" data-id="${c.id}" data-user="${c.username}" data-file="${c.crash_filename}">👁️ Просмотр</button>
+          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/crash-reports/${c.id}/download" target="_blank" style="text-decoration: none; display: inline-block;">💾 .txt</a>
+          <button class="btn-danger btn-sm btn-del-crash" data-id="${c.id}">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('.btn-view-crash').forEach(btn => {
+      btn.addEventListener('click', () => openLogViewer('crash', btn.dataset.id, btn.dataset.user, btn.dataset.file));
+    });
+
+    tbody.querySelectorAll('.btn-del-crash').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Удалить этот краш-отчет?')) return;
+        await fetch(`${API_BASE}/api/v1/admin/crash-reports/${btn.dataset.id}`, { method: 'DELETE', headers: getAuthHeaders() });
+        loadCrashReports();
+      });
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки краш-репортов:', err);
+  }
+}
+
+// ----------------------------------------------------
+// 13. МОДАЛЬНОЕ ОКНО ПРОСМОТРА ЛОГА / КРАШ-РЕПОРТА
+// ----------------------------------------------------
+function setupLogViewerModal() {
+  const modal = document.getElementById('modal-log-viewer');
+  const closeBtn = document.getElementById('btn-close-log-viewer');
+  const copyBtn = document.getElementById('btn-copy-log-content');
+
+  if (closeBtn && modal) {
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const content = document.getElementById('log-viewer-content')?.textContent || '';
+      navigator.clipboard.writeText(content).then(() => {
+        copyBtn.textContent = '✅ Скопировано!';
+        setTimeout(() => copyBtn.textContent = '📋 Копировать текст', 2000);
+      });
+    });
+  }
+}
+
+async function openLogViewer(type, id, user, metaInfo) {
+  const modal = document.getElementById('modal-log-viewer');
+  const titleEl = document.getElementById('log-viewer-title');
+  const metaEl = document.getElementById('log-viewer-meta');
+  const contentEl = document.getElementById('log-viewer-content');
+  const downloadLink = document.getElementById('btn-download-log-file');
+
+  if (!modal || !contentEl) return;
+
+  titleEl.textContent = type === 'debug' ? `🔍 Дебаг-лог игрока: ${user}` : `💥 Краш-репорт Minecraft: ${user}`;
+  metaEl.textContent = `Игрок: ${user} • ${metaInfo}`;
+  contentEl.textContent = 'Загрузка содержимого...';
+
+  const downloadUrl = type === 'debug' 
+    ? `${API_BASE}/api/v1/admin/debug-logs/${id}/download`
+    : `${API_BASE}/api/v1/admin/crash-reports/${id}/download`;
+
+  if (downloadLink) downloadLink.href = downloadUrl;
+
+  modal.classList.remove('hidden');
+
+  try {
+    const fetchUrl = type === 'debug' 
+      ? `${API_BASE}/api/v1/admin/debug-logs/${id}`
+      : `${API_BASE}/api/v1/admin/crash-reports/${id}`;
+
+    const res = await fetch(fetchUrl, { headers: getAuthHeaders() });
+    const data = await res.json();
+
+    contentEl.textContent = data.log_content || data.report_content || 'Лог пуст';
+  } catch (err) {
+    contentEl.textContent = 'Ошибка загрузки файла лога с сервера.';
+  }
+}
+
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
 }

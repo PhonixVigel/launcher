@@ -958,4 +958,227 @@ router.post('/discord/simulate-auth', requireAdmin, async (req: Request, res: Re
   }
 });
 
+// ----------------------------------------------------
+// 10. МОБИЛЬНЫЕ БАЙПАСЫ (Вход с телефонов / PojavLauncher)
+// ----------------------------------------------------
+
+// GET /api/v1/admin/launcher/bypasses - Список активных байпасов
+router.get('/launcher/bypasses', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    const bypasses = await db.all(`
+      SELECT * FROM launcher_bypasses 
+      WHERE expires_at IS NULL OR expires_at > datetime('now')
+      ORDER BY created_at DESC
+    `);
+    return res.json({ bypasses: bypasses || [] });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения байпасов' });
+  }
+});
+
+// POST /api/v1/admin/launcher/bypasses - Выдать байпас игроку
+router.post('/launcher/bypasses', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { username, reason, days } = req.body;
+    if (!username) return res.status(400).json({ error: 'Никнейм обязателен' });
+
+    const cleanNick = username.trim();
+    const adminUser = (req as any).user?.username || 'Admin';
+    const expiresAt = days && parseInt(days) > 0 
+      ? new Date(Date.now() + parseInt(days) * 86400 * 1000).toISOString()
+      : null; // null = бессрочно
+
+    const db = await getDb();
+    await db.run(`
+      INSERT OR REPLACE INTO launcher_bypasses (username, reason, created_by, expires_at)
+      VALUES (?, ?, ?, ?)
+    `, [cleanNick, reason || 'Мобильный клиент (телефон)', adminUser, expiresAt]);
+
+    await logAudit(adminUser, 'ADMIN', 'BYPASS_GRANT', cleanNick, `Выдан мобильный байпас на вход (${reason || 'Телефон'})`, req.ip || '');
+
+    return res.json({ success: true, message: `Мобильный байпас для ${cleanNick} успешно выдан!` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка выдачи байпаса: ' + (error as Error).message });
+  }
+});
+
+// DELETE /api/v1/admin/launcher/bypasses/:id - Удалить байпас
+router.delete('/launcher/bypasses/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const bypass = await db.get("SELECT * FROM launcher_bypasses WHERE id = ?", [id]);
+    await db.run("DELETE FROM launcher_bypasses WHERE id = ?", [id]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    if (bypass) {
+      await logAudit(adminUser, 'ADMIN', 'BYPASS_REVOKE', bypass.username, `Отозван мобильный байпас`, req.ip || '');
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка отзыва байпаса' });
+  }
+});
+
+// ----------------------------------------------------
+// 11. ДЕБАГ-ЛОГИ ЛАУНЧЕРОВ (Хранение 3 дня)
+// ----------------------------------------------------
+
+// GET /api/v1/admin/debug-logs - Список дебаг-логов
+router.get('/debug-logs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { username, os, limit, offset } = req.query;
+    const db = await getDb();
+
+    // Авто-очистка логов старше 3 дней
+    await db.run("DELETE FROM launcher_debug_logs WHERE created_at < datetime('now', '-3 days')");
+
+    let query = "SELECT id, username, os, launcher_version, event_type, created_at, length(log_content) as size FROM launcher_debug_logs WHERE 1=1";
+    const params: any[] = [];
+
+    if (username) {
+      query += " AND LOWER(username) LIKE LOWER(?)";
+      params.push(`%${username}%`);
+    }
+    if (os) {
+      query += " AND LOWER(os) LIKE LOWER(?)";
+      params.push(`%${os}%`);
+    }
+
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    params.push(parseInt(limit as string) || 50, parseInt(offset as string) || 0);
+
+    const logs = await db.all(query, params);
+    const totalCount = await db.get("SELECT COUNT(*) as cnt FROM launcher_debug_logs");
+
+    return res.json({
+      logs: logs || [],
+      total: totalCount?.cnt || 0
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения дебаг-логов' });
+  }
+});
+
+// GET /api/v1/admin/debug-logs/:id - Получить конкретный лог целиком
+router.get('/debug-logs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const logItem = await db.get("SELECT * FROM launcher_debug_logs WHERE id = ?", [id]);
+    if (!logItem) return res.status(404).json({ error: 'Лог не найден' });
+    return res.json(logItem);
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения лога' });
+  }
+});
+
+// GET /api/v1/admin/debug-logs/:id/download - Скачать файл .log
+router.get('/debug-logs/:id/download', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const logItem = await db.get("SELECT * FROM launcher_debug_logs WHERE id = ?", [id]);
+    if (!logItem) return res.status(404).send('Лог не найден');
+
+    const filename = `launcher-debug-${logItem.username}-${new Date(logItem.created_at).toISOString().replace(/[:.]/g, '-')}.log`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(logItem.log_content);
+  } catch (error) {
+    return res.status(500).send('Ошибка скачивания лога');
+  }
+});
+
+// DELETE /api/v1/admin/debug-logs/:id - Удалить лог
+router.delete('/debug-logs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    await db.run("DELETE FROM launcher_debug_logs WHERE id = ?", [id]);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка удаления лога' });
+  }
+});
+
+// ----------------------------------------------------
+// 12. КРАШ-РЕПОРТЫ MINECRAFT (/crash-reports, Хранение 3 дня)
+// ----------------------------------------------------
+
+// GET /api/v1/admin/crash-reports - Список краш-репортов
+router.get('/crash-reports', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { username, limit, offset } = req.query;
+    const db = await getDb();
+
+    // Авто-очистка краш-репортов старше 3 дней
+    await db.run("DELETE FROM launcher_crash_reports WHERE created_at < datetime('now', '-3 days')");
+
+    let query = "SELECT id, username, os, server_id, crash_filename, created_at, length(report_content) as size FROM launcher_crash_reports WHERE 1=1";
+    const params: any[] = [];
+
+    if (username) {
+      query += " AND LOWER(username) LIKE LOWER(?)";
+      params.push(`%${username}%`);
+    }
+
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    params.push(parseInt(limit as string) || 50, parseInt(offset as string) || 0);
+
+    const reports = await db.all(query, params);
+    const totalCount = await db.get("SELECT COUNT(*) as cnt FROM launcher_crash_reports");
+
+    return res.json({
+      reports: reports || [],
+      total: totalCount?.cnt || 0
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения краш-репортов' });
+  }
+});
+
+// GET /api/v1/admin/crash-reports/:id - Получить текст краша
+router.get('/crash-reports/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const crashItem = await db.get("SELECT * FROM launcher_crash_reports WHERE id = ?", [id]);
+    if (!crashItem) return res.status(404).json({ error: 'Краш-репорт не найден' });
+    return res.json(crashItem);
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения краш-репорта' });
+  }
+});
+
+// GET /api/v1/admin/crash-reports/:id/download - Скачать .txt краш-репорта
+router.get('/crash-reports/:id/download', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const crashItem = await db.get("SELECT * FROM launcher_crash_reports WHERE id = ?", [id]);
+    if (!crashItem) return res.status(404).send('Краш-репорт не найден');
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${crashItem.crash_filename || 'crash-report.txt'}"`);
+    return res.send(crashItem.report_content);
+  } catch (error) {
+    return res.status(500).send('Ошибка скачивания краш-репорта');
+  }
+});
+
+// DELETE /api/v1/admin/crash-reports/:id - Удалить краш-репорт
+router.delete('/crash-reports/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    await db.run("DELETE FROM launcher_crash_reports WHERE id = ?", [id]);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка удаления краш-репорта' });
+  }
+});
+
 export default router;

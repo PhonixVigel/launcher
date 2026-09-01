@@ -592,7 +592,7 @@ bool LauncherEngine::launchGame(const LaunchConfig& config,
         processMonitorThread.join();
     }
 
-    processMonitorThread = std::thread([this, pid, stdoutFd = stdoutPipe[0], stderrFd = stderrPipe[0], logFilePath, logCallback, exitCallback]() {
+    processMonitorThread = std::thread([this, pid, stdoutFd = stdoutPipe[0], stderrFd = stderrPipe[0], logFilePath, logCallback, exitCallback, gameDir, config]() {
         std::ofstream logFile(logFilePath, std::ios::app);
         auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         logFile << "\n=== СТАРТ VOZDUCRAFT C++ LAUNCHER LOG [" << std::ctime(&now) << "] ===\n";
@@ -636,6 +636,46 @@ bool LauncherEngine::launchGame(const LaunchConfig& config,
         int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
         logFile << "\n=== ПРОЦЕСС ЗАВЕРШИЛСЯ С КОДОМ: " << exitCode << " ===\n";
         logFile.close();
+
+        // Автоматическая проверка и отправка краш-репортов из папки /crash-reports
+        try {
+            std::string crashReportsDir = gameDir + "/crash-reports";
+            if (fs::exists(crashReportsDir) && fs::is_directory(crashReportsDir)) {
+                std::string latestCrashFile = "";
+                fs::file_time_type latestTime{};
+                for (const auto& entry : fs::directory_iterator(crashReportsDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".txt") {
+                        auto ftime = fs::last_write_time(entry);
+                        if (latestCrashFile.empty() || ftime > latestTime) {
+                            latestCrashFile = entry.path().string();
+                            latestTime = ftime;
+                        }
+                    }
+                }
+                if (!latestCrashFile.empty()) {
+                    std::ifstream crStream(latestCrashFile);
+                    if (crStream.is_open()) {
+                        std::stringstream crBuffer;
+                        crBuffer << crStream.rdbuf();
+                        std::string crContent = crBuffer.str();
+                        std::string fname = fs::path(latestCrashFile).filename().string();
+
+                        json payload;
+                        payload["username"] = config.username;
+                        payload["os"] = "macOS";
+#if defined(_WIN32)
+                        payload["os"] = "Windows";
+#endif
+                        payload["server_id"] = config.serverId;
+                        payload["crash_filename"] = fname;
+                        payload["report_content"] = crContent;
+
+                        std::string uploadUrl = config.apiBaseUrl + "/launcher/crash-report";
+                        downloader.postJson(uploadUrl, payload.dump());
+                    }
+                }
+            }
+        } catch (...) {}
 
         this->gameRunning = false;
         this->runningPid = -1;

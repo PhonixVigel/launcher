@@ -116,6 +116,33 @@ function updateKnownMirrors(mirrorsList) {
 }
 
 // ----------------------------------------------------
+// 0. СКРЫТАЯ ТЕЛЕМЕТРИЯ И ДЕБАГ (Отправка на мастер-сервер)
+// ----------------------------------------------------
+async function sendTelemetry(eventType, message, details = {}) {
+  try {
+    const username = state.currentUser?.username || localStorage.getItem('vozducraft_last_user') || 'Anonymous';
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isWin = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
+    const os = isMac ? 'macOS' : (isWin ? 'Windows' : 'Linux');
+    
+    const payload = {
+      username: username,
+      os: os,
+      launcher_version: typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.1.0',
+      event_type: eventType,
+      log_content: `[${new Date().toISOString()}] [${eventType}] ${message}\n` + 
+                   `Player: ${username} | OS: ${os} | Launcher: v${typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.1.0'}\n` +
+                   (Object.keys(details).length ? `Details: ${JSON.stringify(details, null, 2)}\n` : '')
+    };
+
+    apiFetch('/launcher/debug-log', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+// ----------------------------------------------------
 // 1. ГЛОБАЛЬНЫЕ КОЛБЭКИ C++ ДВИЖКА
 // ----------------------------------------------------
 window.__VOZDUCRAFT_ON_STATUS = function(percent, text) {
@@ -136,8 +163,15 @@ window.__VOZDUCRAFT_ON_STATUS = function(percent, text) {
 
 window.__VOZDUCRAFT_ON_GAME_CLOSED = function(exitCode) {
   console.log('[GAME CLOSED] Exit code:', exitCode);
+  const lastServer = activeLaunchingServerId;
   isGameLaunching = false;
   activeLaunchingServerId = null;
+
+  sendTelemetry(
+    exitCode === 0 ? 'GAME_EXIT' : 'CRASH',
+    exitCode === 0 ? 'Игра завершилась штатно' : `Игра завершилась с кодом ошибки: ${exitCode}`,
+    { exitCode, serverId: lastServer }
+  );
 
   const progressContainer = document.getElementById('progress-container');
   if (progressContainer) progressContainer.classList.add('hidden');
