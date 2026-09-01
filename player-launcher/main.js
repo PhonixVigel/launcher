@@ -398,7 +398,6 @@ function createWindow() {
         if (!fs.existsSync(p)) continue;
         const pLower = p.toLowerCase().replace(/\\/g, '/');
         if (pLower.includes('binarypatcher') || pLower.includes('autorenamingtool') || pLower.includes('installertools')) continue;
-        if (pLower.includes('asm-9.0') || pLower.includes('asm-9.1') || pLower.includes('asm-9.2') || pLower.includes('asm-9.3') || pLower.includes('asm-9.4') || pLower.includes('asm-9.5') || pLower.includes('asm-9.6')) continue;
         if (pLower.includes('gson-2.8.9')) continue;
         if (pLower.includes('neoforge-21.1.234-universal.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-srg.jar')) continue;
@@ -497,6 +496,14 @@ function createWindow() {
       ];
 
       // Формирование файла аргументов JVM для обхода лимита длины строки Windows (ENAMETOOLONG)
+      function formatArgForJava(arg) {
+        if (!arg) return '';
+        if (arg.includes(' ')) {
+          return `"${arg.replace(/\\/g, '\\\\')}"`;
+        }
+        return arg;
+      }
+
       const jvmArgsFormatted = [];
       for (let i = 0; i < jvmArgs.length; i++) {
         const item = jvmArgs[i];
@@ -504,15 +511,15 @@ function createWindow() {
           jvmArgsFormatted.push(item);
           i++;
           if (i < jvmArgs.length) {
-            jvmArgsFormatted.push(`"${jvmArgs[i].replace(/\\/g, '\\\\')}"`);
+            jvmArgsFormatted.push(formatArgForJava(jvmArgs[i]));
           }
         } else if (item.startsWith('-D') && item.includes('=')) {
           const eqIndex = item.indexOf('=');
           const k = item.slice(0, eqIndex + 1);
           const v = item.slice(eqIndex + 1);
-          jvmArgsFormatted.push(`${k}"${v.replace(/\\/g, '\\\\')}"`);
+          jvmArgsFormatted.push(v.includes(' ') ? `${k}"${v.replace(/\\/g, '\\\\')}"` : item);
         } else {
-          jvmArgsFormatted.push(item);
+          jvmArgsFormatted.push(formatArgForJava(item));
         }
       }
 

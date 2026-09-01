@@ -144,11 +144,11 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.0.4',
-      releaseNotes: latestRelease?.release_notes || 'Официальное обновление лаунчера VozduCraft',
+      latestVersion: latestRelease?.version || config?.value || '3.0.7',
+      releaseNotes: latestRelease?.release_notes || 'Официальное обновление лаунчера VozduCraft v3.0.7',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
-      isMandatory: latestRelease ? latestRelease.is_mandatory === 1 : false
+      isMandatory: latestRelease ? latestRelease.is_mandatory === 1 : true
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка проверки обновлений' });

@@ -305,18 +305,18 @@ async function initDbSchema(db: Database) {
   }
 
   // Заполнение релизов лаунчера по умолчанию
-  const releaseCount = await db.get('SELECT COUNT(*) as cnt FROM launcher_releases');
-  if (!releaseCount || releaseCount.cnt === 0) {
+  const r307 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.0.7'");
+  if (!r307) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, mac_download_url, win_download_url, is_mandatory)
       VALUES 
-        ('3.0.0', 'Переход на нативный C++ движок Prism Launcher, мультисерверность и повышенная производительность.', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-3.0.0.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-3.0.0.zip', 1)
+        ('3.0.7', 'Финальный фикс модулей org.objectweb.asm и аргументных файлов Windows', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1)
     `);
   }
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.0.0',
+    'launcher_version': '3.0.7',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',
