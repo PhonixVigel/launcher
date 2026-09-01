@@ -248,11 +248,12 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.0.1';
+const LAUNCHER_CURRENT_VERSION = '3.0.2';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();
   setupWindowControls();
+  setupGlobalShortcuts();
   setupNavigation();
   setupAuthEvents();
   setupSettingsEvents();
@@ -375,10 +376,12 @@ function showUpdateModal(data) {
         }
       };
 
+      const currentNick = state.currentUser?.username || localStorage.getItem('vozducraft_last_user') || 'Anonymous';
+
       if (typeof window.nativeAutoUpdateLauncher === 'function') {
         logDebug('[2/2] Запуск нативного C++ загрузчика...');
         try {
-          window.nativeAutoUpdateLauncher(downloadUrl);
+          window.nativeAutoUpdateLauncher(JSON.stringify({ url: downloadUrl, username: currentNick }));
         } catch (err) {
           logDebug(`Ошибка нативного загрузчика: ${err.message}. Открываем в браузере...`);
           if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
@@ -422,6 +425,64 @@ function showUpdateModal(data) {
   }
 
   modal.classList.remove('hidden');
+}
+
+// ----------------------------------------------------
+// 3. ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ (macOS & Windows)
+// ----------------------------------------------------
+function setupGlobalShortcuts() {
+  window.addEventListener('keydown', (e) => {
+    const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+
+    // Cmd+Q / Ctrl+Q -> Завершить работу приложения
+    if (isCmdOrCtrl && e.key.toLowerCase() === 'q') {
+      e.preventDefault();
+      if (window.nativeCloseWindow) {
+        window.nativeCloseWindow();
+      } else {
+        window.close();
+      }
+      return;
+    }
+
+    // Cmd+W / Ctrl+W -> Закрыть окно
+    if (isCmdOrCtrl && e.key.toLowerCase() === 'w') {
+      e.preventDefault();
+      if (window.nativeCloseWindow) {
+        window.nativeCloseWindow();
+      }
+      return;
+    }
+
+    // Cmd+M / Ctrl+M -> Свернуть окно
+    if (isCmdOrCtrl && e.key.toLowerCase() === 'm') {
+      e.preventDefault();
+      if (window.nativeMinimizeWindow) {
+        window.nativeMinimizeWindow();
+      }
+      return;
+    }
+
+    // Cmd+H / Ctrl+H -> Скрыть окно (Свернуть)
+    if (isCmdOrCtrl && e.key.toLowerCase() === 'h') {
+      e.preventDefault();
+      if (window.nativeMinimizeWindow) {
+        window.nativeMinimizeWindow();
+      }
+      return;
+    }
+
+    // Escape -> Закрыть активные модалки (если не обязательное обновление)
+    if (e.key === 'Escape') {
+      const updateModal = document.getElementById('modal-update-launcher');
+      const isMandatory = document.getElementById('btn-close-update-modal')?.style.display === 'none';
+      
+      document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(modal => {
+        if (modal === updateModal && isMandatory) return;
+        modal.classList.add('hidden');
+      });
+    }
+  });
 }
 
 // ----------------------------------------------------

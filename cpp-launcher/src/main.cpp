@@ -116,6 +116,48 @@ int main(int argc, char** argv) {
     curl_global_init(CURL_GLOBAL_ALL);
     g_launcherEngine = std::make_unique<LauncherEngine>();
 
+#if defined(__APPLE__)
+    // Создание стандартного главного меню macOS для поддержки горячих клавиш (Cmd+Q, Cmd+H, Cmd+M, Cmd+C, Cmd+V, etc.)
+    NSMenu* menubar = [[NSMenu alloc] init];
+    
+    // Меню приложения
+    NSMenuItem* appMenuItem = [[NSMenuItem alloc] init];
+    [menubar addItem:appMenuItem];
+    NSMenu* appMenu = [[NSMenu alloc] init];
+    [appMenu addItemWithTitle:@"О программе VozduCraft" action:nil keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:@"Скрыть VozduCraft" action:@selector(hide:) keyEquivalent:@"h"];
+    [appMenu addItemWithTitle:@"Скрыть остальные" action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+    [[appMenu itemAtIndex:3] setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagOption];
+    [appMenu addItemWithTitle:@"Показать все" action:@selector(unhideAllApplications:) keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:@"Завершить VozduCraft" action:@selector(terminate:) keyEquivalent:@"q"];
+    [appMenuItem setSubmenu:appMenu];
+
+    // Меню Правка (Cmd+C, Cmd+V, Cmd+A, Cmd+X, Cmd+Z)
+    NSMenuItem* editMenuItem = [[NSMenuItem alloc] init];
+    [menubar addItem:editMenuItem];
+    NSMenu* editMenu = [[NSMenu alloc] initWithTitle:@"Правка"];
+    [editMenu addItemWithTitle:@"Отменить" action:@selector(undo:) keyEquivalent:@"z"];
+    [editMenu addItemWithTitle:@"Повторить" action:@selector(redo:) keyEquivalent:@"Z"];
+    [editMenu addItem:[NSMenuItem separatorItem]];
+    [editMenu addItemWithTitle:@"Вырезать" action:@selector(cut:) keyEquivalent:@"x"];
+    [editMenu addItemWithTitle:@"Копировать" action:@selector(copy:) keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:@"Вставить" action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Выбрать всё" action:@selector(selectAll:) keyEquivalent:@"a"];
+    [editMenuItem setSubmenu:editMenu];
+
+    // Меню Окно (Cmd+M, Cmd+W)
+    NSMenuItem* windowMenuItem = [[NSMenuItem alloc] init];
+    [menubar addItem:windowMenuItem];
+    NSMenu* windowMenu = [[NSMenu alloc] initWithTitle:@"Окно"];
+    [windowMenu addItemWithTitle:@"Убрать в Dock" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+    [windowMenu addItemWithTitle:@"Закрыть окно" action:@selector(performClose:) keyEquivalent:@"w"];
+    [windowMenuItem setSubmenu:windowMenu];
+
+    [NSApp setMainMenu:menubar];
+#endif
+
     // Инициализация WebView окна (1160x720) с поддержкой изменения размера (Resizable)
     g_webview = std::make_unique<webview::webview>(true, nullptr);
     g_webview->set_title("VozduCraft Launcher");
@@ -258,20 +300,16 @@ int main(int argc, char** argv) {
                 destFile = homeDir + "/Downloads/VozduCraft-Update.zip";
 #endif
 
+                std::string username = "Player";
+                try {
+                    auto j = json::parse(params);
+                    if (j.is_object() && j.contains("username")) username = j["username"].get<std::string>();
+                    else if (j.is_array() && !j.empty() && j[0].is_object() && j[0].contains("username")) username = j[0]["username"].get<std::string>();
+                } catch (...) {}
+
                 logToDebugFile("AutoUpdater", "Starting download from: " + downloadUrl + " to: " + destFile);
 
                 Downloader dl;
-
-                // Прямая отправка дебаг-лога на сервер из C++
-                try {
-                    json logPayload;
-                    logPayload["username"] = "Launcher_Native";
-                    logPayload["os"] = "macOS";
-                    logPayload["launcher_version"] = "3.1.0";
-                    logPayload["event_type"] = "UPDATE_START";
-                    logPayload["log_content"] = "[C++ AutoUpdater] Starting download: " + downloadUrl + " -> " + destFile;
-                    dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", logPayload.dump());
-                } catch (...) {}
 
                 std::string jsStart = "if(window.onLauncherUpdateProgress) window.onLauncherUpdateProgress(1, 0.1, 15.4);";
 #if defined(__APPLE__)
@@ -307,11 +345,11 @@ int main(int argc, char** argv) {
 
                     try {
                         json successPayload;
-                        successPayload["username"] = "Launcher_Native";
+                        successPayload["username"] = username;
                         successPayload["os"] = "macOS";
-                        successPayload["launcher_version"] = "3.1.0";
+                        successPayload["launcher_version"] = "3.0.2";
                         successPayload["event_type"] = "UPDATE_SUCCESS";
-                        successPayload["log_content"] = "[C++ AutoUpdater] Download 100% complete! Launching installer: " + destFile;
+                        successPayload["log_content"] = "[C++ AutoUpdater] Загрузка 100% завершена! Запуск установщика: " + destFile;
                         dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", successPayload.dump());
                     } catch (...) {}
 
@@ -339,11 +377,11 @@ int main(int argc, char** argv) {
 
                     try {
                         json errPayload;
-                        errPayload["username"] = "Launcher_Native";
+                        errPayload["username"] = username;
                         errPayload["os"] = "macOS";
-                        errPayload["launcher_version"] = "3.1.0";
+                        errPayload["launcher_version"] = "3.0.2";
                         errPayload["event_type"] = "UPDATE_ERROR";
-                        errPayload["log_content"] = "[C++ AutoUpdater] Download failed for URL: " + downloadUrl;
+                        errPayload["log_content"] = "[C++ AutoUpdater] Ошибка скачивания по URL: " + downloadUrl;
                         dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", errPayload.dump());
                     } catch (...) {}
 
