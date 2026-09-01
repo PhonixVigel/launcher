@@ -114,7 +114,7 @@ function updateKnownMirrors(mirrorsList) {
 // ----------------------------------------------------
 async function sendTelemetry(eventType, message, details = {}) {
   try {
-    const username = state.currentUser?.username || localStorage.getItem('vozducraft_last_user') || 'Anonymous';
+    const username = (typeof appState !== 'undefined' && appState.username) ? appState.username : (localStorage.getItem('vozducraft_username') || localStorage.getItem('vozducraft_last_user') || 'Anonymous');
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const isWin = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
     const os = isMac ? 'macOS' : (isWin ? 'Windows' : 'Linux');
@@ -122,10 +122,10 @@ async function sendTelemetry(eventType, message, details = {}) {
     const payload = {
       username: username,
       os: os,
-      launcher_version: typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.1.0',
+      launcher_version: typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.0.2',
       event_type: eventType,
       log_content: `[${new Date().toISOString()}] [${eventType}] ${message}\n` + 
-                   `Player: ${username} | OS: ${os} | Launcher: v${typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.1.0'}\n` +
+                   `Player: ${username} | OS: ${os} | Launcher: v${typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.0.2'}\n` +
                    (Object.keys(details).length ? `Details:\n${JSON.stringify(details, null, 2)}\n` : '')
     };
 
@@ -370,8 +370,15 @@ function showUpdateModal(data) {
         }
       };
 
-      const currentNick = state.currentUser?.username || localStorage.getItem('vozducraft_last_user') || 'Anonymous';
+      const currentNick = (typeof appState !== 'undefined' && appState.username) ? appState.username : (localStorage.getItem('vozducraft_username') || 'Anonymous');
 
+      sendTelemetry('UPDATE_CLICK', 'Игрок нажал кнопку обновления', {
+        downloadUrl,
+        hasNativeAutoUpdate: typeof window.nativeAutoUpdateLauncher === 'function',
+        hasElectron: !!window.require
+      });
+
+      // 1. Для нативного C++ macOS движка
       if (typeof window.nativeAutoUpdateLauncher === 'function') {
         logDebug('[2/2] Запуск нативного C++ загрузчика...');
         try {
@@ -381,7 +388,74 @@ function showUpdateModal(data) {
           if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
           else window.open(downloadUrl, '_blank');
         }
-      } else if (typeof window.nativeOpenUrl === 'function') {
+      } 
+      // 2. Для Electron на Windows
+      else if (window.require) {
+        try {
+          const electron = window.require('electron');
+          const fs = window.require('fs');
+          const path = window.require('path');
+          const http = window.require('http');
+          const https = window.require('https');
+          const os = window.require('os');
+
+          logDebug('Запуск фоновой загрузки обновления Windows...');
+          const destFile = path.join(os.homedir(), 'Downloads', 'VozduCraft-Windows-Update.zip');
+          const fileStream = fs.createWriteStream(destFile);
+
+          const client = downloadUrl.startsWith('https') ? https : http;
+
+          const req = client.get(downloadUrl, (res) => {
+            if (res.statusCode === 301 || res.statusCode === 302) {
+              const redirectUrl = res.headers.location;
+              electron.shell.openExternal(redirectUrl || downloadUrl);
+              return;
+            }
+
+            const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+            let downloadedBytes = 0;
+
+            res.on('data', (chunk) => {
+              downloadedBytes += chunk.length;
+              if (totalBytes > 0) {
+                const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
+                const mbNow = (downloadedBytes / (1024 * 1024)).toFixed(1);
+                const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
+                if (progressBar) progressBar.style.width = `${pct}%`;
+                if (percentText) percentText.textContent = `${pct}%`;
+                if (detailsText) detailsText.textContent = `Скачано: ${mbNow} МБ из ${mbTotal} МБ (${pct}%)`;
+              }
+            });
+
+            res.pipe(fileStream);
+
+            fileStream.on('finish', () => {
+              fileStream.close(() => {
+                if (progressBar) progressBar.style.width = '100%';
+                if (percentText) percentText.textContent = '100%';
+                if (statusText) statusText.textContent = '✅ Загрузка завершена!';
+                if (detailsText) detailsText.textContent = 'Открытие папки с обновлением...';
+
+                sendTelemetry('UPDATE_SUCCESS', 'Обновление Windows успешно загружено', { destFile });
+
+                electron.shell.showItemInFolder(destFile);
+              });
+            });
+          });
+
+          req.on('error', (err) => {
+            logDebug(`Ошибка загрузки: ${err.message}. Открываем в браузере...`);
+            sendTelemetry('UPDATE_ERROR', 'Ошибка загрузки обновления Windows', { error: err.message, downloadUrl });
+            electron.shell.openExternal(downloadUrl);
+          });
+        } catch (e) {
+          logDebug('Electron download fallback: ' + e.message);
+          if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
+          else window.open(downloadUrl, '_blank');
+        }
+      } 
+      // 3. Fallback браузер
+      else if (typeof window.nativeOpenUrl === 'function') {
         logDebug('[2/2] Запуск загрузки через системный браузер...');
         window.nativeOpenUrl(downloadUrl);
       } else {
