@@ -7,6 +7,10 @@ const https = require('https');
 const crypto = require('crypto');
 const os = require('os');
 
+const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const isArm64 = process.arch === 'arm64' || process.arch === 'aarch64';
+
 let mainWindow;
 
 function generateValidUuid(username) {
@@ -140,8 +144,6 @@ function createWindow() {
 
       // 1. Поиск или подгрузка Eclipse Adoptium Temurin 21
       let javaBinaryPath = null;
-      const isWin = process.platform === 'win32';
-      const isMac = process.platform === 'darwin';
 
       function findAdoptiumJava21() {
         if (isWin) {
@@ -238,9 +240,6 @@ function createWindow() {
       const processLib = (lib) => {
         if (!lib.downloads || !lib.downloads.artifact) return;
         
-        const isMac = process.platform === 'darwin';
-        const isArm64 = process.arch === 'arm64' || process.arch === 'aarch64';
-        
         if (lib.rules) {
             let allowed = false;
             for (const rule of lib.rules) {
@@ -334,8 +333,6 @@ function createWindow() {
         }
       }
       
-      const isWin = process.platform === 'win32';
-      const isMac = process.platform === 'darwin';
       const pathSeparator = isWin ? ';' : ':';
       
       // Удаление дубликатов из путей
@@ -349,11 +346,6 @@ function createWindow() {
       const assetsDir = path.join(gamePath, 'assets');
       if (!fs.existsSync(assetsDir)) {
           fs.mkdirSync(assetsDir, { recursive: true });
-          // Copy from Prism if available for offline play
-          const prismAssets = path.join(os.homedir(), 'Library', 'Application Support', 'PrismLauncher', 'assets');
-          if (fs.existsSync(prismAssets)) {
-              require('child_process').execSync(`cp -R "${prismAssets}/" "${assetsDir}/"`);
-          }
       }
 
       // 5. Запуск процесса Java
