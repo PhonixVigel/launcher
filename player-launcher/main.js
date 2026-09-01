@@ -28,32 +28,65 @@ function logToDisk(message) {
 
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const client = url.startsWith('https') ? https : http;
-
-    client.get(url, (response) => {
-      if (response.statusCode === 301 || response.statusCode === 302) {
-        return downloadFile(response.headers.location, dest, onProgress).then(resolve).catch(reject);
+    try {
+      if (fs.existsSync(dest)) {
+        try { fs.unlinkSync(dest); } catch (_) {}
       }
+      const dir = path.dirname(dest);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
-      let downloadedBytes = 0;
+      const file = fs.createWriteStream(dest);
+      let isClosed = false;
+      const safeClose = (cb) => {
+        if (!isClosed) {
+          isClosed = true;
+          file.close(cb);
+        } else if (cb) cb();
+      };
 
-      response.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        if (totalBytes > 0 && onProgress) {
-          onProgress(downloadedBytes, totalBytes);
+      file.on('error', (err) => {
+        safeClose(() => {
+          try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (_) {}
+          reject(err);
+        });
+      });
+
+      const client = url.startsWith('https') ? https : http;
+
+      const req = client.get(url, (response) => {
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          safeClose(() => {
+            downloadFile(response.headers.location, dest, onProgress).then(resolve).catch(reject);
+          });
+          return;
         }
+
+        const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+        let downloadedBytes = 0;
+
+        response.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          if (totalBytes > 0 && onProgress) {
+            onProgress(downloadedBytes, totalBytes);
+          }
+        });
+
+        response.pipe(file);
+
+        file.on('finish', () => {
+          safeClose(() => resolve(dest));
+        });
       });
 
-      response.pipe(file);
-
-      file.on('finish', () => {
-        file.close(() => resolve(dest));
+      req.on('error', (err) => {
+        safeClose(() => {
+          try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (_) {}
+          reject(err);
+        });
       });
-    }).on('error', (err) => {
-      fs.unlink(dest, () => reject(err));
-    });
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
@@ -105,61 +138,49 @@ function createWindow() {
       const targetNeoForgeVer = '21.1.234';
       const targetMcVer = '1.21.1';
 
-      // 1. Поиск или подгрузка Java 21
-      let javaBinaryPath = 'java';
+      // 1. Поиск или подгрузка Eclipse Adoptium Temurin 21
+      let javaBinaryPath = null;
       const isWin = process.platform === 'win32';
       const isMac = process.platform === 'darwin';
 
-      function findSystemJava21() {
+      function findAdoptiumJava21() {
         if (isWin) {
-          const progFiles = process.env.ProgramFiles;
-          const progFilesX86 = process.env['ProgramFiles(x86)'];
-          const localAppData = process.env.LOCALAPPDATA;
-          const searchDirs = [];
-          if (progFiles) {
-            searchDirs.push(path.join(progFiles, 'Eclipse Adoptium'));
-            searchDirs.push(path.join(progFiles, 'Java'));
-            searchDirs.push(path.join(progFiles, 'BellSoft'));
-            searchDirs.push(path.join(progFiles, 'Zulu'));
-          }
-          if (progFilesX86) {
-            searchDirs.push(path.join(progFilesX86, 'Eclipse Adoptium'));
-            searchDirs.push(path.join(progFilesX86, 'Java'));
-          }
-          if (localAppData) {
-            searchDirs.push(path.join(localAppData, 'Programs', 'Eclipse Adoptium'));
-          }
+          const searchRoots = [
+            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Eclipse Adoptium'),
+            path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Eclipse Adoptium'),
+            path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Eclipse Adoptium'),
+            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'AdoptOpenJDK'),
+            path.join(gamePath, 'java')
+          ];
 
-          for (const base of searchDirs) {
+          for (const base of searchRoots) {
             if (!fs.existsSync(base)) continue;
             try {
               const entries = fs.readdirSync(base);
               for (const entry of entries) {
-                if (entry.includes('21')) {
-                  const javaw = path.join(base, entry, 'bin', 'javaw.exe');
-                  const java = path.join(base, entry, 'bin', 'java.exe');
-                  if (fs.existsSync(javaw)) return javaw;
-                  if (fs.existsSync(java)) return java;
-                }
+                const fullDir = path.join(base, entry);
+                try {
+                  const stat = fs.statSync(fullDir);
+                  if (stat.isDirectory()) {
+                    const javaw = path.join(fullDir, 'bin', 'javaw.exe');
+                    const java = path.join(fullDir, 'bin', 'java.exe');
+                    if (fs.existsSync(javaw)) return javaw;
+                    if (fs.existsSync(java)) return java;
+                  }
+                } catch (_) {}
               }
             } catch (_) {}
           }
 
-          if (process.env.JAVA_HOME) {
+          if (process.env.JAVA_HOME && process.env.JAVA_HOME.toLowerCase().includes('adopt')) {
             const javaw = path.join(process.env.JAVA_HOME, 'bin', 'javaw.exe');
-            const java = path.join(process.env.JAVA_HOME, 'bin', 'java.exe');
             if (fs.existsSync(javaw)) return javaw;
-            if (fs.existsSync(java)) return java;
           }
-          return null;
         } else if (isMac) {
           const knownPaths = [
             '/Library/Java/JavaVirtualMachines/temurin-21.jre/Contents/Home/bin/java',
             '/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin/java',
-            '/Library/Java/JavaVirtualMachines/liberica-jdk-21.jdk/Contents/Home/bin/java',
-            '/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home/bin/java',
-            '/opt/homebrew/opt/openjdk@21/bin/java',
-            '/usr/local/opt/openjdk@21/bin/java'
+            path.join(gamePath, 'java', 'jdk-21.0.2+13/Contents/Home/bin/java')
           ];
           for (const p of knownPaths) {
             if (fs.existsSync(p)) return p;
@@ -168,44 +189,40 @@ function createWindow() {
         return null;
       }
 
-      const systemJava = findSystemJava21();
-      const localJavaMac = path.join(javaDir, 'jdk-21.0.2+13/Contents/Home/bin/java');
-      const localJavaWin = path.join(javaDir, 'bin', 'javaw.exe');
-      const localJavaWinExe = path.join(javaDir, 'bin', 'java.exe');
-
-      if (systemJava) {
-        javaBinaryPath = systemJava;
-        logToDisk(`Обнаружена системная Java 21: ${javaBinaryPath}`);
-      } else if (fs.existsSync(localJavaMac)) {
-        javaBinaryPath = localJavaMac;
-      } else if (fs.existsSync(localJavaWin)) {
-        javaBinaryPath = localJavaWin;
-      } else if (fs.existsSync(localJavaWinExe)) {
-        javaBinaryPath = localJavaWinExe;
+      const foundJava = findAdoptiumJava21();
+      if (foundJava) {
+        javaBinaryPath = foundJava;
+        logToDisk(`✅ Обнаружена среда исполнения Eclipse Adoptium 21: ${javaBinaryPath}`);
       } else {
+        logToDisk('Среда Eclipse Adoptium 21 не найдена. Загрузка официального пакета Temurin 21 JDK...');
         const javaUrl = isMac ? 'http://185.221.213.43:3000/files/launchers/java21-mac.tar.gz' : 'http://185.221.213.43:3000/files/launchers/java21-win.zip';
-        const archiveDest = path.join(gamePath, isMac ? 'java21.tar.gz' : 'java21.zip');
-        sendStatus(10, 'Загрузка Temurin Java 21 JDK...');
-        await downloadFile(javaUrl, archiveDest, (loaded, total) => {
-          sendStatus(Math.floor((loaded / total) * 10) + 10, `[Загрузка Java 21] ${(loaded / 1024 / 1024).toFixed(1)} МБ`);
+        const tempDest = path.join(os.tmpdir(), isMac ? 'temurin21.tar.gz' : 'temurin21.zip');
+        
+        sendStatus(10, 'Загрузка Eclipse Adoptium Temurin 21 JDK...');
+        await downloadFile(javaUrl, tempDest, (loaded, total) => {
+          sendStatus(Math.floor((loaded / total) * 10) + 10, `[Загрузка Adoptium 21] ${(loaded / 1024 / 1024).toFixed(1)} МБ`);
         });
 
         fs.mkdirSync(javaDir, { recursive: true });
         const { execSync } = require('child_process');
         if (isMac) {
-          execSync(`tar -xzf "${archiveDest}" -C "${javaDir}"`);
-          if (fs.existsSync(localJavaMac)) {
-            javaBinaryPath = localJavaMac;
-            execSync(`chmod +x "${javaBinaryPath}"`);
-          }
+          execSync(`tar -xzf "${tempDest}" -C "${javaDir}"`);
+          try { fs.unlinkSync(tempDest); } catch (_) {}
         } else if (isWin) {
           try {
-            execSync(`powershell -Command "Expand-Archive -Force -Path '${archiveDest}' -DestinationPath '${javaDir}'"`);
+            execSync(`powershell -Command "Expand-Archive -Force -Path '${tempDest}' -DestinationPath '${javaDir}'"`);
           } catch (_) {
-            execSync(`tar -xf "${archiveDest}" -C "${javaDir}"`);
+            execSync(`tar -xf "${tempDest}" -C "${javaDir}"`);
           }
-          if (fs.existsSync(localJavaWin)) javaBinaryPath = localJavaWin;
-          else if (fs.existsSync(localJavaWinExe)) javaBinaryPath = localJavaWinExe;
+          try { fs.unlinkSync(tempDest); } catch (_) {}
+        }
+
+        const freshJava = findAdoptiumJava21();
+        if (freshJava) {
+          javaBinaryPath = freshJava;
+          logToDisk(`✅ Установлена и готова к работе Eclipse Adoptium 21: ${javaBinaryPath}`);
+        } else {
+          javaBinaryPath = isWin ? 'javaw.exe' : 'java';
         }
       }
 
