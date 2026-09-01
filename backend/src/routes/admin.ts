@@ -15,12 +15,20 @@ const JWT_SECRET = process.env.JWT_SECRET || 'VOZDUCRAFT_SUPER_SECURE_JWT_SECRET
 // Middleware проверки прав администратора
 export const requireAdmin = async (req: Request, res: Response, next: Function) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Требуется токен авторизации администратора' });
+    const authHeader = req.headers.authorization || (req.headers['x-admin-token'] as string);
+    const queryToken = req.query.token as string;
+    let token = '';
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (authHeader) {
+      token = authHeader;
+    } else if (queryToken) {
+      token = queryToken;
     }
 
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Требуется токен авторизации администратора' });
+    }
     
     // Проверка подписи JWT токена
     let decoded: any;

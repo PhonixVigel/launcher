@@ -107,28 +107,105 @@ function createWindow() {
 
       // 1. Поиск или подгрузка Java 21
       let javaBinaryPath = 'java';
+      const isWin = process.platform === 'win32';
+      const isMac = process.platform === 'darwin';
+
+      function findSystemJava21() {
+        if (isWin) {
+          const progFiles = process.env.ProgramFiles;
+          const progFilesX86 = process.env['ProgramFiles(x86)'];
+          const localAppData = process.env.LOCALAPPDATA;
+          const searchDirs = [];
+          if (progFiles) {
+            searchDirs.push(path.join(progFiles, 'Eclipse Adoptium'));
+            searchDirs.push(path.join(progFiles, 'Java'));
+            searchDirs.push(path.join(progFiles, 'BellSoft'));
+            searchDirs.push(path.join(progFiles, 'Zulu'));
+          }
+          if (progFilesX86) {
+            searchDirs.push(path.join(progFilesX86, 'Eclipse Adoptium'));
+            searchDirs.push(path.join(progFilesX86, 'Java'));
+          }
+          if (localAppData) {
+            searchDirs.push(path.join(localAppData, 'Programs', 'Eclipse Adoptium'));
+          }
+
+          for (const base of searchDirs) {
+            if (!fs.existsSync(base)) continue;
+            try {
+              const entries = fs.readdirSync(base);
+              for (const entry of entries) {
+                if (entry.includes('21')) {
+                  const javaw = path.join(base, entry, 'bin', 'javaw.exe');
+                  const java = path.join(base, entry, 'bin', 'java.exe');
+                  if (fs.existsSync(javaw)) return javaw;
+                  if (fs.existsSync(java)) return java;
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (process.env.JAVA_HOME) {
+            const javaw = path.join(process.env.JAVA_HOME, 'bin', 'javaw.exe');
+            const java = path.join(process.env.JAVA_HOME, 'bin', 'java.exe');
+            if (fs.existsSync(javaw)) return javaw;
+            if (fs.existsSync(java)) return java;
+          }
+          return null;
+        } else if (isMac) {
+          const knownPaths = [
+            '/Library/Java/JavaVirtualMachines/temurin-21.jre/Contents/Home/bin/java',
+            '/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin/java',
+            '/Library/Java/JavaVirtualMachines/liberica-jdk-21.jdk/Contents/Home/bin/java',
+            '/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home/bin/java',
+            '/opt/homebrew/opt/openjdk@21/bin/java',
+            '/usr/local/opt/openjdk@21/bin/java'
+          ];
+          for (const p of knownPaths) {
+            if (fs.existsSync(p)) return p;
+          }
+        }
+        return null;
+      }
+
+      const systemJava = findSystemJava21();
       const localJavaMac = path.join(javaDir, 'jdk-21.0.2+13/Contents/Home/bin/java');
-      const localJavaWin = path.join(javaDir, 'bin', 'java.exe');
-      if (fs.existsSync(localJavaMac)) {
+      const localJavaWin = path.join(javaDir, 'bin', 'javaw.exe');
+      const localJavaWinExe = path.join(javaDir, 'bin', 'java.exe');
+
+      if (systemJava) {
+        javaBinaryPath = systemJava;
+        logToDisk(`Обнаружена системная Java 21: ${javaBinaryPath}`);
+      } else if (fs.existsSync(localJavaMac)) {
         javaBinaryPath = localJavaMac;
       } else if (fs.existsSync(localJavaWin)) {
         javaBinaryPath = localJavaWin;
+      } else if (fs.existsSync(localJavaWinExe)) {
+        javaBinaryPath = localJavaWinExe;
       } else {
-        const isMac = process.platform === 'darwin';
         const javaUrl = isMac ? 'http://185.221.213.43:3000/files/launchers/java21-mac.tar.gz' : 'http://185.221.213.43:3000/files/launchers/java21-win.zip';
         const archiveDest = path.join(gamePath, isMac ? 'java21.tar.gz' : 'java21.zip');
         sendStatus(10, 'Загрузка Temurin Java 21 JDK...');
         await downloadFile(javaUrl, archiveDest, (loaded, total) => {
           sendStatus(Math.floor((loaded / total) * 10) + 10, `[Загрузка Java 21] ${(loaded / 1024 / 1024).toFixed(1)} МБ`);
         });
+
+        fs.mkdirSync(javaDir, { recursive: true });
+        const { execSync } = require('child_process');
         if (isMac) {
-          fs.mkdirSync(javaDir, { recursive: true });
-          const { execSync } = require('child_process');
           execSync(`tar -xzf "${archiveDest}" -C "${javaDir}"`);
           if (fs.existsSync(localJavaMac)) {
             javaBinaryPath = localJavaMac;
             execSync(`chmod +x "${javaBinaryPath}"`);
           }
+        } else if (isWin) {
+          try {
+            execSync(`powershell -Command "Expand-Archive -Force -Path '${archiveDest}' -DestinationPath '${javaDir}'"`);
+          } catch (_) {
+            execSync(`tar -xf "${archiveDest}" -C "${javaDir}"`);
+          }
+          if (fs.existsSync(localJavaWin)) javaBinaryPath = localJavaWin;
+          else if (fs.existsSync(localJavaWinExe)) javaBinaryPath = localJavaWinExe;
         }
       }
 
@@ -328,29 +405,34 @@ function createWindow() {
 
       logToDisk(`ЗАПУСК ИГРЫ: ${javaBinaryPath} ${finalArgs.join(' ')}`);
 
-      fs.writeFileSync('/Users/maksim/.vozducraft/java_cmd.log', finalArgs.join('\n'));
-      fs.writeFileSync(gameLogFile, `=== СТАРТ ИГРОВОГО ЛОГА [${new Date().toISOString()}] ===\n`);
+      try {
+        fs.writeFileSync(path.join(gamePath, 'java_cmd.log'), finalArgs.join('\n'));
+      } catch (_) {}
+      try {
+        fs.writeFileSync(gameLogFile, `=== СТАРТ ИГРОВОГО ЛОГА [${new Date().toISOString()}] ===\n`);
+      } catch (_) {}
 
       const mcProcess = require('child_process').spawn(javaBinaryPath, finalArgs, { cwd: gamePath, shell: false, env: process.env });
       mcProcess.stdout?.on('data', (data) => {
         const str = data.toString();
         logToDisk(`[GAME OUT] ${str.trim()}`);
-        fs.appendFileSync(gameLogFile, str);
+        try { fs.appendFileSync(gameLogFile, str); } catch (_) {}
       });
       mcProcess.stderr?.on('data', (data) => {
         const str = data.toString();
         logToDisk(`[GAME ERR] ${str.trim()}`);
-        fs.appendFileSync(gameLogFile, str);
+        try { fs.appendFileSync(gameLogFile, str); } catch (_) {}
       });
       mcProcess.on('error', (err) => {
         logToDisk(`[FATAL PROCESS ERROR] ${err.message}`);
+        if (mainWindow) mainWindow.webContents.send('mc-error', { error: err.message });
         sendClosed(-1);
       });
       mcProcess.on('close', (code) => {
         logToDisk(`Игровой процесс завершился с кодом: ${code}`);
         sendClosed(code);
       });
-      sendStatus(100, 'Игра завязана и запущена!');
+      sendStatus(100, 'Minecraft успешно запущен!');
     } catch (err) {
       logToDisk(`[CRITICAL ERROR] ${err.message}`);
       sendStatus(0, 'Ошибка: ' + err.message);
