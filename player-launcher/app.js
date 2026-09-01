@@ -400,7 +400,8 @@ function showUpdateModal(data) {
           const os = window.require('os');
 
           logDebug('Запуск фоновой загрузки обновления Windows...');
-          const destFile = path.join(os.homedir(), 'Downloads', 'VozduCraft-Windows-Update.zip');
+          const isExe = downloadUrl.toLowerCase().endsWith('.exe');
+          const destFile = path.join(os.tmpdir(), isExe ? 'VozduCraft-Update.exe' : 'VozduCraft-Update.zip');
           const fileStream = fs.createWriteStream(destFile);
 
           const client = downloadUrl.startsWith('https') ? https : http;
@@ -433,12 +434,28 @@ function showUpdateModal(data) {
               fileStream.close(() => {
                 if (progressBar) progressBar.style.width = '100%';
                 if (percentText) percentText.textContent = '100%';
-                if (statusText) statusText.textContent = '✅ Загрузка завершена!';
-                if (detailsText) detailsText.textContent = 'Открытие папки с обновлением...';
+                if (statusText) statusText.textContent = '⚡ Применение обновления...';
+                if (detailsText) detailsText.textContent = 'Лаунчер обновляется и автоматически перезапустится...';
 
-                sendTelemetry('UPDATE_SUCCESS', 'Обновление Windows успешно загружено', { destFile });
+                sendTelemetry('UPDATE_SUCCESS', 'Обновление Windows скачано, запуск фонового обновления', { destFile });
 
-                electron.shell.showItemInFolder(destFile);
+                if (destFile.toLowerCase().endsWith('.exe')) {
+                  const { spawn } = window.require('child_process');
+                  try {
+                    const installer = spawn(destFile, ['/S'], {
+                      detached: true,
+                      stdio: 'ignore'
+                    });
+                    installer.unref();
+                    setTimeout(() => {
+                      window.close();
+                    }, 1200);
+                  } catch (e) {
+                    electron.shell.openPath(destFile);
+                  }
+                } else {
+                  electron.shell.openPath(destFile);
+                }
               });
             });
           });
