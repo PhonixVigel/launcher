@@ -30,8 +30,12 @@ function logToDisk(message) {
   fs.appendFileSync(logFile, formattedMsg);
 }
 
-function downloadFile(url, dest, onProgress) {
+function downloadFile(url, dest, onProgress, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
+    if (maxRedirects <= 0) {
+      return reject(new Error(`Too many redirects for ${url}`));
+    }
+
     try {
       if (fs.existsSync(dest)) {
         try { fs.unlinkSync(dest); } catch (_) {}
@@ -56,19 +60,44 @@ function downloadFile(url, dest, onProgress) {
       });
 
       const client = url.startsWith('https') ? https : http;
+      const parsedUrl = new URL(url);
+      const reqOptions = {
+        protocol: parsedUrl.protocol,
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        headers: {
+          'User-Agent': 'VozduCraft-Launcher/3.0.6 (Windows; x64; Adoptium Java Installer)'
+        }
+      };
 
-      const req = client.get(url, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
+      let timer = null;
+      const resetInactivityTimer = (timeoutMs = 30000) => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          req.destroy(new Error(`Download stalled (no data for ${Math.round(timeoutMs/1000)}s): ${url}`));
+        }, timeoutMs);
+      };
+
+      resetInactivityTimer(30000);
+
+      const req = client.get(reqOptions, (response) => {
+        resetInactivityTimer(30000);
+
+        if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 303 || response.statusCode === 307 || response.statusCode === 308) {
+          if (timer) clearTimeout(timer);
           safeClose(() => {
-            downloadFile(response.headers.location, dest, onProgress).then(resolve).catch(reject);
+            const redirectUrl = new URL(response.headers.location, url).toString();
+            downloadFile(redirectUrl, dest, onProgress, maxRedirects - 1).then(resolve).catch(reject);
           });
           return;
         }
 
         if (response.statusCode !== 200 && response.statusCode !== 206) {
+          if (timer) clearTimeout(timer);
           safeClose(() => {
             try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (_) {}
-            reject(new Error(`HTTP ${response.statusCode} for ${url}`));
+            reject(new Error(`HTTP ${response.statusCode} downloading ${url}`));
           });
           return;
         }
@@ -78,27 +107,27 @@ function downloadFile(url, dest, onProgress) {
 
         response.on('data', (chunk) => {
           downloadedBytes += chunk.length;
+          resetInactivityTimer(30000);
           if (totalBytes > 0 && onProgress) {
             onProgress(downloadedBytes, totalBytes);
           }
         });
 
         response.on('error', (err) => {
+          if (timer) clearTimeout(timer);
           req.destroy(err);
         });
 
         response.pipe(file);
 
         file.on('finish', () => {
+          if (timer) clearTimeout(timer);
           safeClose(() => resolve(dest));
         });
       });
 
-      req.setTimeout(8000, () => {
-        req.destroy(new Error(`Timeout (8s) downloading: ${url}`));
-      });
-
       req.on('error', (err) => {
+        if (timer) clearTimeout(timer);
         safeClose(() => {
           try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (_) {}
           reject(err);
