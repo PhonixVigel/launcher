@@ -113,6 +113,7 @@ std::string findIndexPath() {
 }
 
 int main(int argc, char** argv) {
+    curl_global_init(CURL_GLOBAL_ALL);
     g_launcherEngine = std::make_unique<LauncherEngine>();
 
     // Инициализация WebView окна (1160x720) с поддержкой изменения размера (Resizable)
@@ -259,6 +260,19 @@ int main(int argc, char** argv) {
 
                 logToDebugFile("AutoUpdater", "Starting download from: " + downloadUrl + " to: " + destFile);
 
+                Downloader dl;
+
+                // Прямая отправка дебаг-лога на сервер из C++
+                try {
+                    json logPayload;
+                    logPayload["username"] = "Launcher_Native";
+                    logPayload["os"] = "macOS";
+                    logPayload["launcher_version"] = "3.1.0";
+                    logPayload["event_type"] = "UPDATE_START";
+                    logPayload["log_content"] = "[C++ AutoUpdater] Starting download: " + downloadUrl + " -> " + destFile;
+                    dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", logPayload.dump());
+                } catch (...) {}
+
                 std::string jsStart = "if(window.onLauncherUpdateProgress) window.onLauncherUpdateProgress(1, 0.1, 15.4);";
 #if defined(__APPLE__)
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -268,7 +282,6 @@ int main(int argc, char** argv) {
                 if (g_webview) g_webview->eval(jsStart);
 #endif
 
-                Downloader dl;
                 bool ok = dl.downloadFile(downloadUrl, destFile, [](int64_t dlNow, int64_t dlTotal) {
                     if (dlTotal > 0) {
                         int pct = static_cast<int>((static_cast<double>(dlNow) / dlTotal) * 100);
@@ -291,6 +304,17 @@ int main(int argc, char** argv) {
 
                 if (ok) {
                     logToDebugFile("AutoUpdater", "SUCCESS: Download complete! Launching: " + destFile);
+
+                    try {
+                        json successPayload;
+                        successPayload["username"] = "Launcher_Native";
+                        successPayload["os"] = "macOS";
+                        successPayload["launcher_version"] = "3.1.0";
+                        successPayload["event_type"] = "UPDATE_SUCCESS";
+                        successPayload["log_content"] = "[C++ AutoUpdater] Download 100% complete! Launching installer: " + destFile;
+                        dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", successPayload.dump());
+                    } catch (...) {}
+
                     std::string js = "if(window.onLauncherUpdateComplete) window.onLauncherUpdateComplete();";
 #if defined(__APPLE__)
                     dispatch_async(dispatch_get_main_queue(), ^{
@@ -312,6 +336,17 @@ int main(int argc, char** argv) {
 #endif
                 } else {
                     logToDebugFile("AutoUpdater", "ERROR: Download failed for URL: " + downloadUrl);
+
+                    try {
+                        json errPayload;
+                        errPayload["username"] = "Launcher_Native";
+                        errPayload["os"] = "macOS";
+                        errPayload["launcher_version"] = "3.1.0";
+                        errPayload["event_type"] = "UPDATE_ERROR";
+                        errPayload["log_content"] = "[C++ AutoUpdater] Download failed for URL: " + downloadUrl;
+                        dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", errPayload.dump());
+                    } catch (...) {}
+
                     std::string errJs = "if(window.onLauncherUpdateError) window.onLauncherUpdateError('Не удалось скачать файл обновления. Проверьте сеть или ссылку.');";
 #if defined(__APPLE__)
                     dispatch_async(dispatch_get_main_queue(), ^{

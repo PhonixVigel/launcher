@@ -17,11 +17,9 @@ namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 Downloader::Downloader() {
-    curl_global_init(CURL_GLOBAL_ALL);
 }
 
 Downloader::~Downloader() {
-    curl_global_cleanup();
 }
 
 size_t Downloader::writeDataCallback(void* ptr, size_t size, size_t nmemb, void* stream) {
