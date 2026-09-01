@@ -468,6 +468,8 @@ function createWindow() {
         `-Dneoforge.stage=client`,
         `-Dneoforge.version=${targetNeoForgeVer}`,
         `-Dneoforge.modsDir=${modsPath}`,
+        `-Dneoforge.earlydisplay=false`,
+        `-Dfml.earlydisplay=false`,
         `-cp`,
         classpath
       ];
@@ -482,10 +484,10 @@ function createWindow() {
         `--accessToken`, `VOZDUCRAFT-TOKEN-${Date.now()}`,
         `--userType`, `offline`,
         `--versionType`, `release`,
-        `--neoForgeVersion`, `21.1.234`,
-        `--fml.neoForgeVersion`, `21.1.234`,
-        `--fmlVersion`, `4.0.42`,
-        `--fml.fmlVersion`, `4.0.42`,
+        `--neoForgeVersion`, targetNeoForgeVer,
+        `--fml.neoForgeVersion`, targetNeoForgeVer,
+        `--fmlVersion`, `4.0.43`,
+        `--fml.fmlVersion`, `4.0.43`,
         `--mcVersion`, `1.21.1`,
         `--fml.mcVersion`, `1.21.1`,
         `--neoFormVersion`, `20240808.144430`,
