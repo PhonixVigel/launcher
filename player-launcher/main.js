@@ -496,12 +496,39 @@ function createWindow() {
         `--launchTarget`, `forgeclient`
       ];
 
-      const finalArgs = [...jvmArgs, mainClass, ...gameArgs];
+      // Формирование файла аргументов JVM для обхода лимита длины строки Windows (ENAMETOOLONG)
+      const jvmArgsFormatted = [];
+      for (let i = 0; i < jvmArgs.length; i++) {
+        const item = jvmArgs[i];
+        if (item === '-cp' || item === '--module-path' || item === '--add-modules' || item === '--add-opens') {
+          jvmArgsFormatted.push(item);
+          i++;
+          if (i < jvmArgs.length) {
+            jvmArgsFormatted.push(`"${jvmArgs[i].replace(/\\/g, '\\\\')}"`);
+          }
+        } else if (item.startsWith('-D') && item.includes('=')) {
+          const eqIndex = item.indexOf('=');
+          const k = item.slice(0, eqIndex + 1);
+          const v = item.slice(eqIndex + 1);
+          jvmArgsFormatted.push(`${k}"${v.replace(/\\/g, '\\\\')}"`);
+        } else {
+          jvmArgsFormatted.push(item);
+        }
+      }
 
-      logToDisk(`ЗАПУСК ИГРЫ: ${javaBinaryPath} ${finalArgs.join(' ')}`);
+      const argFilePath = path.join(gamePath, 'jvm_args.txt');
+      try {
+        fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
+      } catch (_) {}
+
+      const finalArgs = isWin 
+        ? [`@${argFilePath}`, mainClass, ...gameArgs]
+        : [...jvmArgs, mainClass, ...gameArgs];
+
+      logToDisk(`ЗАПУСК ИГРЫ (${isWin ? 'Windows ArgFile' : 'Unix Direct'}): ${javaBinaryPath} ${finalArgs.join(' ')}`);
 
       try {
-        fs.writeFileSync(path.join(gamePath, 'java_cmd.log'), finalArgs.join('\n'));
+        fs.writeFileSync(path.join(gamePath, 'java_cmd.log'), `=== JVM ARGS ===\n${jvmArgsFormatted.join('\n')}\n\n=== MAIN CLASS ===\n${mainClass}\n\n=== GAME ARGS ===\n${gameArgs.join('\n')}`);
       } catch (_) {}
       try {
         fs.writeFileSync(gameLogFile, `=== СТАРТ ИГРОВОГО ЛОГА [${new Date().toISOString()}] ===\n`);
