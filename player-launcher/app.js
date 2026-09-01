@@ -132,13 +132,25 @@ async function sendTelemetry(eventType, message, details = {}) {
       event_type: eventType,
       log_content: `[${new Date().toISOString()}] [${eventType}] ${message}\n` + 
                    `Player: ${username} | OS: ${os} | Launcher: v${typeof LAUNCHER_CURRENT_VERSION !== 'undefined' ? LAUNCHER_CURRENT_VERSION : '3.1.0'}\n` +
-                   (Object.keys(details).length ? `Details: ${JSON.stringify(details, null, 2)}\n` : '')
+                   (Object.keys(details).length ? `Details:\n${JSON.stringify(details, null, 2)}\n` : '')
     };
 
-    apiFetch('/launcher/debug-log', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }).catch(() => {});
+    const targetUrl = `${CURRENT_API_BASE}/launcher/debug-log`;
+
+    if (window.nativeApiFetch) {
+      window.nativeApiFetch(JSON.stringify({
+        url: targetUrl,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }));
+    } else {
+      fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    }
   } catch (_) {}
 }
 
@@ -436,6 +448,24 @@ function showUpdateModal(data) {
       btnClose.style.display = 'inline-block';
       btnClose.onclick = () => modal.classList.add('hidden');
     }
+  }
+
+  const btnCancelDownload = document.getElementById('btn-cancel-update-download');
+  if (btnCancelDownload) {
+    btnCancelDownload.onclick = () => {
+      sendTelemetry('UPDATE_CANCELLED', 'Игрок отменил загрузку обновления лаунчера', {
+        currentProgress: progressBar ? progressBar.style.width : '0%',
+        status: statusText ? statusText.textContent : '',
+        details: detailsText ? detailsText.textContent : '',
+        downloadUrl: downloadUrl,
+        latestVersion: data.latestVersion
+      });
+
+      if (progressZone) progressZone.classList.add('hidden');
+      if (buttonsZone) buttonsZone.classList.remove('hidden');
+      if (progressBar) progressBar.style.width = '0%';
+      if (percentText) percentText.textContent = '0%';
+    };
   }
 
   modal.classList.remove('hidden');
