@@ -315,7 +315,6 @@ function createWindow() {
 
       if (mcMeta.libraries) mcMeta.libraries.forEach(processLib);
       if (nfMeta.libraries) nfMeta.libraries.forEach(processLib);
-      if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
       if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
 
       // 3. Быстрая параллельная загрузка библиотек с пулом воркеров
