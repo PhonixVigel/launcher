@@ -1,21 +1,15 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
 const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
 
-let storedMirrors = [];
-try {
-  storedMirrors = JSON.parse(localStorage.getItem('vozducraft_known_mirrors') || '[]');
-} catch (e) {}
-
-let KNOWN_MIRRORS = Array.from(new Set([
-  DEFAULT_PRIMARY_MIRROR,
-  ...(Array.isArray(storedMirrors) ? storedMirrors : []),
-  'http://89.248.236.145:3000/api/v1'
-])).filter(url => url && typeof url === 'string' && !url.includes('localhost'));
+let KNOWN_MIRRORS = [DEFAULT_PRIMARY_MIRROR];
 
 let CURRENT_API_BASE = DEFAULT_PRIMARY_MIRROR;
 const savedMirror = localStorage.getItem('vozducraft_active_mirror');
-if (savedMirror && !savedMirror.includes('localhost')) {
+if (savedMirror && !savedMirror.includes('localhost') && !savedMirror.includes('89.248.236.145')) {
   CURRENT_API_BASE = savedMirror;
+} else {
+  CURRENT_API_BASE = DEFAULT_PRIMARY_MIRROR;
+  localStorage.setItem('vozducraft_active_mirror', DEFAULT_PRIMARY_MIRROR);
 }
 
 let ipcRenderer = null;
@@ -611,6 +605,34 @@ async function loadServerCarousel() {
     appState.servers.forEach(s => pingServerCard(s));
   } catch (err) {
     console.error('Ошибка загрузки списка серверов:', err);
+    if (!appState.servers || appState.servers.length === 0) {
+      appState.servers = [
+        {
+          id: 1,
+          name: 'VozduCraft Season #2',
+          server_ip: '89.248.236.145',
+          server_port: 27123,
+          minecraft_version: '1.21.1',
+          modloader: 'neoforge',
+          modloader_version: '21.1.248',
+          java_version: 21,
+          description: 'Официальный сервер выживания VozduCraft Season #2 (170+ модов)'
+        },
+        {
+          id: 2,
+          name: 'VozduCraft Tech & Create',
+          server_ip: '185.221.213.43',
+          server_port: 25566,
+          minecraft_version: '1.21.1',
+          modloader: 'neoforge',
+          modloader_version: '21.1.248',
+          java_version: 21,
+          description: 'Индустриальный сервер с механизмами Create, авиацией и поездами'
+        }
+      ];
+      renderCarousel();
+      appState.servers.forEach(s => pingServerCard(s));
+    }
   }
 }
 
