@@ -690,15 +690,23 @@ async function handleFilesUpload(files) {
   if (!files || files.length === 0) return;
 
   const dropzone = document.getElementById('mod-dropzone');
-  const oldText = dropzone.querySelector('.dropzone-text').innerHTML;
-  dropzone.querySelector('.dropzone-text').innerHTML = '⏳ Загрузка и подсчет SHA-256 хешей...';
+  const dropzoneTextEl = dropzone.querySelector('.dropzone-text');
+  const oldText = dropzoneTextEl.innerHTML;
 
-  for (const file of Array.from(files)) {
-    if (!file.name.endsWith('.jar') && !file.name.endsWith('.zip')) continue;
+  const fileList = Array.from(files).filter(f => f.name.endsWith('.jar') || f.name.endsWith('.zip'));
+  if (fileList.length === 0) {
+    alert('Пожалуйста, выберите файлы с расширением .jar или .zip');
+    return;
+  }
+
+  for (let i = 0; i < fileList.length; i++) {
+    const file = fileList[i];
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    dropzoneTextEl.innerHTML = `⏳ [${i + 1}/${fileList.length}] Загрузка <b>${file.name}</b> (${sizeMb} MB)...`;
 
     try {
       const base64Data = await readFileAsBase64(file);
-      await fetch(`${API_BASE}/api/v1/admin/modpack/upload`, {
+      const res = await fetch(`${API_BASE}/api/v1/admin/modpack/upload`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -709,12 +717,18 @@ async function handleFilesUpload(files) {
           modDescription: 'Локальный мод, загруженный администратором'
         })
       });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        alert(`Ошибка при загрузке ${file.name}: ${data.error || res.statusText || 'Сервер отклонил файл'}`);
+      }
     } catch (err) {
       console.error('Ошибка загрузки файла:', file.name, err);
+      alert(`Сбой передачи файла ${file.name}: ${err.message}`);
     }
   }
 
-  dropzone.querySelector('.dropzone-text').innerHTML = oldText;
+  dropzoneTextEl.innerHTML = oldText;
   await loadModpack();
 }
 

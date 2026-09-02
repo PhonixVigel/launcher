@@ -24,6 +24,7 @@ app.use((req, res, next) => {
   if (req.body && Object.keys(req.body).length > 0) {
     const bodyCopy = { ...req.body };
     if (bodyCopy.fileBase64) bodyCopy.fileBase64 = `[BASE64 ${bodyCopy.fileBase64.length} chars]`;
+    if (bodyCopy.base64Data) bodyCopy.base64Data = `[BASE64 ${bodyCopy.base64Data.length} chars]`;
     if (bodyCopy.password) bodyCopy.password = '***';
     console.log(`   🔹 Body:`, JSON.stringify(bodyCopy).substring(0, 300));
   }
@@ -39,8 +40,8 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '1024mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
 
 // Статическая папка для раздачи модов, зеркал и бинарников лаунчера (с полной поддержкой CORS)
 const filesDir = path.join(__dirname, '../public/files');
