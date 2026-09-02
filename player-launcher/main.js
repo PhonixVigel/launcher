@@ -498,6 +498,17 @@ rm -f "$0"
       if (fs.existsSync(fwJar)) {
         jvmCpEntries.push(fwJar);
       }
+      const extraJar = path.join(libsDir, 'net', 'minecraft', 'client', '1.21.1-20240808.144430', 'client-1.21.1-20240808.144430-extra.jar');
+      if (fs.existsSync(extraJar)) {
+        jvmCpEntries.push(extraJar);
+      }
+      const nfClientJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-client.jar`);
+      if (fs.existsSync(nfClientJar)) {
+        jvmCpEntries.push(nfClientJar);
+      }
+      if (fs.existsSync(mcJarPath)) {
+        jvmCpEntries.push(mcJarPath);
+      }
       
       const pathSeparator = isWin ? ';' : ':';
       
@@ -521,7 +532,7 @@ rm -f "$0"
       const validUuid = generateValidUuid(username);
       const macFlags = isMac ? ['-XstartOnFirstThread'] : [];
       const mainClass = 'io.github.zekerzhayard.forgewrapper.installer.Main';
-      const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;minecraft-1.21.1-client.jar,neoforge-21.1.234-client.jar`;
+      const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;client-1.21.1-20240808.144430-extra.jar,neoforge-${targetNeoForgeVer}-client.jar;minecraft-1.21.1-client.jar,neoforge-${targetNeoForgeVer}-client.jar`;
 
       const jvmArgs = [
         `-Dforgewrapper.minecraft=${mcJarPath}`,

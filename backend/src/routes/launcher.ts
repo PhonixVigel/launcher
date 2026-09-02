@@ -144,10 +144,12 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.0.9',
-      releaseNotes: latestRelease?.release_notes || 'Официальное обновление лаунчера VozduCraft v3.0.9 (Поддержка чистой установки процессоров)',
+      latestVersion: latestRelease?.version || config?.value || '3.1.0',
+      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.1.0',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
+      patchUrl: `${baseHost}/files/launchers/app.asar`,
+      asarDownloadUrl: `${baseHost}/files/launchers/app.asar`,
       isMandatory: latestRelease ? latestRelease.is_mandatory === 1 : true
     });
   } catch (error) {
