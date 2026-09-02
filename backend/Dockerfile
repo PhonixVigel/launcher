@@ -30,11 +30,12 @@ RUN npm ci --only=production
 # Копируем скомпилированный код бэкенда
 COPY --from=builder /app/dist ./dist
 
-# Копируем публичные статические файлы (Web Admin UI и хранилище файлов)
-COPY public/ ./public/
+# Копируем публичные веб-интерфейсы (Web Admin UI и Player UI)
+COPY public/admin/ ./public/admin/
+COPY public/player/ ./public/player/
 
 # Создаем директории для постоянных данных (Persistent Volumes)
-RUN mkdir -p /app/data /app/public/files/mods /app/public/files/releases
+RUN mkdir -p /app/data /app/public/files/mods /app/public/files/launchers
 
 EXPOSE 3000
 
