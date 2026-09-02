@@ -315,6 +315,7 @@ function createWindow() {
 
       if (mcMeta.libraries) mcMeta.libraries.forEach(processLib);
       if (nfMeta.libraries) nfMeta.libraries.forEach(processLib);
+      if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
       if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
 
       // 3. Быстрая параллельная загрузка библиотек с пулом воркеров
@@ -396,7 +397,7 @@ function createWindow() {
         const p = lib.dest;
         if (!fs.existsSync(p)) continue;
         const pLower = p.toLowerCase().replace(/\\/g, '/');
-        if (pLower.includes('binarypatcher') || pLower.includes('autorenamingtool') || pLower.includes('installertools')) continue;
+        if (pLower.includes('binarypatcher') || pLower.includes('autorenamingtool') || pLower.includes('installertools') || pLower.includes('jarsplitter') || pLower.includes('cli-utils') || pLower.includes('specialsource') || pLower.includes('srgutils') || pLower.includes('neoform-1.21.1')) continue;
         if (pLower.includes('gson-2.8.9')) continue;
         if (pLower.includes('neoforge-21.1.234-universal.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-srg.jar')) continue;

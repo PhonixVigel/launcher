@@ -242,7 +242,7 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.0.8';
+const LAUNCHER_CURRENT_VERSION = '3.0.9';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();

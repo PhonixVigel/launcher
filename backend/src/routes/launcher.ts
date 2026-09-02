@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.0.8',
-      releaseNotes: latestRelease?.release_notes || 'Официальное обновление лаунчера VozduCraft v3.0.8',
+      latestVersion: latestRelease?.version || config?.value || '3.0.9',
+      releaseNotes: latestRelease?.release_notes || 'Официальное обновление лаунчера VozduCraft v3.0.9 (Поддержка чистой установки процессоров)',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       isMandatory: latestRelease ? latestRelease.is_mandatory === 1 : true
