@@ -480,6 +480,49 @@ router.delete('/modpack/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
+// POST /api/v1/admin/modpack/bulk-delete - Массовое удаление модов
+router.post('/modpack/bulk-delete', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Список ID модов не предоставлен' });
+    }
+
+    const db = await getDb();
+    const placeholders = ids.map(() => '?').join(',');
+    await db.run(`DELETE FROM modpack_files WHERE id IN (${placeholders})`, ids);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'MOD_BULK_DELETE', `${ids.length} модов`, `Массово удалено ${ids.length} модов`, req.ip || '');
+
+    return res.json({ success: true, deletedCount: ids.length });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка массового удаления модов' });
+  }
+});
+
+// POST /api/v1/admin/modpack/bulk-set-optional - Массовая смена опциональности модов
+router.post('/modpack/bulk-set-optional', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { ids, is_optional } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Список ID модов не предоставлен' });
+    }
+
+    const targetOpt = is_optional ? 1 : 0;
+    const db = await getDb();
+    const placeholders = ids.map(() => '?').join(',');
+    await db.run(`UPDATE modpack_files SET is_optional = ? WHERE id IN (${placeholders})`, [targetOpt, ...ids]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'MOD_BULK_OPTIONAL', `${ids.length} модов`, `Установлен статус опциональности (${targetOpt}) для ${ids.length} модов`, req.ip || '');
+
+    return res.json({ success: true, updatedCount: ids.length, is_optional: targetOpt });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка массового изменения статуса опциональности' });
+  }
+});
+
 // PATCH /api/v1/admin/modpack/:id/toggle-optional - Переключение статуса опциональности
 router.patch('/modpack/:id/toggle-optional', requireAdmin, async (req: Request, res: Response) => {
   try {

@@ -165,11 +165,27 @@
               <div class="mods-stats-badge" id="mods-count-badge">Всего модов: 0</div>
             </div>
 
+            <!-- Плавающая панель массовых действий с модами -->
+            <div class="mods-bulk-bar" id="mods-bulk-bar">
+              <div class="bulk-info">
+                <span>Выбрано модов: <strong id="selected-mods-count" style="color: #38bdf8; font-size: 16px;">0</strong></span>
+              </div>
+              <div class="bulk-actions-group">
+                <button class="btn-danger btn-sm" id="btn-bulk-delete-mods">🗑️ Удалить выбранные</button>
+                <button class="btn-secondary btn-sm" id="btn-bulk-set-optional">⚙️ Сделать опциональными</button>
+                <button class="btn-secondary btn-sm" id="btn-bulk-set-required">🔒 Сделать обязательными</button>
+                <button class="btn-secondary btn-sm" id="btn-bulk-deselect-all">✖️ Снять выбор</button>
+              </div>
+            </div>
+
             <!-- Список модов в таблице -->
             <div class="table-container glass-panel">
               <table class="data-table">
                 <thead>
                   <tr>
+                    <th style="width: 40px; text-align: center;">
+                      <input type="checkbox" id="th-mod-select-all" class="styled-checkbox" title="Выбрать все моды">
+                    </th>
                     <th>Файл / Имя Мода</th>
                     <th>Размер</th>
                     <th>Тип</th>
@@ -503,7 +519,7 @@
           </div>
 
           <!-- Вкладка 7: Мобильные байпасы (PojavLauncher / телефоны) -->
-          <div class="tab-content" id="tab-bypasses">
+          <div class="dashboard-tab" id="tab-bypasses">
             <div class="tab-header">
               <div>
                 <h2 class="tab-title">📱 Мобильные байпасы (Вход без официального лаунчера)</h2>
@@ -544,23 +560,23 @@
                 <div class="table-container-scroll">
                   <table class="data-table">
                     <thead>
-                      <tr>
-                        <th>Игрок</th>
-                        <th>Причина</th>
-                        <th>Кем выдан</th>
-                        <th>Истекает</th>
-                        <th>Действие</th>
-                      </tr>
-                    </thead>
-                    <tbody id="bypasses-table-body"></tbody>
-                  </table>
-                </div>
-              </div>
+                  <tr>
+                    <th>Игрок</th>
+                    <th>Причина</th>
+                    <th>Кем выдан</th>
+                    <th>Истекает</th>
+                    <th>Действие</th>
+                  </tr>
+                </thead>
+                <tbody id="bypasses-table-body"></tbody>
+              </table>
             </div>
           </div>
+        </div>
+      </div>
 
           <!-- Вкладка 8: Скрытый дебаг лаунчеров игроков (хранение 3 дня) -->
-          <div class="tab-content" id="tab-debug-logs">
+          <div class="dashboard-tab" id="tab-debug-logs">
             <div class="tab-header">
               <div>
                 <h2 class="tab-title">🔍 Дебаг лаунчеров игроков</h2>
@@ -599,7 +615,7 @@
           </div>
 
           <!-- Вкладка 9: Краш-репорты Minecraft (/crash-reports, хранение 3 дня) -->
-          <div class="tab-content" id="tab-crash-reports">
+          <div class="dashboard-tab" id="tab-crash-reports">
             <div class="tab-header">
               <div>
                 <h2 class="tab-title">💥 Логи крашей Minecraft</h2>

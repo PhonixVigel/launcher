@@ -7,6 +7,8 @@ const state = {
   servers: [],
   currentServerId: 1,
   currentModpack: [],
+  selectedModIds: new Set(),
+  renderedModIds: [],
   bans: [],
   releases: [],
   stats: {}
@@ -426,11 +428,35 @@ async function deleteServer(serverId) {
 // ----------------------------------------------------
 // 4. УПРАВЛЕНИЕ МОДАМИ СБОРКИ
 // ----------------------------------------------------
+function updateBulkBar() {
+  const bulkBar = document.getElementById('mods-bulk-bar');
+  const countEl = document.getElementById('selected-mods-count');
+  const thSelectAll = document.getElementById('th-mod-select-all');
+  const totalVisible = state.renderedModIds ? state.renderedModIds.length : 0;
+  const selectedCount = state.selectedModIds.size;
+
+  if (countEl) countEl.textContent = selectedCount;
+  if (bulkBar) {
+    if (selectedCount > 0) bulkBar.classList.add('visible');
+    else bulkBar.classList.remove('visible');
+  }
+
+  if (thSelectAll) {
+    thSelectAll.checked = (totalVisible > 0 && selectedCount === totalVisible);
+    thSelectAll.indeterminate = (selectedCount > 0 && selectedCount < totalVisible);
+  }
+}
+
 function setupModpackControls() {
   const dropzone = document.getElementById('mod-dropzone');
   const fileInput = document.getElementById('file-input-mod');
   const browseBtn = document.getElementById('btn-browse-files');
   const searchInput = document.getElementById('search-local-mods');
+  const thSelectAll = document.getElementById('th-mod-select-all');
+  const btnBulkDelete = document.getElementById('btn-bulk-delete-mods');
+  const btnBulkOptional = document.getElementById('btn-bulk-set-optional');
+  const btnBulkRequired = document.getElementById('btn-bulk-set-required');
+  const btnBulkDeselect = document.getElementById('btn-bulk-deselect-all');
 
   browseBtn.addEventListener('click', () => fileInput.click());
 
@@ -457,6 +483,98 @@ function setupModpackControls() {
     const query = e.target.value.toLowerCase().trim();
     filterLocalMods(query);
   });
+
+  // Выбрать / снять все моды
+  if (thSelectAll) {
+    thSelectAll.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        state.renderedModIds.forEach(id => state.selectedModIds.add(id));
+      } else {
+        state.renderedModIds.forEach(id => state.selectedModIds.delete(id));
+      }
+      document.querySelectorAll('.mod-checkbox').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateBulkBar();
+    });
+  }
+
+  // Массовое удаление выбранных модов
+  if (btnBulkDelete) {
+    btnBulkDelete.addEventListener('click', async () => {
+      const ids = Array.from(state.selectedModIds);
+      if (ids.length === 0) return;
+      if (confirm(`Вы уверены, что хотите удалить выбранные моды (${ids.length} шт.) из сборки сервера?`)) {
+        try {
+          const res = await fetch(`${API_BASE}/api/v1/admin/modpack/bulk-delete`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ ids })
+          });
+          const data = await res.json();
+          if (data.success) {
+            state.selectedModIds.clear();
+            await loadModpack();
+          } else {
+            alert('Ошибка: ' + (data.error || 'Не удалось удалить моды'));
+          }
+        } catch (err) {
+          alert('Ошибка соединения с сервером: ' + err.message);
+        }
+      }
+    });
+  }
+
+  // Массовый перевод в опциональные
+  if (btnBulkOptional) {
+    btnBulkOptional.addEventListener('click', async () => {
+      const ids = Array.from(state.selectedModIds);
+      if (ids.length === 0) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/modpack/bulk-set-optional`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ids, is_optional: 1 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          await loadModpack();
+        }
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
+    });
+  }
+
+  // Массовый перевод в обязательные
+  if (btnBulkRequired) {
+    btnBulkRequired.addEventListener('click', async () => {
+      const ids = Array.from(state.selectedModIds);
+      if (ids.length === 0) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/modpack/bulk-set-optional`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ids, is_optional: 0 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          await loadModpack();
+        }
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
+    });
+  }
+
+  // Снять всё выделение
+  if (btnBulkDeselect) {
+    btnBulkDeselect.addEventListener('click', () => {
+      state.selectedModIds.clear();
+      document.querySelectorAll('.mod-checkbox').forEach(cb => cb.checked = false);
+      updateBulkBar();
+    });
+  }
 }
 
 async function loadModpack() {
@@ -477,18 +595,26 @@ function renderModpackTable(files) {
   const badge = document.getElementById('mods-count-badge');
   if (!tbody) return;
 
+  state.renderedModIds = files.map(f => f.id);
+
   if (badge) badge.textContent = `Всего модов: ${files.length}`;
   tbody.innerHTML = '';
 
   if (files.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 30px;">В сборке этого сервера пока нет модов. Перетащите файлы сюда или добавьте из Modrinth.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">В сборке этого сервера пока нет модов. Перетащите файлы сюда или добавьте из Modrinth.</td></tr>';
+    updateBulkBar();
     return;
   }
 
   files.forEach(file => {
     const tr = document.createElement('tr');
     const sizeMb = (file.size_bytes / (1024 * 1024)).toFixed(2);
+    const isChecked = state.selectedModIds.has(file.id);
+
     tr.innerHTML = `
+      <td style="text-align: center;">
+        <input type="checkbox" class="mod-checkbox styled-checkbox" data-id="${file.id}" ${isChecked ? 'checked' : ''}>
+      </td>
       <td>
         <div class="mod-title-cell">${file.mod_name || file.filepath}</div>
         <div class="mod-path-sub">${file.filepath}</div>
@@ -505,6 +631,19 @@ function renderModpackTable(files) {
       </td>
     `;
     tbody.appendChild(tr);
+  });
+
+  // Чекбоксы выбора строк
+  document.querySelectorAll('.mod-checkbox').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const id = parseInt(e.target.dataset.id, 10);
+      if (e.target.checked) {
+        state.selectedModIds.add(id);
+      } else {
+        state.selectedModIds.delete(id);
+      }
+      updateBulkBar();
+    });
   });
 
   document.querySelectorAll('.btn-toggle-opt').forEach(b => {
@@ -526,10 +665,13 @@ function renderModpackTable(files) {
           method: 'DELETE',
           headers: getAuthHeaders()
         });
+        state.selectedModIds.delete(parseInt(id, 10));
         loadModpack();
       }
     });
   });
+
+  updateBulkBar();
 }
 
 function filterLocalMods(query) {
@@ -1515,7 +1657,7 @@ async function loadDebugLogs() {
         <td style="color: var(--text-secondary); font-size: 12px;">${((l.size || 0) / 1024).toFixed(1)} КБ</td>
         <td>
           <button class="btn-secondary btn-sm btn-view-debug" data-id="${l.id}" data-user="${l.username}" data-time="${l.created_at}">👁️ Просмотр</button>
-          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/debug-logs/${l.id}/download" target="_blank" style="text-decoration: none; display: inline-block;">💾 .log</a>
+          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/debug-logs/${l.id}/download?token=${encodeURIComponent(state.token || localStorage.getItem('vozducraft_admin_token') || '')}" target="_blank" style="text-decoration: none; display: inline-block;">💾 .log</a>
           <button class="btn-danger btn-sm btn-del-debug" data-id="${l.id}">🗑️</button>
         </td>
       </tr>
@@ -1577,7 +1719,7 @@ async function loadCrashReports() {
         <td style="color: var(--text-secondary); font-size: 12px;">${((c.size || 0) / 1024).toFixed(1)} КБ</td>
         <td>
           <button class="btn-secondary btn-sm btn-view-crash" data-id="${c.id}" data-user="${c.username}" data-file="${c.crash_filename}">👁️ Просмотр</button>
-          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/crash-reports/${c.id}/download" target="_blank" style="text-decoration: none; display: inline-block;">💾 .txt</a>
+          <a class="btn-secondary btn-sm" href="${API_BASE}/api/v1/admin/crash-reports/${c.id}/download?token=${encodeURIComponent(state.token || localStorage.getItem('vozducraft_admin_token') || '')}" target="_blank" style="text-decoration: none; display: inline-block;">💾 .txt</a>
           <button class="btn-danger btn-sm btn-del-crash" data-id="${c.id}">🗑️</button>
         </td>
       </tr>
@@ -1638,9 +1780,10 @@ async function openLogViewer(type, id, user, metaInfo) {
   metaEl.textContent = `Игрок: ${user} • ${metaInfo}`;
   contentEl.textContent = 'Загрузка содержимого...';
 
+  const token = state.token || localStorage.getItem('vozducraft_admin_token') || '';
   const downloadUrl = type === 'debug' 
-    ? `${API_BASE}/api/v1/admin/debug-logs/${id}/download`
-    : `${API_BASE}/api/v1/admin/crash-reports/${id}/download`;
+    ? `${API_BASE}/api/v1/admin/debug-logs/${id}/download?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/api/v1/admin/crash-reports/${id}/download?token=${encodeURIComponent(token)}`;
 
   if (downloadLink) downloadLink.href = downloadUrl;
 
