@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.1.8',
-      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.1.8 (Автосинхронизация модов и конфигов сервера)',
+      latestVersion: latestRelease?.version || config?.value || '3.1.9',
+      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.1.9 (Удаление server-side мода Vanishmod и улучшенная выгрузка крашлогов)',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,

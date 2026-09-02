@@ -753,7 +753,51 @@ rm -f "$0"
 
       function reportCrashToServer(code, errDetail) {
         try {
+          const crashReportsDir = path.join(gamePath, 'crash-reports');
+          let latestCrashContent = '';
+          let latestCrashFilename = '';
+
+          if (fs.existsSync(crashReportsDir)) {
+            try {
+              const files = fs.readdirSync(crashReportsDir).filter(f => f.startsWith('crash-') && f.endsWith('.txt'));
+              if (files.length > 0) {
+                files.sort((a, b) => {
+                  return fs.statSync(path.join(crashReportsDir, b)).mtimeMs - fs.statSync(path.join(crashReportsDir, a)).mtimeMs;
+                });
+                latestCrashFilename = files[0];
+                const crashPath = path.join(crashReportsDir, latestCrashFilename);
+                latestCrashContent = fs.readFileSync(crashPath, 'utf8');
+
+                // Отправляем специальный краш-репорт в /crash-report
+                const crashPayload = JSON.stringify({
+                  username: username,
+                  os: isWin ? 'Windows' : 'macOS',
+                  server_id: launchData?.serverId || 1,
+                  crash_filename: latestCrashFilename,
+                  report_content: latestCrashContent
+                });
+
+                const crashReq = http.request({
+                  hostname: '185.221.213.43',
+                  port: 3000,
+                  path: '/api/v1/launcher/crash-report',
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(crashPayload)
+                  }
+                }, () => {});
+                crashReq.on('error', () => {});
+                crashReq.write(crashPayload);
+                crashReq.end();
+              }
+            } catch (_) {}
+          }
+
           let logContent = `Exit Code: ${code}\nDetail: ${errDetail || 'None'}\nJava Path: ${javaBinaryPath}\n`;
+          if (latestCrashFilename) {
+            logContent += `\n--- CRASH REPORT: ${latestCrashFilename} ---\n` + latestCrashContent.slice(0, 15000) + '\n';
+          }
           try {
             if (fs.existsSync(gameLogFile)) {
               logContent += '\n--- GAME LOG (LAST 8KB) ---\n' + fs.readFileSync(gameLogFile, 'utf8').slice(-8000);
@@ -769,7 +813,7 @@ rm -f "$0"
           const payload = JSON.stringify({
             username: username,
             os: isWin ? 'Windows' : 'macOS',
-            launcher_version: app.getVersion() || '3.1.2',
+            launcher_version: app.getVersion() || '3.1.9',
             event_type: 'CRASH',
             log_content: logContent
           });
