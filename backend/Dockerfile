@@ -30,9 +30,8 @@ RUN npm ci --only=production
 # Копируем скомпилированный код бэкенда
 COPY --from=builder /app/dist ./dist
 
-# Копируем публичные веб-интерфейсы (Web Admin UI и Player UI)
+# Копируем веб-интерфейс администратора (Web Admin UI)
 COPY public/admin/ ./public/admin/
-COPY public/player/ ./public/player/
 
 # Создаем директории для постоянных данных (Persistent Volumes)
 RUN mkdir -p /app/data /app/public/files/mods /app/public/files/launchers
