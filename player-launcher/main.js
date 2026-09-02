@@ -265,7 +265,7 @@ rm -f "$0"
 
     try {
       sendStatus(5, 'Подготовка автономного запуска VozduCraft...');
-      const targetNeoForgeVer = '21.1.234';
+      const targetNeoForgeVer = '21.1.248';
       const targetMcVer = '1.21.1';
 
       // 1. Поиск или подгрузка Eclipse Adoptium Temurin 21
@@ -448,7 +448,9 @@ rm -f "$0"
       const neoForgeClientJarPath = path.join(gamePath, `neoforge-${targetNeoForgeVer}-client.jar`);
       if (!fs.existsSync(neoForgeClientJarPath)) {
         sendStatus(85, `Загрузка NeoForge Client...`);
-        await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-21.1.234-client.jar`, neoForgeClientJarPath, null).catch(() => {});
+        await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(async () => {
+          await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(() => {});
+        });
       }
 
       // Скачивание ForgeWrapper
@@ -461,11 +463,11 @@ rm -f "$0"
       }
 
       // Скачивание NeoForge Installer
-      const forgewrapperInstallerJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', '21.1.234', 'neoforge-21.1.234-installer.jar');
+      const forgewrapperInstallerJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-installer.jar`);
       if (!fs.existsSync(forgewrapperInstallerJar) || fs.statSync(forgewrapperInstallerJar).size < 1000) {
         fs.mkdirSync(path.dirname(forgewrapperInstallerJar), { recursive: true });
-        await downloadFile('https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.234/neoforge-21.1.234-installer.jar', forgewrapperInstallerJar, null).catch(async () => {
-          await downloadFile('http://185.221.213.43:3000/files/launchers/neoforge-21.1.234-installer.jar', forgewrapperInstallerJar, null).catch(() => {});
+        await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-installer.jar`, forgewrapperInstallerJar, null).catch(async () => {
+          await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-installer.jar`, forgewrapperInstallerJar, null).catch(() => {});
         });
       }
 
@@ -480,7 +482,7 @@ rm -f "$0"
         const pLower = p.toLowerCase().replace(/\\/g, '/');
         if (pLower.includes('binarypatcher') || pLower.includes('autorenamingtool') || pLower.includes('installertools') || pLower.includes('jarsplitter') || pLower.includes('cli-utils') || pLower.includes('specialsource') || pLower.includes('srgutils') || pLower.includes('neoform-1.21.1')) continue;
         if (pLower.includes('gson-2.8.9')) continue;
-        if (pLower.includes('neoforge-21.1.234-universal.jar')) continue;
+        if (pLower.includes('-universal.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-srg.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-extra.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-slim.jar')) continue;
