@@ -304,20 +304,20 @@ async function initDbSchema(db: Database) {
     `);
   }
 
-  // Обязательная регистрация релиза 3.1.3
-  const r313 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.1.3'");
-  if (!r313) {
+  // Обязательная регистрация релиза 3.1.4
+  const r314 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.1.4'");
+  if (!r314) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, mac_download_url, win_download_url, is_mandatory, created_at)
       VALUES 
-        ('3.1.3', 'Финальный релиз v3.1.3: устранение дублирования модулей client и minecraft', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
+        ('3.1.4', 'Финальный релиз v3.1.4: отключение fmlearlywindow и запуск окна игры', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
     `);
   }
-  await db.run("UPDATE project_config SET value = '3.1.3' WHERE key = 'launcher_version'");
+  await db.run("UPDATE project_config SET value = '3.1.4' WHERE key = 'launcher_version'");
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.1.3',
+    'launcher_version': '3.1.4',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

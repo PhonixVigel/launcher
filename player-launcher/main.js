@@ -553,8 +553,13 @@ rm -f "$0"
         `-Dneoforge.stage=client`,
         `-Dneoforge.version=${targetNeoForgeVer}`,
         `-Dneoforge.modsDir=${modsPath}`,
+        `-Dneoforge.earlyWindow=false`,
+        `-Dfml.earlyWindow=false`,
         `-Dneoforge.earlydisplay=false`,
         `-Dfml.earlydisplay=false`,
+        `-Dneoforge.earlyWindow.enabled=false`,
+        `-Dfml.earlyWindow.enabled=false`,
+        `-Dneoforge.display.enabled=false`,
         `-cp`,
         classpath
       ];
@@ -577,6 +582,7 @@ rm -f "$0"
         `--fml.mcVersion`, `1.21.1`,
         `--neoFormVersion`, `20240808.144430`,
         `--fml.neoFormVersion`, `20240808.144430`,
+        `--fml.earlyWindow=false`,
         `--launchTarget`, `forgeclient`
       ];
 
