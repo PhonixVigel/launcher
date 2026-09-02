@@ -471,6 +471,116 @@ rm -f "$0"
         });
       }
 
+      // 3.5. Синхронизация файлов модпака и модов с сервера
+      sendStatus(86, 'Синхронизация модов и конфигов сборки...');
+      const serverId = launchData?.serverId || 1;
+      const apiBase = launchData?.apiBaseUrl || 'http://185.221.213.43:3000/api/v1';
+      const manifestUrl = `${apiBase.replace(/\/+$/, '')}/manifest?serverId=${serverId}`;
+      
+      try {
+        const manifestData = await new Promise((resolve) => {
+          const u = new URL(manifestUrl);
+          const httpLib = u.protocol === 'https:' ? require('https') : require('http');
+          httpLib.get(manifestUrl, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+              try { resolve(JSON.parse(body)); } catch (_) { resolve(null); }
+            });
+          }).on('error', () => resolve(null));
+        });
+
+        if (manifestData) {
+          const selectedOpts = launchData?.selectedOptionalMods || launchData?.optionalMods || [];
+          const filesToSync = [];
+
+          if (Array.isArray(manifestData.files)) {
+            manifestData.files.forEach(f => filesToSync.push({ ...f, isOpt: false }));
+          }
+          if (Array.isArray(manifestData.optionalFiles)) {
+            manifestData.optionalFiles.forEach(f => {
+              if (selectedOpts.includes(f.filepath)) {
+                filesToSync.push({ ...f, isOpt: true });
+              } else {
+                const targetPath = path.join(gamePath, f.filepath);
+                if (fs.existsSync(targetPath)) {
+                  try { fs.unlinkSync(targetPath); } catch (_) {}
+                }
+              }
+            });
+          }
+
+          logToDisk(`К синхронизации: ${filesToSync.length} файлов сборки`);
+          const allowedModFiles = new Set();
+          let syncedCount = 0;
+          const modQueue = [...filesToSync];
+          const modConcurrency = 12;
+
+          async function modWorker() {
+            while (modQueue.length > 0) {
+              const fileItem = modQueue.shift();
+              if (!fileItem) break;
+              
+              const relPath = fileItem.filepath;
+              const targetPath = path.join(gamePath, relPath);
+              allowedModFiles.add(path.basename(relPath).toLowerCase());
+
+              let downloadUrl = fileItem.download_url || '';
+              if (downloadUrl.includes('localhost:3000')) {
+                downloadUrl = downloadUrl.replace('http://localhost:3000', 'http://185.221.213.43:3000');
+              } else if (downloadUrl.startsWith('/')) {
+                downloadUrl = `http://185.221.213.43:3000${downloadUrl}`;
+              }
+
+              if (downloadUrl) {
+                try {
+                  let needDownload = true;
+                  if (fs.existsSync(targetPath)) {
+                    if (fileItem.size_bytes && fs.statSync(targetPath).size === fileItem.size_bytes) {
+                      needDownload = false;
+                    }
+                  }
+
+                  if (needDownload) {
+                    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+                    await downloadFile(downloadUrl, targetPath, null).catch(e => {
+                      logToDisk(`[Mod Sync Error] ${fileItem.filepath}: ${e.message}`);
+                    });
+                  }
+                } catch (e) {
+                  logToDisk(`[Mod Sync Warning] ${fileItem.filepath}: ${e.message}`);
+                }
+              }
+
+              syncedCount++;
+              if (syncedCount % 5 === 0 || syncedCount === filesToSync.length) {
+                const pct = 86 + Math.floor((syncedCount / Math.max(1, filesToSync.length)) * 4);
+                sendStatus(pct, `[Синхронизация модов] ${syncedCount}/${filesToSync.length}`);
+              }
+            }
+          }
+
+          const modWorkers = [];
+          for (let i = 0; i < Math.min(modConcurrency, filesToSync.length); i++) {
+            modWorkers.push(modWorker());
+          }
+          await Promise.all(modWorkers);
+
+          // 🛡️ Античит: очистка папки mods от посторонних .jar
+          if (fs.existsSync(modsPath)) {
+            const localMods = fs.readdirSync(modsPath);
+            for (const file of localMods) {
+              if (file.endsWith('.jar') && !allowedModFiles.has(file.toLowerCase())) {
+                logToDisk(`🛡️ Удален посторонний файл из mods: ${file}`);
+                try { fs.unlinkSync(path.join(modsPath, file)); } catch (_) {}
+              }
+            }
+          }
+        }
+      } catch (err) {
+        logToDisk(`[Modpack Sync Error] ${err.message}`);
+      }
+
       // 4. Формирование Classpath
       sendStatus(90, 'Построение путей и запуск FML...');
       const modulePathEntries = [];
