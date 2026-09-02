@@ -529,7 +529,7 @@ rm -f "$0"
       const validUuid = generateValidUuid(username);
       const macFlags = isMac ? ['-XstartOnFirstThread'] : [];
       const mainClass = 'io.github.zekerzhayard.forgewrapper.installer.Main';
-      const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;client-1.21.1-20240808.144430-extra.jar,neoforge-${targetNeoForgeVer}-client.jar;minecraft-1.21.1-client.jar,neoforge-${targetNeoForgeVer}-client.jar`;
+      const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;client-1.21.1-20240808.144430-extra.jar,neoforge-${targetNeoForgeVer}-client.jar`;
 
       const jvmArgs = [
         `-Dforgewrapper.minecraft=${mcJarPath}`,
@@ -648,7 +648,7 @@ rm -f "$0"
           const payload = JSON.stringify({
             username: username,
             os: isWin ? 'Windows' : 'macOS',
-            launcher_version: '3.0.6',
+            launcher_version: app.getVersion() || '3.1.2',
             event_type: 'CRASH',
             log_content: logContent
           });
@@ -698,7 +698,7 @@ rm -f "$0"
         const payload = JSON.stringify({
           username: launchData?.username || 'Player',
           os: isWin ? 'Windows' : 'macOS',
-          launcher_version: '3.0.6',
+          launcher_version: app.getVersion() || '3.1.2',
           event_type: 'CRASH',
           log_content: `Launcher Exception: ${err.message}\nStack: ${err.stack}`
         });
