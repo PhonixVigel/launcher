@@ -389,90 +389,35 @@ function showUpdateModal(data) {
           else window.open(downloadUrl, '_blank');
         }
       } 
-      // 2. Для Electron на Windows
+      // 2. Для Electron на Windows / macOS (Скоростной микро-патч ASAR 4.4 МБ)
       else if (window.require) {
         try {
           const electron = window.require('electron');
-          const fs = window.require('fs');
-          const path = window.require('path');
-          const http = window.require('http');
-          const https = window.require('https');
-          const os = window.require('os');
+          const asarUrl = data.asarDownloadUrl || data.patchUrl || 'http://185.221.213.43:3000/files/launchers/app.asar';
 
-          logDebug('Запуск фоновой загрузки обновления Windows...');
-          const isExe = downloadUrl.toLowerCase().endsWith('.exe');
-          const destFile = path.join(os.tmpdir(), isExe ? 'VozduCraft-Update.exe' : 'VozduCraft-Update.zip');
-          const fileStream = fs.createWriteStream(destFile);
+          logDebug(`⚡ Запуск микро-обновления лаунчера (размер ~4 МБ): ${asarUrl}`);
+          if (statusText) statusText.textContent = '⚡ Скачивание микро-обновления (~4 МБ)...';
 
-          const client = downloadUrl.startsWith('https') ? https : http;
-
-          const req = client.get(downloadUrl, (res) => {
-            if (res.statusCode === 301 || res.statusCode === 302) {
-              const redirectUrl = res.headers.location;
-              electron.shell.openExternal(redirectUrl || downloadUrl);
-              return;
-            }
-
-            const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-            let downloadedBytes = 0;
-
-            res.on('data', (chunk) => {
-              downloadedBytes += chunk.length;
-              if (totalBytes > 0) {
-                const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
-                const mbNow = (downloadedBytes / (1024 * 1024)).toFixed(1);
-                const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
-                if (progressBar) progressBar.style.width = `${pct}%`;
-                if (percentText) percentText.textContent = `${pct}%`;
-                if (detailsText) detailsText.textContent = `Скачано: ${mbNow} МБ из ${mbTotal} МБ (${pct}%)`;
-              }
-            });
-
-            res.pipe(fileStream);
-
-            fileStream.on('finish', () => {
-              fileStream.close(() => {
-                if (progressBar) progressBar.style.width = '100%';
-                if (percentText) percentText.textContent = '100%';
-                if (statusText) statusText.textContent = '⚡ Применение обновления...';
-                if (detailsText) detailsText.textContent = 'Лаунчер обновляется и автоматически перезапустится...';
-
-                sendTelemetry('UPDATE_SUCCESS', 'Обновление Windows скачано, запуск фонового обновления', { destFile });
-
-                if (destFile.toLowerCase().endsWith('.exe')) {
-                  const { spawn } = window.require('child_process');
-                  try {
-                    // Запуск установщика с таймаутом 1 сек для освобождения файлов текущим процессом
-                    const installer = spawn('cmd.exe', ['/c', `timeout /t 1 /nobreak >nul & "${destFile}" /S`], {
-                      detached: true,
-                      stdio: 'ignore',
-                      windowsHide: true
-                    });
-                    installer.unref();
-
-                    setTimeout(() => {
-                      const electronApp = window.require('electron').remote?.app || window.require('@electron/remote')?.app;
-                      if (electronApp) electronApp.exit(0);
-                      else if (window.require('process')) window.require('process').exit(0);
-                      else window.close();
-                    }, 400);
-                  } catch (e) {
-                    electron.shell.openPath(destFile);
-                  }
-                } else {
-                  electron.shell.openPath(destFile);
-                }
-              });
-            });
+          electron.ipcRenderer.on('update-progress', (evt, prog) => {
+            const pct = prog.percent || 0;
+            const mbNow = ((prog.downloaded || 0) / (1024 * 1024)).toFixed(1);
+            const mbTotal = ((prog.total || 0) / (1024 * 1024)).toFixed(1);
+            if (progressBar) progressBar.style.width = `${pct}%`;
+            if (percentText) percentText.textContent = `${pct}%`;
+            if (detailsText) detailsText.textContent = `Скачано: ${mbNow} МБ из ${mbTotal} МБ (${pct}%)`;
           });
 
-          req.on('error', (err) => {
-            logDebug(`Ошибка загрузки: ${err.message}. Открываем в браузере...`);
-            sendTelemetry('UPDATE_ERROR', 'Ошибка загрузки обновления Windows', { error: err.message, downloadUrl });
+          electron.ipcRenderer.invoke('apply-micro-update', { asarUrl }).then(() => {
+            if (progressBar) progressBar.style.width = '100%';
+            if (percentText) percentText.textContent = '100%';
+            if (statusText) statusText.textContent = '✅ Патч применен! Перезапуск...';
+            if (detailsText) detailsText.textContent = 'Лаунчер обновлен и сейчас откроется...';
+          }).catch((err) => {
+            logDebug(`Микро-обновление не удалось (${err.message}). Переход на полный установщик...`);
             electron.shell.openExternal(downloadUrl);
           });
         } catch (e) {
-          logDebug('Electron download fallback: ' + e.message);
+          logDebug('Electron micro-updater error: ' + e.message);
           if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
           else window.open(downloadUrl, '_blank');
         }

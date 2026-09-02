@@ -156,6 +156,86 @@ function createWindow() {
   ipcMain.on('window-close', () => { app.quit(); });
   ipcMain.on('window-minimize', () => { if (mainWindow) mainWindow.minimize(); });
 
+  // Автономный микро-агент обновления (ASAR Hot-Patching)
+  ipcMain.handle('apply-micro-update', async (event, { asarUrl }) => {
+    logToDisk(`⚡ Запуск микро-обновления app.asar: ${asarUrl}`);
+    try {
+      const resourcesDir = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
+      const currentAsar = path.join(resourcesDir, 'app.asar');
+      const newAsar = path.join(resourcesDir, 'app.asar.update');
+
+      if (!fs.existsSync(resourcesDir)) {
+        throw new Error(`Директория resources не найдена: ${resourcesDir}`);
+      }
+
+      // 1. Скачивание пакета обновления (~4 МБ)
+      await downloadFile(asarUrl, newAsar, (downloaded, total) => {
+        const pct = total > 0 ? Math.round((downloaded / total) * 100) : 50;
+        if (mainWindow) mainWindow.webContents.send('update-progress', { percent: pct, downloaded, total });
+      });
+
+      logToDisk(`Пакет app.asar.update скачан (${fs.statSync(newAsar).size} байт). Запуск отдельного агента обновления...`);
+
+      // 2. Генерация и запуск выделенного агента обновления
+      if (isWin) {
+        const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.bat');
+        const scriptContent = `@echo off
+chcp 65001 >nul
+echo [VozduCraft Update Agent] Ожидание завершения основного процесса...
+timeout /t 1 /nobreak >nul
+taskkill /F /PID ${process.pid} >nul 2>&1
+timeout /t 1 /nobreak >nul
+echo [VozduCraft Update Agent] Применение микро-патча...
+copy /Y "${newAsar}" "${currentAsar}" >nul 2>&1
+del /F /Q "${newAsar}" >nul 2>&1
+echo [VozduCraft Update Agent] Перезапуск лаунчера...
+start "" "${process.execPath}"
+del "%~f0"
+`;
+        fs.writeFileSync(agentScript, scriptContent, 'utf8');
+
+        const child = spawn('cmd.exe', ['/c', agentScript], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        });
+        child.unref();
+
+        setTimeout(() => {
+          app.exit(0);
+        }, 300);
+
+        return { success: true };
+      } else {
+        const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.sh');
+        const scriptContent = `#!/bin/bash
+sleep 1
+kill -9 ${process.pid} 2>/dev/null
+cp -f "${newAsar}" "${currentAsar}"
+rm -f "${newAsar}"
+open "${process.execPath.split('/Contents/MacOS')[0]}"
+rm -f "$0"
+`;
+        fs.writeFileSync(agentScript, scriptContent, { mode: 0o755 });
+
+        const child = spawn('/bin/bash', [agentScript], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.unref();
+
+        setTimeout(() => {
+          app.exit(0);
+        }, 300);
+
+        return { success: true };
+      }
+    } catch (err) {
+      logToDisk(`[Ошибка микро-обновления] ${err.message}`);
+      throw err;
+    }
+  });
+
   // 100% СТАБИЛЬНЫЙ ДВИЖОК BOOTSTRAPLAUNCHER 1.21.1
   ipcMain.on('execute-launch', async (event, launchData) => {
     logToDisk('=== СТАРТ ПРОЦЕССА ПОДГОТОВКИ И ЗАПУСКА VOZDUCRAFT BOOTSTRAPLAUNCHER ULTIMATE ===');
