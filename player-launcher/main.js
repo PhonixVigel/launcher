@@ -179,25 +179,26 @@ function createWindow() {
       // 2. Генерация и запуск выделенного агента обновления
       if (isWin) {
         const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.bat');
+        const vbsScript = path.join(os.tmpdir(), 'vozducraft_update_runner.vbs');
         const scriptContent = `@echo off
 chcp 65001 >nul
-echo [VozduCraft Update Agent] Ожидание завершения основного процесса...
 timeout /t 1 /nobreak >nul
 taskkill /F /PID ${process.pid} >nul 2>&1
 timeout /t 1 /nobreak >nul
-echo [VozduCraft Update Agent] Применение микро-патча...
 copy /Y "${newAsar}" "${currentAsar}" >nul 2>&1
 del /F /Q "${newAsar}" >nul 2>&1
-echo [VozduCraft Update Agent] Перезапуск лаунчера...
 start "" "${process.execPath}"
 del "%~f0"
 `;
         fs.writeFileSync(agentScript, scriptContent, 'utf8');
 
-        const child = spawn('cmd.exe', ['/c', agentScript], {
+        // Скрытый запуск через VBScript без мигания консоли
+        const vbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.Run chr(34) & "${agentScript.replace(/\\/g, '\\\\')}" & chr(34), 0, False\n`;
+        fs.writeFileSync(vbsScript, vbsContent, 'utf8');
+
+        const child = spawn('wscript.exe', [vbsScript], {
           detached: true,
-          stdio: 'ignore',
-          windowsHide: true
+          stdio: 'ignore'
         });
         child.unref();
 
@@ -499,16 +500,12 @@ rm -f "$0"
         jvmCpEntries.push(fwJar);
       }
       const extraJar = path.join(libsDir, 'net', 'minecraft', 'client', '1.21.1-20240808.144430', 'client-1.21.1-20240808.144430-extra.jar');
-      if (fs.existsSync(extraJar)) {
-        jvmCpEntries.push(extraJar);
-      }
+      jvmCpEntries.push(extraJar);
+
       const nfClientJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-client.jar`);
-      if (fs.existsSync(nfClientJar)) {
-        jvmCpEntries.push(nfClientJar);
-      }
-      if (fs.existsSync(mcJarPath)) {
-        jvmCpEntries.push(mcJarPath);
-      }
+      jvmCpEntries.push(nfClientJar);
+
+      jvmCpEntries.push(mcJarPath);
       
       const pathSeparator = isWin ? ';' : ':';
       
