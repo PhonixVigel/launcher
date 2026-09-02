@@ -480,14 +480,21 @@ rm -f "$0"
         const p = lib.dest;
         if (!fs.existsSync(p)) continue;
         const pLower = p.toLowerCase().replace(/\\/g, '/');
-        if (pLower.includes('binarypatcher') || pLower.includes('autorenamingtool') || pLower.includes('installertools') || pLower.includes('jarsplitter') || pLower.includes('cli-utils') || pLower.includes('specialsource') || pLower.includes('srgutils') || pLower.includes('neoform-1.21.1')) continue;
-        if (pLower.includes('gson-2.8.9')) continue;
-        if (pLower.includes('-universal.jar')) continue;
-        if (pLower.includes('client-1.21.1-20240808.144430-srg.jar')) continue;
-        if (pLower.includes('client-1.21.1-20240808.144430-extra.jar')) continue;
-        if (pLower.includes('client-1.21.1-20240808.144430-slim.jar')) continue;
-        if (pLower.includes('minecraft-1.21.1-client.jar')) continue;
-        if (pLower.includes('minecraft-1.21.1.jar')) continue;
+        if (
+          pLower.includes('universal') ||
+          pLower.includes('installer') ||
+          pLower.includes('net/neoforged/neoforge/') ||
+          pLower.includes('net/minecraft/client/') ||
+          pLower.includes('binarypatcher') || 
+          pLower.includes('autorenamingtool') || 
+          pLower.includes('installertools') || 
+          pLower.includes('jarsplitter') || 
+          pLower.includes('cli-utils') || 
+          pLower.includes('specialsource') || 
+          pLower.includes('srgutils') || 
+          pLower.includes('neoform') ||
+          pLower.includes('gson-2.8.9')
+        ) continue;
         
         if (
           pLower.includes('cpw/mods/bootstraplauncher') || 
