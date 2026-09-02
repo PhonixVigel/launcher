@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.1.4',
-      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.1.4 (Отключение fmlearlywindow и прямой запуск)',
+      latestVersion: latestRelease?.version || config?.value || '3.1.5',
+      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.1.5 (Точная синхронизация с архитектурой Prism Launcher)',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
