@@ -482,7 +482,10 @@ rm -f "$0"
         if (pLower.includes('gson-2.8.9')) continue;
         if (pLower.includes('neoforge-21.1.234-universal.jar')) continue;
         if (pLower.includes('client-1.21.1-20240808.144430-srg.jar')) continue;
+        if (pLower.includes('client-1.21.1-20240808.144430-extra.jar')) continue;
+        if (pLower.includes('client-1.21.1-20240808.144430-slim.jar')) continue;
         if (pLower.includes('minecraft-1.21.1-client.jar')) continue;
+        if (pLower.includes('minecraft-1.21.1.jar')) continue;
         
         if (
           pLower.includes('cpw/mods/bootstraplauncher') || 
@@ -499,13 +502,6 @@ rm -f "$0"
       if (fs.existsSync(fwJar)) {
         jvmCpEntries.push(fwJar);
       }
-      const extraJar = path.join(libsDir, 'net', 'minecraft', 'client', '1.21.1-20240808.144430', 'client-1.21.1-20240808.144430-extra.jar');
-      jvmCpEntries.push(extraJar);
-
-      const nfClientJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-client.jar`);
-      jvmCpEntries.push(nfClientJar);
-
-      jvmCpEntries.push(mcJarPath);
       
       const pathSeparator = isWin ? ';' : ':';
       
