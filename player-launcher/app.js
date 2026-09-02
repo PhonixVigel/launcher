@@ -242,7 +242,7 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.1.9';
+const LAUNCHER_CURRENT_VERSION = '3.2.0';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();
@@ -863,6 +863,16 @@ function launchSelectedServer(server) {
     autoJoinServer: server.auto_join_server !== undefined ? server.auto_join_server : 1,
     apiBaseUrl: CURRENT_API_BASE
   };
+
+  // Регистрация активного билета входа на мастер-сервере VozduCraft Security
+  try {
+    const nick = appState.username || 'PhonixVogel';
+    fetch(`${CURRENT_API_BASE}/launcher/session-ticket`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: nick })
+    }).catch(() => {});
+  } catch (_) {}
 
   if (window.nativeLaunchGame) {
     try {

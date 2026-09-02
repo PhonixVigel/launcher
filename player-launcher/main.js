@@ -834,6 +834,30 @@ rm -f "$0"
         } catch (_) {}
       }
 
+      // Создание защищенного билета сессии на мастер-сервере VozduCraft Security
+      try {
+        const ticketPayload = JSON.stringify({ username: username });
+        const ticketReq = http.request({
+          hostname: '185.221.213.43',
+          port: 3000,
+          path: '/api/v1/launcher/session-ticket',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(ticketPayload)
+          }
+        }, (ticketRes) => {
+          logToDisk(`[SECURITY TICKET] Ответ сервера безопасности: HTTP ${ticketRes.statusCode}`);
+        });
+        ticketReq.on('error', (err) => {
+          logToDisk(`[SECURITY TICKET] Ошибка запроса билета: ${err.message}`);
+        });
+        ticketReq.write(ticketPayload);
+        ticketReq.end();
+      } catch (err) {
+        logToDisk(`[SECURITY TICKET] Исключение: ${err.message}`);
+      }
+
       const mcProcess = require('child_process').spawn(javaBinaryPath, finalArgs, { cwd: gamePath, shell: false, env: process.env });
       mcProcess.stdout?.on('data', (data) => {
         const str = data.toString();

@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.1.9',
-      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.1.9 (Удаление server-side мода Vanishmod и улучшенная выгрузка крашлогов)',
+      latestVersion: latestRelease?.version || config?.value || '3.2.0',
+      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.2.0 (Автоматическая авторизация билета безопасности VozduCraft Security)',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
@@ -167,14 +167,14 @@ router.post('/session-ticket', async (req: Request, res: Response) => {
 
     const crypto = await import('crypto');
     const ticketId = 'VOZDUCRAFT_TICKET_' + crypto.randomBytes(16).toString('hex');
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 минут на вход
 
+    await db.run('DELETE FROM launcher_tickets WHERE LOWER(username) = LOWER(?)', [cleanNick]);
     await db.run(
-      'INSERT INTO launcher_tickets (id, username, ip_address, expires_at) VALUES (?, ?, ?, ?)',
-      [ticketId, cleanNick, req.ip || '', expiresAt]
+      "INSERT INTO launcher_tickets (id, username, ip_address, expires_at) VALUES (?, ?, ?, datetime('now', '+1 day'))",
+      [ticketId, cleanNick, req.ip || '']
     );
 
-    return res.json({ success: true, ticket: ticketId, expiresInSeconds: 300 });
+    return res.json({ success: true, ticket: ticketId, expiresInSeconds: 86400 });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to create session ticket' });
   }
