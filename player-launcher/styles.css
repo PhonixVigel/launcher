@@ -477,17 +477,14 @@ body.has-custom-bg {
   background-attachment: fixed !important;
 }
 
-body.has-custom-bg::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(10, 12, 16, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  z-index: -1;
+body.has-custom-bg .app-container {
+  background: rgba(7, 8, 16, 0.65) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+body.has-custom-bg .titlebar {
+  background: rgba(10, 12, 22, 0.75) !important;
 }
 
 /* CAROUSEL WRAPPER & SLIDER */

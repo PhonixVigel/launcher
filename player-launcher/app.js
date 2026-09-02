@@ -242,7 +242,7 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.2.0';
+const LAUNCHER_CURRENT_VERSION = '3.2.1';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();
@@ -897,7 +897,9 @@ async function loadScreenshots() {
 
   try {
     let shots = [];
-    if (window.nativeGetScreenshots) {
+    if (window.ipcRenderer) {
+      shots = await window.ipcRenderer.invoke('get-screenshots');
+    } else if (window.nativeGetScreenshots) {
       const res = window.nativeGetScreenshots();
       shots = typeof res === 'string' ? JSON.parse(res) : res;
     }
@@ -916,7 +918,7 @@ async function loadScreenshots() {
       card.innerHTML = `
         <div class="screenshot-thumb-wrap">
           <img src="${shot.data}" alt="${shot.filename}">
-          <button class="btn-copy-screenshot" data-index="${index}" title="Скопировать в буфер">📋 Скопировать</button>
+          <button class="btn-copy-screenshot" data-index="${index}" title="Скопировать изображение">📋 Скопировать</button>
         </div>
         <div class="screenshot-meta">
           <span class="screenshot-name">${shot.filename}</span>
@@ -941,7 +943,17 @@ async function loadScreenshots() {
   }
 }
 
-function copyScreenshot(shot) {
+async function copyScreenshot(shot) {
+  if (window.ipcRenderer && shot.path) {
+    try {
+      const res = await window.ipcRenderer.invoke('copy-image-to-clipboard', shot.path);
+      if (res && res.success) {
+        showToast('📋 Скриншот скопирован в буфер обмена!');
+        return;
+      }
+    } catch (_) {}
+  }
+
   if (window.nativeCopyImageToClipboard) {
     window.nativeCopyImageToClipboard({ path: shot.path });
     showToast('📋 Скриншот скопирован в буфер обмена!');

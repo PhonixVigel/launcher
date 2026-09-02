@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard, nativeImage } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -920,6 +920,59 @@ rm -f "$0"
 
     if (!fs.existsSync(targetPath)) fs.mkdirSync(targetPath, { recursive: true });
     shell.openPath(targetPath);
+  });
+
+  // Получение списка скриншотов из .vozducraft/screenshots
+  ipcMain.handle('get-screenshots', async () => {
+    try {
+      const homeDir = app.getPath('home');
+      const screenshotsDir = path.join(homeDir, '.vozducraft', 'screenshots');
+      if (!fs.existsSync(screenshotsDir)) return [];
+
+      const files = fs.readdirSync(screenshotsDir).filter(f => {
+        const lower = f.toLowerCase();
+        return lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg');
+      });
+
+      files.sort((a, b) => {
+        const statA = fs.statSync(path.join(screenshotsDir, a));
+        const statB = fs.statSync(path.join(screenshotsDir, b));
+        return statB.mtimeMs - statA.mtimeMs;
+      });
+
+      const list = [];
+      for (const f of files.slice(0, 60)) {
+        try {
+          const fullPath = path.join(screenshotsDir, f);
+          const ext = path.extname(f).slice(1).toLowerCase() || 'png';
+          const dataBuf = fs.readFileSync(fullPath);
+          const base64 = dataBuf.toString('base64');
+          list.push({
+            filename: f,
+            path: fullPath,
+            data: `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${base64}`
+          });
+        } catch (_) {}
+      }
+      return list;
+    } catch (err) {
+      logToDisk(`[SCREENSHOTS ERROR] ${err.message}`);
+      return [];
+    }
+  });
+
+  // Копирование изображения в системный буфер обмена
+  ipcMain.handle('copy-image-to-clipboard', async (event, filePath) => {
+    try {
+      if (filePath && fs.existsSync(filePath)) {
+        const img = nativeImage.createFromPath(filePath);
+        clipboard.writeImage(img);
+        return { success: true };
+      }
+      return { success: false, error: 'File not found' };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   });
 }
 
