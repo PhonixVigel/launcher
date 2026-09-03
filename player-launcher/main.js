@@ -179,26 +179,55 @@ function createWindow() {
       // 2. Генерация и запуск выделенного агента обновления
       if (isWin) {
         const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.bat');
-        const vbsScript = path.join(os.tmpdir(), 'vozducraft_update_runner.vbs');
+        const updateLog = path.join(gamePath, 'update.log');
+        
+        // Надежный скрипт с циклом повторных попыток замены файла (до 30 попыток)
         const scriptContent = `@echo off
 chcp 65001 >nul
+setlocal enabledelayedexpansion
+
+echo === VOZDUCRAFT AUTO-UPDATER START [%date% %time%] === > "${updateLog}"
+
+:: Завершаем старый процесс лаунчера
+set LAUNCHER_PID=${process.pid}
+taskkill /F /PID !LAUNCHER_PID! >> "${updateLog}" 2>&1
 timeout /t 1 /nobreak >nul
-taskkill /F /PID ${process.pid} >nul 2>&1
-timeout /t 1 /nobreak >nul
-copy /Y "${newAsar}" "${currentAsar}" >nul 2>&1
-del /F /Q "${newAsar}" >nul 2>&1
+
+:: Цикл ожидания освобождения файла и перезаписи app.asar (до 30 попыток с задержкой)
+set RETRIES=0
+:retry_copy
+set /a RETRIES+=1
+echo [Попытка !RETRIES!/30] Копирование пакета обновления... >> "${updateLog}"
+
+copy /Y "${newAsar}" "${currentAsar}" >> "${updateLog}" 2>&1
+if errorlevel 1 (
+  if !RETRIES! leq 30 (
+    timeout /t 1 /nobreak >nul
+    goto retry_copy
+  ) else (
+    echo [ОШИБКА] Превышено количество попыток замены файла! >> "${updateLog}"
+  )
+) else (
+  echo [УСПЕХ] Файл app.asar успешно обновлен! >> "${updateLog}"
+)
+
+:: Удаляем временный скачанный пакет
+del /F /Q "${newAsar}" >> "${updateLog}" 2>&1
+
+:: Запускаем обновленный лаунчер
+echo [СТАРТ] Запуск обновленного лаунчера: "${process.execPath}" >> "${updateLog}"
 start "" "${process.execPath}"
-del "%~f0"
+
+:: Самоудаление батника
+(goto) 2>nul & del "%~f0"
 `;
         fs.writeFileSync(agentScript, scriptContent, 'utf8');
 
-        // Скрытый запуск через VBScript без мигания консоли
-        const vbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.Run chr(34) & "${agentScript.replace(/\\/g, '\\\\')}" & chr(34), 0, False\n`;
-        fs.writeFileSync(vbsScript, vbsContent, 'utf8');
-
-        const child = spawn('wscript.exe', [vbsScript], {
+        // Запуск через нативный cmd.exe с флагом windowsHide: true (без мигания консоли и без блокируемого VBScript)
+        const child = spawn('cmd.exe', ['/c', agentScript], {
           detached: true,
-          stdio: 'ignore'
+          stdio: 'ignore',
+          windowsHide: true
         });
         child.unref();
 
@@ -212,7 +241,12 @@ del "%~f0"
         const scriptContent = `#!/bin/bash
 sleep 1
 kill -9 ${process.pid} 2>/dev/null
-cp -f "${newAsar}" "${currentAsar}"
+for i in {1..20}; do
+  if cp -f "${newAsar}" "${currentAsar}"; then
+    break
+  fi
+  sleep 0.5
+done
 rm -f "${newAsar}"
 open "${process.execPath.split('/Contents/MacOS')[0]}"
 rm -f "$0"
