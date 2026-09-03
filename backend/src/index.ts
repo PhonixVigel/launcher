@@ -68,16 +68,173 @@ app.use('/api/v1/manifest', manifestRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/launcher', launcherRoutes);
 
-// Корневой проверщик статуса API
+// Корневой маршрут: красивый веб-лендинг скачивания лаунчера (или JSON при API-запросе)
 app.get('/', (req, res) => {
+  const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+  if (acceptsHtml) {
+    return res.send(`
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VozduCraft — Скачать лаунчер</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+    body {
+      background: #070810;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(251, 146, 60, 0.18) 0%, transparent 70%);
+      top: -100px;
+      left: 10%;
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.2) 0%, transparent 70%);
+      bottom: -100px;
+      right: 10%;
+      z-index: 0;
+    }
+    .card {
+      position: relative;
+      z-index: 1;
+      background: rgba(18, 22, 38, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 24px;
+      padding: 48px 36px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .logo {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #fb923c, #f43f5e, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #94a3b8;
+      font-size: 15px;
+      line-height: 1.5;
+      margin-bottom: 32px;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 24px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .btn-win {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(2, 132, 199, 0.3);
+    }
+    .btn-win:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(2, 132, 199, 0.45);
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+    }
+    .btn-mac {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .btn-mac:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      margin-bottom: 20px;
+    }
+    .footer-links {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 20px;
+    }
+    .footer-links a {
+      color: #94a3b8;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1</div>
+    <div class="logo">VOZDUCRAFT</div>
+    <div class="subtitle">Официальный игровой лаунчер с автоматической синхронизацией модов и Java</div>
+    
+    <div class="btn-group">
+      <a href="/files/launchers/VozduCraft-Windows-Setup.exe" class="btn btn-win">
+        🪟 Скачать для Windows (.exe)
+      </a>
+      <a href="/files/launchers/VozduCraft-macOS-Setup.dmg" class="btn btn-mac">
+        🍏 Скачать для macOS (.dmg)
+      </a>
+    </div>
+
+    <div class="footer-links">
+      <a href="/admin/">Панель администратора</a>
+    </div>
+  </div>
+</body>
+</html>
+    `);
+  }
   res.json({
     status: 'ONLINE',
     service: 'VozduCraft Launcher Backend API',
-    version: '1.0.0',
-    links: {
-      playerLauncher: 'http://185.221.213.43:3000/player/',
-      adminLauncher: 'http://185.221.213.43:3000/admin/',
-      serverAuthPluginJar: 'http://185.221.213.43:3000/files/vozducraft-auth-plugin.jar'
+    version: '3.2.2',
+    downloads: {
+      windows: 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe',
+      macos: 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg'
     }
   });
 });
