@@ -365,17 +365,21 @@ int main(int argc, char** argv) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1200));
 
 #if defined(__APPLE__)
+                    NSString* currentAppPath = [[NSBundle mainBundle] bundlePath];
+                    std::string appPathStr = [currentAppPath UTF8String];
+                    logToDebugFile("AutoUpdater", "Target running app bundle to replace in-place: " + appPathStr);
+
                     std::string updateScript = 
                         "(sleep 1 && "
                         "hdiutil detach /tmp/VozduCraftMount 2>/dev/null || true; "
                         "hdiutil detach /Volumes/VozduCraft 2>/dev/null || true; "
                         "mkdir -p /tmp/VozduCraftMount && "
                         "hdiutil attach \"" + destFile + "\" -nobrowse -mountpoint /tmp/VozduCraftMount && "
-                        "rm -rf /Applications/VozduCraft.app 2>/dev/null || true && "
-                        "cp -R /tmp/VozduCraftMount/VozduCraft.app /Applications/ && "
+                        "rm -rf \"" + appPathStr + "\" 2>/dev/null || true && "
+                        "cp -R /tmp/VozduCraftMount/VozduCraft.app \"" + appPathStr + "\" && "
                         "hdiutil detach /tmp/VozduCraftMount 2>/dev/null || true && "
-                        "open -n /Applications/VozduCraft.app) &";
-                    logToDebugFile("AutoUpdater", "Running macOS seamless update script: " + updateScript);
+                        "open -n \"" + appPathStr + "\") &";
+                    logToDebugFile("AutoUpdater", "Running macOS seamless in-place update script: " + updateScript);
                     system(updateScript.c_str());
                     exit(0);
 #elif defined(_WIN32)
