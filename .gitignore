@@ -31,3 +31,7 @@ Thumbs.db
 # Large Archives (>100MB)
 *.zip
 backend/public/files/launchers/*.zip
+dist_win/
+dist_mac/
+dist_mac_admin/
+

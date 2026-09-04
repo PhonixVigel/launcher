@@ -139,7 +139,32 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
   });
 }
 
+function ensureDesktopShortcut() {
+  if (!isWin) return;
+  try {
+    const desktopDir = app.getPath('desktop') || path.join(app.getPath('home'), 'Desktop');
+    const shortcutPath = path.join(desktopDir, 'VozduCraft.lnk');
+    const exePath = process.execPath;
+
+    if (fs.existsSync(desktopDir) && exePath.toLowerCase().endsWith('.exe')) {
+      const { exec } = require('child_process');
+      const psCmd = `$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}'); $s.TargetPath = '${exePath.replace(/'/g, "''")}'; $s.WorkingDirectory = '${path.dirname(exePath).replace(/'/g, "''")}'; $s.IconLocation = '${exePath.replace(/'/g, "''")},0'; $s.Description = 'VozduCraft Launcher'; $s.Save()`;
+      exec(`powershell -NoProfile -NonInteractive -Command "${psCmd}"`, (err) => {
+        if (!err) {
+          logToDisk(`✨ Ярлык VozduCraft создан/обновлен на Рабочем столе: ${shortcutPath}`);
+        } else {
+          logToDisk(`[Shortcut Error] ${err.message}`);
+        }
+      });
+    }
+  } catch (err) {
+    logToDisk(`[Shortcut Warning] ${err.message}`);
+  }
+}
+
 function createWindow() {
+  ensureDesktopShortcut();
+
   mainWindow = new BrowserWindow({
     width: 1050,
     height: 700,
@@ -163,6 +188,8 @@ function createWindow() {
       const resourcesDir = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
       const currentAsar = path.join(resourcesDir, 'app.asar');
       const newAsar = path.join(resourcesDir, 'app.asar.update');
+      const gamePath = path.join(app.getPath('home'), '.vozducraft');
+      if (!fs.existsSync(gamePath)) fs.mkdirSync(gamePath, { recursive: true });
 
       if (!fs.existsSync(resourcesDir)) {
         throw new Error(`Директория resources не найдена: ${resourcesDir}`);
