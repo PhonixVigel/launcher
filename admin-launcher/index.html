@@ -104,6 +104,10 @@
               <span class="nav-icon">💥</span>
               <span class="nav-text">Логи крашей</span>
             </button>
+            <button class="nav-item" data-tab="admins">
+              <span class="nav-icon">👑</span>
+              <span class="nav-text">Администраторы</span>
+            </button>
             <button class="nav-item" data-tab="analytics">
               <span class="nav-icon">📊</span>
               <span class="nav-text">Аналитика & Логи</span>
@@ -647,6 +651,40 @@
             </div>
           </div>
 
+          <!-- Вкладка 10: Управление администраторами и модераторами -->
+          <div class="dashboard-tab" id="tab-admins">
+            <div class="tab-header">
+              <div>
+                <h2 class="tab-title">👑 Администраторы & Модераторы</h2>
+                <p class="tab-subtitle">Управление доступом к панели управления, создание администраторов и моментальный отзыв прав</p>
+              </div>
+              <div class="header-actions">
+                <button class="btn-primary" id="btn-open-create-admin">➕ Добавить администратора</button>
+                <button class="btn-secondary" id="btn-refresh-admins">🔄 Обновить</button>
+              </div>
+            </div>
+
+            <div class="panel-card glass-panel">
+              <div class="table-container-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Никнейм</th>
+                      <th>Уровень доступа</th>
+                      <th>Последний IP</th>
+                      <th>Дата создания</th>
+                      <th>Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admins-table-body">
+                    <!-- Заполняется динамически -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </main>
       </div>
     </section>
@@ -889,6 +927,37 @@
     </div>
   </div>
 
-  <script src="app.js?v=7.0"></script>
+  <!-- Модальное окно создания / добавления администратора -->
+  <div class="modal-overlay hidden" id="modal-create-admin">
+    <div class="modal-card glass-panel" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">👑 Добавление администратора</h3>
+        <button class="modal-close" id="btn-close-create-admin">✕</button>
+      </div>
+      <form id="form-create-admin">
+        <div class="input-group">
+          <label for="admin-new-nick">Никнейм администратора</label>
+          <input type="text" id="admin-new-nick" placeholder="Например: Moderator2026" required autocomplete="off">
+        </div>
+        <div class="input-group">
+          <label for="admin-new-pwd">Пароль</label>
+          <input type="password" id="admin-new-pwd" placeholder="Минимум 6 символов" required minlength="6" autocomplete="new-password">
+        </div>
+        <div class="input-group">
+          <label for="admin-new-role">Уровень доступа (Роль)</label>
+          <select id="admin-new-role" class="styled-select">
+            <option value="ADMIN" selected>Главный администратор (Полный доступ)</option>
+            <option value="MODERATOR">Модератор (Просмотр логов, крашей, бан-лист)</option>
+          </select>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px;">
+          <button type="button" class="btn-secondary" id="btn-cancel-create-admin">Отмена</button>
+          <button type="submit" class="btn-primary">Сохранить администратора</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=8.0"></script>
 </body>
 </html>

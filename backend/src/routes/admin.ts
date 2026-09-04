@@ -4,13 +4,13 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import net from 'net';
-
-const router = Router();
-
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDiscordBotStatus, reloadDiscordBot, sendDiscordLoginRequest } from '../discordBot';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'VOZDUCRAFT_SUPER_SECURE_JWT_SECRET_2026';
+const router = Router();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'vozducraft_secret_key_2026_super_secure';
 
 // Middleware проверки прав администратора
 export const requireAdmin = async (req: Request, res: Response, next: Function) => {
@@ -47,7 +47,7 @@ export const requireAdmin = async (req: Request, res: Response, next: Function) 
     `, [token]);
 
     if (!session || (session.role !== 'ADMIN' && session.role !== 'MODERATOR')) {
-      return res.status(403).json({ error: 'Доступ запрещен. Требуются права администратора или модератора.' });
+      return res.status(401).json({ error: 'Доступ запрещен. Аккаунт был удален или сессия аннулирована.' });
     }
 
     (req as any).user = session;
@@ -58,19 +58,125 @@ export const requireAdmin = async (req: Request, res: Response, next: Function) 
 };
 
 // Функция записи в аудит-лог
-async function logAudit(actor: string, role: string, action: string, target: string, details: string, ip: string) {
+export async function logAudit(adminUser: string, adminRole: string, actionType: string, targetName: string, details: string, ipAddress: string) {
   try {
     const db = await getDb();
-    await db.run(`
-      INSERT INTO audit_logs (actor_username, actor_role, action_type, target, details, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [actor, role, action, target, details, ip]);
-  } catch (e) {
-    console.error('[AUDIT ERROR]', e);
+    await db.run(
+      'INSERT INTO audit_logs (admin_username, admin_role, action_type, target_name, details, ip_address) VALUES (?, ?, ?, ?, ?, ?)',
+      [adminUser, adminRole, actionType, targetName, details, ipAddress]
+    );
+  } catch (err) {
+    console.error('[AUDIT LOG ERROR]', err);
   }
 }
 
-// Прямой опрос статуса Minecraft сервера через нативный TCP Socket (Handshake Protocol)
+// ----------------------------------------------------
+// 0. ПРОВЕРКА ПРОФИЛЯ И УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ
+// ----------------------------------------------------
+
+// GET /api/v1/admin/me - Проверка статуса текущей сессии
+router.get('/me', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    return res.json({
+      authenticated: true,
+      user: {
+        username: user.username,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка проверки профиля' });
+  }
+});
+
+// GET /api/v1/admin/admins - Список всех администраторов и модераторов
+router.get('/admins', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    const admins = await db.all(`
+      SELECT id, username, role, last_ip, last_hwid, created_at 
+      FROM users 
+      WHERE role IN ('ADMIN', 'MODERATOR') 
+      ORDER BY id ASC
+    `);
+    return res.json({ admins: admins || [] });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения списка администраторов' });
+  }
+});
+
+// POST /api/v1/admin/admins - Добавление нового администратора или модератора
+router.post('/admins', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { username, password, role } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Никнейм и пароль обязательны' });
+    }
+    const cleanNick = username.trim();
+    if (cleanNick.length < 3 || cleanNick.length > 20) {
+      return res.status(400).json({ error: 'Никнейм должен быть от 3 до 20 символов' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Пароль должен содержать минимум 6 символов' });
+    }
+    const adminRole = role === 'MODERATOR' ? 'MODERATOR' : 'ADMIN';
+
+    const db = await getDb();
+    const existing = await db.get("SELECT id FROM users WHERE LOWER(username) = LOWER(?)", [cleanNick]);
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    if (existing) {
+      await db.run(
+        "UPDATE users SET password_hash = ?, role = ? WHERE id = ?",
+        [passwordHash, adminRole, existing.id]
+      );
+    } else {
+      await db.run(
+        "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+        [cleanNick, passwordHash, adminRole]
+      );
+    }
+
+    const currentAdmin = (req as any).user?.username || 'Admin';
+    await logAudit(currentAdmin, 'ADMIN', 'ADMIN_CREATE', cleanNick, `Создан/обновлен администратор с ролью ${adminRole}`, req.ip || '');
+
+    return res.json({ success: true, message: `Администратор ${cleanNick} (${adminRole}) успешно сохранен!` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка добавления администратора: ' + (error as Error).message });
+  }
+});
+
+// DELETE /api/v1/admin/admins/:id - Удаление администратора с немедленным сбросом всех его сессий
+router.delete('/admins/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const targetUser = await db.get("SELECT * FROM users WHERE id = ?", [id]);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    // Проверяем, не является ли это последним главным администратором
+    const adminCount = await db.get("SELECT COUNT(*) as cnt FROM users WHERE role = 'ADMIN'");
+    if (targetUser.role === 'ADMIN' && (adminCount?.cnt || 0) <= 1) {
+      return res.status(400).json({ error: 'Нельзя удалить единственного главного администратора системы' });
+    }
+
+    // 1. Удаляем пользователя из таблицы users
+    await db.run("DELETE FROM users WHERE id = ?", [id]);
+
+    // 2. Сбрасываем и удаляем ВСЕ активные сессии администратора
+    await db.run("DELETE FROM sessions WHERE LOWER(username) = LOWER(?)", [targetUser.username]);
+
+    const currentAdmin = (req as any).user?.username || 'Admin';
+    await logAudit(currentAdmin, 'ADMIN', 'ADMIN_DELETE', targetUser.username, `Удален администратор и немедленно сброшены все его активные сессии`, req.ip || '');
+
+    return res.json({ success: true, message: `Администратор ${targetUser.username} успешно удален, а его авторизация аннулирована!` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка удаления администратора: ' + (error as Error).message });
+  }
+});
 function tcpPingMinecraft(host: string, port: number): Promise<any> {
   return new Promise((resolve) => {
     const startTime = Date.now();

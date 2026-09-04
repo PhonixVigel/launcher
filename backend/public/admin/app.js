@@ -14,6 +14,42 @@ const state = {
   stats: {}
 };
 
+// Interceptor для перехвата 401/403 и немедленного сброса сессии при удалении аккаунта
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const response = await originalFetch.apply(this, args);
+  if ((response.status === 401 || response.status === 403) && state.token) {
+    handleAuthFailure('Ваш аккаунт был удален или авторизация аннулирована.');
+  }
+  return response;
+};
+
+function handleAuthFailure(message) {
+  localStorage.removeItem('vozducraft_admin_token');
+  localStorage.removeItem('vozducraft_admin_user');
+  state.token = '';
+  showScreen('screen-auth');
+  const alertEl = document.getElementById('auth-alert');
+  if (alertEl) {
+    alertEl.textContent = message || 'Доступ запрещен. Сессия аннулирована.';
+    alertEl.classList.remove('hidden');
+  }
+}
+
+function startAuthHeartbeat() {
+  setInterval(async () => {
+    if (!state.token) return;
+    try {
+      const res = await originalFetch(`${API_BASE}/api/v1/admin/me`, {
+        headers: { 'Authorization': `Bearer ${state.token}` }
+      });
+      if (res.status === 401 || res.status === 403) {
+        handleAuthFailure('Ваш аккаунт администратора был удален. Сессия сброшена.');
+      }
+    } catch (_) {}
+  }, 8000);
+}
+
 // ----------------------------------------------------
 // 1. ИНИЦИАЛИЗАЦИЯ И НАВИГАЦИЯ
 // ----------------------------------------------------
@@ -31,9 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupBypassesControls();
   setupDebugLogsControls();
   setupCrashReportsControls();
+  setupAdminsControls();
   setupLogViewerModal();
   setupChangePasswordModal();
   startClock();
+  startAuthHeartbeat();
 
   if (state.token) {
     showScreen('screen-admin');
@@ -81,6 +119,7 @@ function setupNavigation() {
       if (btn.dataset.tab === 'bypasses') loadBypasses();
       if (btn.dataset.tab === 'debug-logs') loadDebugLogs();
       if (btn.dataset.tab === 'crash-reports') loadCrashReports();
+      if (btn.dataset.tab === 'admins') loadAdmins();
       if (btn.dataset.tab === 'analytics') loadAnalytics();
     });
   });
@@ -88,10 +127,7 @@ function setupNavigation() {
   const logoutBtn = document.getElementById('btn-logout');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('vozducraft_admin_token');
-      localStorage.removeItem('vozducraft_admin_user');
-      state.token = '';
-      showScreen('screen-auth');
+      handleAuthFailure('Вы успешно вышли из системы');
     });
   }
 }
@@ -1823,4 +1859,143 @@ function debounce(func, wait) {
     clearTimeout(timeout);
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ----------------------------------------------------
+// 13. УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ И МОДЕРАТОРАМИ
+// ----------------------------------------------------
+
+function setupAdminsControls() {
+  const openModalBtn = document.getElementById('btn-open-create-admin');
+  const modal = document.getElementById('modal-create-admin');
+  const closeModalBtn = document.getElementById('btn-close-create-admin');
+  const cancelModalBtn = document.getElementById('btn-cancel-create-admin');
+  const refreshBtn = document.getElementById('btn-refresh-admins');
+  const form = document.getElementById('form-create-admin');
+
+  if (openModalBtn) {
+    openModalBtn.addEventListener('click', () => {
+      if (modal) modal.classList.remove('hidden');
+    });
+  }
+
+  const closeModal = () => {
+    if (modal) modal.classList.add('hidden');
+    if (form) form.reset();
+  };
+
+  if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+  if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      loadAdmins();
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('admin-new-nick').value.trim();
+      const password = document.getElementById('admin-new-pwd').value;
+      const role = document.getElementById('admin-new-role').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/admins`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ username, password, role })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'Администратор успешно сохранен!');
+          closeModal();
+          loadAdmins();
+        } else {
+          alert(data.error || 'Ошибка добавления администратора');
+        }
+      } catch (err) {
+        alert('Ошибка подключения к серверу: ' + err.message);
+      }
+    });
+  }
+}
+
+async function loadAdmins() {
+  const tbody = document.getElementById('admins-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Загрузка администраторов...</td></tr>';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/admins`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    const admins = data.admins || [];
+
+    if (admins.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Нет других администраторов</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = admins.map(a => {
+      const isMe = state.adminUser && a.username.toLowerCase() === state.adminUser.toLowerCase();
+      const roleBadge = a.role === 'ADMIN' 
+        ? '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">👑 Главный Администратор</span>'
+        : '<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">🛡️ Модератор</span>';
+
+      const dateStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU') : 'Не указана';
+
+      return `
+        <tr>
+          <td>#${a.id}</td>
+          <td><strong>${escapeHtml(a.username)}</strong> ${isMe ? '<span style="font-size: 11px; color: var(--primary);"> (Вы)</span>' : ''}</td>
+          <td>${roleBadge}</td>
+          <td>${escapeHtml(a.last_ip || '—')}</td>
+          <td>${dateStr}</td>
+          <td>
+            ${isMe ? '<span style="color: var(--text-muted); font-size: 12px;">Текущий аккаунт</span>' : `
+              <button class="btn-danger btn-sm btn-delete-admin" data-id="${a.id}" data-name="${escapeHtml(a.username)}">🗑️ Удалить доступ</button>
+            `}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('.btn-delete-admin').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const name = btn.dataset.name;
+        if (!confirm(`Вы действительно хотите удалить администратора "${name}"?\nЕго активная сессия будет немедленно сброшена, и доступ к панели заблокирован!`)) {
+          return;
+        }
+
+        try {
+          const delRes = await fetch(`${API_BASE}/api/v1/admin/admins/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const delData = await delRes.json();
+          if (delRes.ok) {
+            alert(delData.message || 'Администратор удален');
+            loadAdmins();
+          } else {
+            alert(delData.error || 'Ошибка удаления');
+          }
+        } catch (e) {
+          alert('Ошибка соединения: ' + e.message);
+        }
+      });
+    });
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Ошибка загрузки списка администраторов</td></tr>';
+  }
 }

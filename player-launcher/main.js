@@ -593,6 +593,91 @@ rm -f "$0"
         });
       }
 
+      // 3.4. Скачивание и синхронизация ассетов (языковые пакеты ru_ru, панорама главного меню, звуки, шрифты)
+      const assetsDir = path.join(gamePath, 'assets');
+      const indexesDir = path.join(assetsDir, 'indexes');
+      const objectsDir = path.join(assetsDir, 'objects');
+      const index17File = path.join(indexesDir, '17.json');
+
+      fs.mkdirSync(indexesDir, { recursive: true });
+      fs.mkdirSync(objectsDir, { recursive: true });
+
+      if (!fs.existsSync(index17File) || fs.statSync(index17File).size < 10000) {
+        sendStatus(76, 'Загрузка манифеста ресурсов Minecraft 1.21.1 (17.json)...');
+        const assetIndexUrl = mcMeta?.assetIndex?.url || 'https://piston-meta.mojang.com/v1/packages/84fb63f8ed4091fab26fb68b32f79dfecfae31d9/17.json';
+        await downloadFile(assetIndexUrl, index17File, null).catch(e => {
+          logToDisk(`[AssetIndex Warning] ${e.message}`);
+        });
+      }
+
+      if (fs.existsSync(index17File)) {
+        try {
+          const indexData = JSON.parse(fs.readFileSync(index17File, 'utf8'));
+          const assetObjects = indexData.objects || {};
+          const allAssetKeys = Object.keys(assetObjects);
+
+          // Список приоритетных ассетов (русский и другие языки, фон меню panorama_*.png, иконки, шрифты)
+          const assetsToDownload = [];
+          for (const key of allAssetKeys) {
+            const info = assetObjects[key];
+            if (!info || !info.hash) continue;
+            const sub = info.hash.slice(0, 2);
+            const targetDest = path.join(objectsDir, sub, info.hash);
+
+            if (!fs.existsSync(targetDest) || fs.statSync(targetDest).size !== info.size) {
+              const isEssential = key.startsWith('minecraft/lang/') || 
+                                  key.includes('title/background') || 
+                                  key.includes('font') ||
+                                  key.startsWith('icons/') ||
+                                  key === 'pack.mcmeta';
+              assetsToDownload.push({
+                key,
+                url: `https://resources.download.minecraft.net/${sub}/${info.hash}`,
+                dest: targetDest,
+                size: info.size,
+                isEssential
+              });
+            }
+          }
+
+          if (assetsToDownload.length > 0) {
+            logToDisk(`📦 Синхронизация ассетов (языки, текстуры меню): ${assetsToDownload.length} файлов`);
+            assetsToDownload.sort((a, b) => (b.isEssential ? 1 : 0) - (a.isEssential ? 1 : 0));
+
+            let downloadedAssets = 0;
+            const assetQueue = [...assetsToDownload];
+            const assetConcurrency = 24;
+
+            async function assetWorker() {
+              while (assetQueue.length > 0) {
+                const item = assetQueue.shift();
+                if (!item) break;
+                try {
+                  fs.mkdirSync(path.dirname(item.dest), { recursive: true });
+                  await downloadFile(item.url, item.dest, null);
+                } catch (e) {
+                  // Игнорируем единичные сетевые сбои неосновных звуков
+                }
+                downloadedAssets++;
+                if (downloadedAssets % 50 === 0 || downloadedAssets === assetsToDownload.length) {
+                  sendStatus(80, `[Ресурсы и Языки] ${downloadedAssets}/${assetsToDownload.length}`);
+                }
+              }
+            }
+
+            const assetWorkers = [];
+            const activeWorkers = Math.min(assetConcurrency, assetsToDownload.length);
+            for (let i = 0; i < activeWorkers; i++) {
+              assetWorkers.push(assetWorker());
+            }
+            await Promise.all(assetWorkers);
+            logToDisk(`✨ Все ассеты и языки Minecraft успешно синхронизированы!`);
+          }
+        } catch (err) {
+          logToDisk(`[Asset Sync Error] ${err.message}`);
+        }
+      }
+
       // 3.5. Синхронизация файлов модпака и модов с сервера
       sendStatus(86, 'Синхронизация модов и конфигов сборки...');
       const serverId = launchData?.serverId || 1;
@@ -898,32 +983,47 @@ rm -f "$0"
                 latestCrashFilename = files[0];
                 const crashPath = path.join(crashReportsDir, latestCrashFilename);
                 latestCrashContent = fs.readFileSync(crashPath, 'utf8');
-
-                // Отправляем специальный краш-репорт в /crash-report
-                const crashPayload = JSON.stringify({
-                  username: username,
-                  os: isWin ? 'Windows' : 'macOS',
-                  server_id: launchData?.serverId || 1,
-                  crash_filename: latestCrashFilename,
-                  report_content: latestCrashContent
-                });
-
-                const crashReq = http.request({
-                  hostname: '185.221.213.43',
-                  port: 3000,
-                  path: '/api/v1/launcher/crash-report',
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(crashPayload)
-                  }
-                }, () => {});
-                crashReq.on('error', () => {});
-                crashReq.write(crashPayload);
-                crashReq.end();
               }
             } catch (_) {}
           }
+
+          // Если внутри crash-reports не было файла, формируем отчет из вывода консоли игры
+          if (!latestCrashContent) {
+            latestCrashFilename = `crash-exit-code-${code}-${Date.now()}.txt`;
+            let generatedLog = `=== VOZDUCRAFT MINECRAFT CRASH/EXIT REPORT ===\n`;
+            generatedLog += `Username: ${username}\n`;
+            generatedLog += `Exit Code: ${code}\n`;
+            generatedLog += `Detail: ${errDetail || 'Game exited unexpectedly'}\n`;
+            generatedLog += `Java Binary: ${javaBinaryPath}\n`;
+            generatedLog += `Time: ${new Date().toISOString()}\n\n`;
+            if (fs.existsSync(gameLogFile)) {
+              generatedLog += `=== GAME CONSOLE OUTPUT ===\n` + fs.readFileSync(gameLogFile, 'utf8');
+            }
+            latestCrashContent = generatedLog;
+          }
+
+          // Всегда отправляем структурированный отчет в /api/v1/launcher/crash-report
+          const crashPayload = JSON.stringify({
+            username: username,
+            os: isWin ? 'Windows' : 'macOS',
+            server_id: launchData?.serverId || 1,
+            crash_filename: latestCrashFilename,
+            report_content: latestCrashContent
+          });
+
+          const crashReq = http.request({
+            hostname: '185.221.213.43',
+            port: 3000,
+            path: '/api/v1/launcher/crash-report',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(crashPayload, 'utf8')
+            }
+          }, () => {});
+          crashReq.on('error', () => {});
+          crashReq.write(crashPayload, 'utf8');
+          crashReq.end();
 
           let logContent = `Exit Code: ${code}\nDetail: ${errDetail || 'None'}\nJava Path: ${javaBinaryPath}\n`;
           if (latestCrashFilename) {
