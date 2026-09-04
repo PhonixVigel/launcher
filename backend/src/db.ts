@@ -304,22 +304,22 @@ async function initDbSchema(db: Database) {
     `);
   }
 
-  // Обязательная регистрация релиза 3.2.4
-  const r324 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.2.4'");
-  if (!r324) {
+  // Обязательная регистрация релиза 3.2.5
+  const r325 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.2.5'");
+  if (!r325) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, mac_download_url, win_download_url, is_mandatory, created_at)
       VALUES 
-        ('3.2.4', 'Финальный релиз v3.2.4: гарантированное in-place обновление файлов лаунчера на macOS', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
+        ('3.2.5', 'Финальный релиз v3.2.5: 100% рабочая галерея скриншотов с мульти-поиском и подписанный macOS бандл', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
     `);
   }
-  await db.run("UPDATE project_config SET value = '3.2.4' WHERE key = 'launcher_version'");
+  await db.run("UPDATE project_config SET value = '3.2.5' WHERE key = 'launcher_version'");
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
   await db.run("DELETE FROM modpack_files WHERE filepath LIKE '%vanishmod%' OR filepath LIKE '%Vanishmod%'");
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.2.4',
+    'launcher_version': '3.2.5',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

@@ -242,7 +242,7 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.2.4';
+const LAUNCHER_CURRENT_VERSION = '3.2.5';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();
@@ -900,11 +900,11 @@ async function loadScreenshots() {
     if (ipcRenderer) {
       shots = await ipcRenderer.invoke('get-screenshots');
     } else if (window.nativeGetScreenshots) {
-      const res = window.nativeGetScreenshots();
+      const res = await window.nativeGetScreenshots();
       shots = typeof res === 'string' ? JSON.parse(res) : res;
     }
 
-    currentScreenshots = shots || [];
+    currentScreenshots = Array.isArray(shots) ? shots : [];
     container.innerHTML = '';
 
     if (currentScreenshots.length === 0) {

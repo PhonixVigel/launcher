@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.2.4',
-      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.2.4 (Гарантированное in-place обновление файлов лаунчера на macOS и Windows)',
+      latestVersion: latestRelease?.version || config?.value || '3.2.5',
+      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.2.5 (100% рабочая галерея скриншотов с мульти-поиском и подписанный macOS бандл)',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,

@@ -965,34 +965,58 @@ rm -f "$0"
     shell.openPath(targetPath);
   });
 
-  // Получение списка скриншотов из .vozducraft/screenshots
+  // Получение списка скриншотов из .vozducraft/screenshots и связанных директорий
   ipcMain.handle('get-screenshots', async () => {
     try {
       const homeDir = app.getPath('home');
-      const screenshotsDir = path.join(homeDir, '.vozducraft', 'screenshots');
-      if (!fs.existsSync(screenshotsDir)) return [];
+      const searchDirs = [
+        path.join(homeDir, '.vozducraft', 'screenshots'),
+        path.join(homeDir, '.vozducraft', 'instances', 'VozduCraft Season #2', 'screenshots'),
+        path.join(homeDir, '.minecraft', 'screenshots'),
+        path.join(homeDir, 'AppData', 'Roaming', '.minecraft', 'screenshots'),
+        path.join(homeDir, 'AppData', 'Roaming', '.vozducraft', 'screenshots'),
+        path.join(homeDir, 'Library', 'Application Support', 'minecraft', 'screenshots')
+      ];
 
-      const files = fs.readdirSync(screenshotsDir).filter(f => {
-        const lower = f.toLowerCase();
-        return lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg');
-      });
+      const foundFiles = [];
+      const seenNames = new Set();
 
-      files.sort((a, b) => {
-        const statA = fs.statSync(path.join(screenshotsDir, a));
-        const statB = fs.statSync(path.join(screenshotsDir, b));
-        return statB.mtimeMs - statA.mtimeMs;
-      });
+      for (const dir of searchDirs) {
+        if (!fs.existsSync(dir)) continue;
+        try {
+          const files = fs.readdirSync(dir).filter(f => {
+            const lower = f.toLowerCase();
+            return lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg');
+          });
+
+          for (const f of files) {
+            const fullPath = path.join(dir, f);
+            try {
+              const stat = fs.statSync(fullPath);
+              if (stat.isFile() && !seenNames.has(f.toLowerCase())) {
+                seenNames.add(f.toLowerCase());
+                foundFiles.push({
+                  filename: f,
+                  path: fullPath,
+                  mtimeMs: stat.mtimeMs
+                });
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+
+      foundFiles.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
       const list = [];
-      for (const f of files.slice(0, 60)) {
+      for (const item of foundFiles.slice(0, 80)) {
         try {
-          const fullPath = path.join(screenshotsDir, f);
-          const ext = path.extname(f).slice(1).toLowerCase() || 'png';
-          const dataBuf = fs.readFileSync(fullPath);
+          const ext = path.extname(item.filename).slice(1).toLowerCase() || 'png';
+          const dataBuf = fs.readFileSync(item.path);
           const base64 = dataBuf.toString('base64');
           list.push({
-            filename: f,
-            path: fullPath,
+            filename: item.filename,
+            path: item.path,
             data: `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${base64}`
           });
         } catch (_) {}

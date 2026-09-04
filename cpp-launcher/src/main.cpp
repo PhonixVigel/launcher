@@ -420,15 +420,20 @@ int main(int argc, char** argv) {
         std::string homeDir = getenv("HOME") ? getenv("HOME") : "/tmp";
         std::vector<std::string> searchDirs = {
             homeDir + "/.vozducraft/screenshots",
+            homeDir + "/.vozducraft/instances/VozduCraft Season #2/screenshots",
+            homeDir + "/.minecraft/screenshots",
+            homeDir + "/Library/Application Support/minecraft/screenshots",
             homeDir + "/Library/Application Support/PrismLauncher/instances/VozduCraft Season #2/minecraft/screenshots"
         };
         json result = json::array();
+        std::vector<std::pair<fs::file_time_type, json>> items;
+
         for (const auto& dir : searchDirs) {
             if (fs::exists(dir) && fs::is_directory(dir)) {
                 for (const auto& entry : fs::directory_iterator(dir)) {
                     if (entry.is_regular_file()) {
                         std::string ext = entry.path().extension().string();
-                        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
+                        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".PNG") {
                             std::ifstream f(entry.path().string(), std::ios::binary);
                             if (f) {
                                 std::vector<unsigned char> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
@@ -451,12 +456,20 @@ int main(int argc, char** argv) {
                                 item["filename"] = entry.path().filename().string();
                                 item["path"] = entry.path().string();
                                 item["data"] = "data:image/png;base64," + b64;
-                                result.push_back(item);
+                                items.push_back({entry.last_write_time(), item});
                             }
                         }
                     }
                 }
             }
+        }
+
+        std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) {
+            return a.first > b.first;
+        });
+
+        for (const auto& p : items) {
+            result.push_back(p.second);
         }
         return result.dump();
     });
