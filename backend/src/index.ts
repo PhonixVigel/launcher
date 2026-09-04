@@ -213,7 +213,10 @@ app.get('/', (req, res) => {
     
     <div class="btn-group">
       <a href="/files/launchers/VozduCraft-Windows-Setup.exe" class="btn btn-win">
-        🪟 Скачать для Windows (.exe)
+        🪟 Скачать для Windows (.exe Установщик)
+      </a>
+      <a href="/files/launchers/VozduCraft-Windows.zip" class="btn btn-mac" style="font-size: 14px; padding: 12px 20px;">
+        📦 Скачать для Windows (.zip Портативная версия)
       </a>
       <a href="/files/launchers/VozduCraft-macOS-Setup.dmg" class="btn btn-mac">
         🍏 Скачать для macOS (.dmg)

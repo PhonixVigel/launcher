@@ -46,6 +46,26 @@ router.get('/', async (req: Request, res: Response) => {
     const files = await db.all("SELECT * FROM modpack_files WHERE server_id = ? AND is_optional = 0 ORDER BY mod_name ASC", [serverId]);
     const optionalFiles = await db.all("SELECT * FROM modpack_files WHERE server_id = ? AND is_optional = 1 ORDER BY mod_name ASC", [serverId]);
 
+    const baseHost = `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}`;
+
+    const normalizeFile = (f: any) => {
+      let downloadUrl = f.download_url || '';
+      if (!downloadUrl) {
+        downloadUrl = `${baseHost}/files/${f.filepath.replace(/^\/+/, '')}`;
+      } else if (downloadUrl.includes('localhost:3000') || downloadUrl.includes('127.0.0.1:3000')) {
+        downloadUrl = downloadUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1):3000/, baseHost);
+      } else if (downloadUrl.startsWith('/')) {
+        downloadUrl = `${baseHost}${downloadUrl}`;
+      }
+      return {
+        ...f,
+        download_url: downloadUrl
+      };
+    };
+
+    const normalizedFiles = (files || []).map(normalizeFile);
+    const normalizedOptionalFiles = (optionalFiles || []).map(normalizeFile);
+
     const jvmConfig = await db.get("SELECT value FROM project_config WHERE key = 'jvm_flags'");
 
     return res.json({
@@ -69,8 +89,8 @@ router.get('/', async (req: Request, res: Response) => {
       jvmFlags: targetServer?.jvm_flags || jvmConfig?.value || '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',
       gameArgs: targetServer?.game_args || '',
       autoJoinServer: targetServer?.auto_join_server !== undefined ? targetServer.auto_join_server : 1,
-      files: files || [],
-      optionalFiles: optionalFiles || []
+      files: normalizedFiles,
+      optionalFiles: normalizedOptionalFiles
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка сервера при получении манифеста' });

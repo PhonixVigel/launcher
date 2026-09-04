@@ -27,3 +27,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Large Archives (>100MB)
+*.zip
+backend/public/files/launchers/*.zip

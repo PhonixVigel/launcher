@@ -242,7 +242,7 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.2.2';
+const LAUNCHER_CURRENT_VERSION = '3.2.3';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();
@@ -897,8 +897,8 @@ async function loadScreenshots() {
 
   try {
     let shots = [];
-    if (window.ipcRenderer) {
-      shots = await window.ipcRenderer.invoke('get-screenshots');
+    if (ipcRenderer) {
+      shots = await ipcRenderer.invoke('get-screenshots');
     } else if (window.nativeGetScreenshots) {
       const res = window.nativeGetScreenshots();
       shots = typeof res === 'string' ? JSON.parse(res) : res;
@@ -944,9 +944,9 @@ async function loadScreenshots() {
 }
 
 async function copyScreenshot(shot) {
-  if (window.ipcRenderer && shot.path) {
+  if (ipcRenderer && shot.path) {
     try {
-      const res = await window.ipcRenderer.invoke('copy-image-to-clipboard', shot.path);
+      const res = await ipcRenderer.invoke('copy-image-to-clipboard', shot.path);
       if (res && res.success) {
         showToast('📋 Скриншот скопирован в буфер обмена!');
         return;

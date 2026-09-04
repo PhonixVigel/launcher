@@ -550,6 +550,8 @@ rm -f "$0"
           const modQueue = [...filesToSync];
           const modConcurrency = 12;
 
+          const masterHost = apiBase.replace(/\/api\/v1\/?$/, '');
+
           async function modWorker() {
             while (modQueue.length > 0) {
               const fileItem = modQueue.shift();
@@ -560,26 +562,33 @@ rm -f "$0"
               allowedModFiles.add(path.basename(relPath).toLowerCase());
 
               let downloadUrl = fileItem.download_url || '';
-              if (downloadUrl.includes('localhost:3000')) {
-                downloadUrl = downloadUrl.replace('http://localhost:3000', 'http://185.221.213.43:3000');
+              if (!downloadUrl) {
+                downloadUrl = `${masterHost}/files/${relPath.replace(/^\/+/, '')}`;
+              } else if (downloadUrl.includes('localhost:3000') || downloadUrl.includes('127.0.0.1:3000')) {
+                downloadUrl = downloadUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1):3000/, masterHost);
               } else if (downloadUrl.startsWith('/')) {
-                downloadUrl = `http://185.221.213.43:3000${downloadUrl}`;
+                downloadUrl = `${masterHost}${downloadUrl}`;
               }
 
               if (downloadUrl) {
                 try {
                   let needDownload = true;
                   if (fs.existsSync(targetPath)) {
-                    if (fileItem.size_bytes && fs.statSync(targetPath).size === fileItem.size_bytes) {
+                    const localSize = fs.statSync(targetPath).size;
+                    if (fileItem.size_bytes && localSize === fileItem.size_bytes && localSize > 0) {
                       needDownload = false;
                     }
                   }
 
                   if (needDownload) {
+                    logToDisk(`[Скачивание мода] ${relPath} (${fileItem.size_bytes || 0} B) с ${downloadUrl}...`);
                     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
                     await downloadFile(downloadUrl, targetPath, null).catch(e => {
                       logToDisk(`[Mod Sync Error] ${fileItem.filepath}: ${e.message}`);
                     });
+                    if (fs.existsSync(targetPath)) {
+                      logToDisk(`[Мод успешно скачан] ${relPath} (${fs.statSync(targetPath).size} B)`);
+                    }
                   }
                 } catch (e) {
                   logToDisk(`[Mod Sync Warning] ${fileItem.filepath}: ${e.message}`);
