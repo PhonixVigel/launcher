@@ -147,9 +147,18 @@ function ensureDesktopShortcut() {
     const exePath = process.execPath;
 
     if (fs.existsSync(desktopDir) && exePath.toLowerCase().endsWith('.exe')) {
+      const psScript = `
+$ws = New-Object -ComObject WScript.Shell
+$s = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}')
+$s.TargetPath = '${exePath.replace(/'/g, "''")}'
+$s.WorkingDirectory = '${path.dirname(exePath).replace(/'/g, "''")}'
+$s.IconLocation = '${exePath.replace(/'/g, "''")},0'
+$s.Description = 'VozduCraft Launcher'
+$s.Save()
+`;
+      const b64 = Buffer.from(psScript, 'utf16le').toString('base64');
       const { exec } = require('child_process');
-      const psCmd = `$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}'); $s.TargetPath = '${exePath.replace(/'/g, "''")}'; $s.WorkingDirectory = '${path.dirname(exePath).replace(/'/g, "''")}'; $s.IconLocation = '${exePath.replace(/'/g, "''")},0'; $s.Description = 'VozduCraft Launcher'; $s.Save()`;
-      exec(`powershell -NoProfile -NonInteractive -Command "${psCmd}"`, (err) => {
+      exec(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${b64}`, (err) => {
         if (!err) {
           logToDisk(`✨ Ярлык VozduCraft создан/обновлен на Рабочем столе: ${shortcutPath}`);
         } else {
@@ -187,7 +196,7 @@ function createWindow() {
     try {
       const resourcesDir = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
       const currentAsar = path.join(resourcesDir, 'app.asar');
-      const newAsar = path.join(resourcesDir, 'app.asar.update');
+      const tempAsar = path.join(os.tmpdir(), 'vozducraft_app.asar.update');
       const gamePath = path.join(app.getPath('home'), '.vozducraft');
       if (!fs.existsSync(gamePath)) fs.mkdirSync(gamePath, { recursive: true });
 
@@ -195,63 +204,72 @@ function createWindow() {
         throw new Error(`Директория resources не найдена: ${resourcesDir}`);
       }
 
-      // 1. Скачивание пакета обновления (~4 МБ)
-      await downloadFile(asarUrl, newAsar, (downloaded, total) => {
+      // 1. Скачивание пакета обновления (~24 МБ) в безопасный временный каталог
+      await downloadFile(asarUrl, tempAsar, (downloaded, total) => {
         const pct = total > 0 ? Math.round((downloaded / total) * 100) : 50;
         if (mainWindow) mainWindow.webContents.send('update-progress', { percent: pct, downloaded, total });
       });
 
-      logToDisk(`Пакет app.asar.update скачан (${fs.statSync(newAsar).size} байт). Запуск отдельного агента обновления...`);
+      logToDisk(`Пакет app.asar скачан (${fs.statSync(tempAsar).size} байт). Запуск автономного агента обновления...`);
 
       // 2. Генерация и запуск выделенного агента обновления
       if (isWin) {
-        const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.bat');
+        const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.ps1');
         const updateLog = path.join(gamePath, 'update.log');
         
-        // Надежный скрипт с циклом повторных попыток замены файла (до 30 попыток)
-        const scriptContent = `@echo off
-chcp 65001 >nul
-setlocal enabledelayedexpansion
+        // Надежный PowerShell скрипт с поддержкой UTF-8, кириллических путей и цикла замены
+        const psScript = `
+Start-Sleep -Milliseconds 600
 
-echo === VOZDUCRAFT AUTO-UPDATER START [%date% %time%] === > "${updateLog}"
+# 1. Завершаем работу старого процесса лаунчера
+try {
+    Stop-Process -Id ${process.pid} -Force -ErrorAction SilentlyContinue
+} catch {}
 
-:: Завершаем старый процесс лаунчера
-set LAUNCHER_PID=${process.pid}
-taskkill /F /PID !LAUNCHER_PID! >> "${updateLog}" 2>&1
-timeout /t 1 /nobreak >nul
+$source = '${tempAsar.replace(/'/g, "''")}'
+$dest = '${currentAsar.replace(/'/g, "''")}'
+$exe = '${process.execPath.replace(/'/g, "''")}'
+$log = '${updateLog.replace(/'/g, "''")}'
 
-:: Цикл ожидания освобождения файла и перезаписи app.asar (до 30 попыток с задержкой)
-set RETRIES=0
-:retry_copy
-set /a RETRIES+=1
-echo [Попытка !RETRIES!/30] Копирование пакета обновления... >> "${updateLog}"
+Add-Content -Path $log -Value "=== VOZDUCRAFT AUTO-UPDATER START ===" -Encoding UTF8 -ErrorAction SilentlyContinue
+$retries = 0
+$success = $false
 
-copy /Y "${newAsar}" "${currentAsar}" >> "${updateLog}" 2>&1
-if errorlevel 1 (
-  if !RETRIES! leq 30 (
-    timeout /t 1 /nobreak >nul
-    goto retry_copy
-  ) else (
-    echo [ОШИБКА] Превышено количество попыток замены файла! >> "${updateLog}"
-  )
-) else (
-  echo [УСПЕХ] Файл app.asar успешно обновлен! >> "${updateLog}"
-)
+while ($retries -lt 40) {
+    $retries++
+    Start-Sleep -Milliseconds 500
+    try {
+        Copy-Item -Path $source -Destination $dest -Force -ErrorAction Stop
+        $success = $true
+        Add-Content -Path $log -Value "[Попытка $retries] Успешно перезаписан app.asar" -Encoding UTF8 -ErrorAction SilentlyContinue
+        break
+    } catch {
+        Add-Content -Path $log -Value "[Попытка $retries] Ожидание освобождения файла: $_" -Encoding UTF8 -ErrorAction SilentlyContinue
+    }
+}
 
-:: Удаляем временный скачанный пакет
-del /F /Q "${newAsar}" >> "${updateLog}" 2>&1
+if ($success) {
+    Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
+    Add-Content -Path $log -Value "[СТАРТ] Запуск обновленного лаунчера: $exe" -Encoding UTF8 -ErrorAction SilentlyContinue
+    Start-Process -FilePath $exe
+} else {
+    Add-Content -Path $log -Value "[ОШИБКА] Превышено количество попыток замены app.asar" -Encoding UTF8 -ErrorAction SilentlyContinue
+}
 
-:: Запускаем обновленный лаунчер
-echo [СТАРТ] Запуск обновленного лаунчера: "${process.execPath}" >> "${updateLog}"
-start "" "${process.execPath}"
-
-:: Самоудаление батника
-(goto) 2>nul & del "%~f0"
+# Самоудаление скрипта обновления
+Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
 `;
-        fs.writeFileSync(agentScript, scriptContent, 'utf8');
+        // Записываем с UTF-8 BOM для безупречной работы PowerShell со всеми языками
+        fs.writeFileSync(agentScript, '\uFEFF' + psScript, 'utf8');
 
-        // Запуск через нативный cmd.exe с флагом windowsHide: true (без мигания консоли и без блокируемого VBScript)
-        const child = spawn('cmd.exe', ['/c', agentScript], {
+        // Запуск PowerShell скрипта в скрытом режиме без мерцания окон
+        const child = spawn('powershell.exe', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy', 'Bypass',
+          '-WindowStyle', 'Hidden',
+          '-File', agentScript
+        ], {
           detached: true,
           stdio: 'ignore',
           windowsHide: true
@@ -442,7 +460,9 @@ rm -f "$0"
           try { fs.unlinkSync(tempDest); } catch (_) {}
         } else if (isWin) {
           try {
-            execSync(`powershell -NoProfile -NonInteractive -Command "Expand-Archive -Force -Path '${tempDest}' -DestinationPath '${javaDir}'"`);
+            const psCmd = `Expand-Archive -Force -Path '${tempDest.replace(/'/g, "''")}' -DestinationPath '${javaDir.replace(/'/g, "''")}'`;
+            const b64 = Buffer.from(psCmd, 'utf16le').toString('base64');
+            execSync(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${b64}`);
           } catch (_) {
             execSync(`tar -xf "${tempDest}" -C "${javaDir}"`);
           }
