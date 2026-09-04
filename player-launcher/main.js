@@ -332,14 +332,40 @@ rm -f "$0"
       // 1. Поиск или подгрузка Eclipse Adoptium Temurin 21
       let javaBinaryPath = null;
 
+      function findExecutableRecursively(dir, names) {
+        if (!fs.existsSync(dir)) return null;
+        try {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              const found = findExecutableRecursively(full, names);
+              if (found) return found;
+            } else if (names.includes(entry.name.toLowerCase())) {
+              return full;
+            }
+          }
+        } catch (_) {}
+        return null;
+      }
+
       function findAdoptiumJava21() {
+        // 1. Проверяем локальную директорию лаунчера ~/.vozducraft/java
+        if (fs.existsSync(javaDir)) {
+          const localBin = findExecutableRecursively(javaDir, isWin ? ['javaw.exe', 'java.exe'] : ['java']);
+          if (localBin) return localBin;
+        }
+
+        // 2. Системные директории Windows с обязательной фильтрацией по версии 21
         if (isWin) {
           const searchRoots = [
             path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Eclipse Adoptium'),
             path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Eclipse Adoptium'),
+            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Java'),
+            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'BellSoft'),
+            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Zulu'),
             path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Eclipse Adoptium'),
-            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'AdoptOpenJDK'),
-            path.join(gamePath, 'java')
+            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'AdoptOpenJDK')
           ];
 
           for (const base of searchRoots) {
@@ -347,6 +373,8 @@ rm -f "$0"
             try {
               const entries = fs.readdirSync(base);
               for (const entry of entries) {
+                // Строго требуем наличие "21" в названии папки (например jdk-21, jre-21, 21.0.x)
+                if (!entry.includes('21')) continue;
                 const fullDir = path.join(base, entry);
                 try {
                   const stat = fs.statSync(fullDir);
@@ -361,19 +389,31 @@ rm -f "$0"
             } catch (_) {}
           }
 
-          if (process.env.JAVA_HOME && process.env.JAVA_HOME.toLowerCase().includes('adopt')) {
+          if (process.env.JAVA_HOME && process.env.JAVA_HOME.includes('21')) {
             const javaw = path.join(process.env.JAVA_HOME, 'bin', 'javaw.exe');
+            const java = path.join(process.env.JAVA_HOME, 'bin', 'java.exe');
             if (fs.existsSync(javaw)) return javaw;
+            if (fs.existsSync(java)) return java;
           }
         } else if (isMac) {
           const knownPaths = [
             '/Library/Java/JavaVirtualMachines/temurin-21.jre/Contents/Home/bin/java',
             '/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin/java',
-            path.join(gamePath, 'java', 'jdk-21.0.2+13/Contents/Home/bin/java')
+            '/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home/bin/java',
+            '/Library/Java/JavaVirtualMachines/liberica-jdk-21.jdk/Contents/Home/bin/java',
+            '/opt/homebrew/opt/openjdk@21/bin/java',
+            '/usr/local/opt/openjdk@21/bin/java'
           ];
           for (const p of knownPaths) {
             if (fs.existsSync(p)) return p;
           }
+          try {
+            const { execSync } = require('child_process');
+            const jh = execSync('/usr/libexec/java_home -v 21 2>/dev/null', { encoding: 'utf-8' }).trim();
+            if (jh && fs.existsSync(path.join(jh, 'bin', 'java'))) {
+              return path.join(jh, 'bin', 'java');
+            }
+          } catch (_) {}
         }
         return null;
       }
@@ -383,17 +423,18 @@ rm -f "$0"
         javaBinaryPath = foundJava;
         logToDisk(`✅ Обнаружена среда исполнения Eclipse Adoptium 21: ${javaBinaryPath}`);
       } else {
-        logToDisk('Среда Eclipse Adoptium 21 не найдена. Загрузка официального пакета Temurin 21 JDK...');
+        logToDisk('Среда Java 21 не найдена на устройстве. Загрузка официального пакета Temurin 21 JDK...');
         const javaUrl = isMac
           ? 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.2_13.tar.gz'
           : 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_x64_windows_hotspot_21.0.2_13.zip';
         const tempDest = path.join(os.tmpdir(), isMac ? 'temurin21.tar.gz' : 'temurin21.zip');
         
-        sendStatus(10, 'Загрузка Eclipse Adoptium Temurin 21 JDK...');
+        sendStatus(10, 'Загрузка Eclipse Adoptium Temurin 21 JDK (~190 МБ)...');
         await downloadFile(javaUrl, tempDest, (loaded, total) => {
-          sendStatus(Math.floor((loaded / total) * 10) + 10, `[Загрузка Adoptium 21] ${(loaded / 1024 / 1024).toFixed(1)} МБ`);
+          sendStatus(Math.floor((loaded / total) * 10) + 10, `[Загрузка Java 21] ${(loaded / 1024 / 1024).toFixed(1)} МБ`);
         });
 
+        sendStatus(20, 'Распаковка Java 21 JDK...');
         fs.mkdirSync(javaDir, { recursive: true });
         const { execSync } = require('child_process');
         if (isMac) {
@@ -401,14 +442,14 @@ rm -f "$0"
           try { fs.unlinkSync(tempDest); } catch (_) {}
         } else if (isWin) {
           try {
-            execSync(`powershell -Command "Expand-Archive -Force -Path '${tempDest}' -DestinationPath '${javaDir}'"`);
+            execSync(`powershell -NoProfile -NonInteractive -Command "Expand-Archive -Force -Path '${tempDest}' -DestinationPath '${javaDir}'"`);
           } catch (_) {
             execSync(`tar -xf "${tempDest}" -C "${javaDir}"`);
           }
           try { fs.unlinkSync(tempDest); } catch (_) {}
         }
 
-        const freshJava = findAdoptiumJava21();
+        const freshJava = findAdoptiumJava21() || findExecutableRecursively(javaDir, isWin ? ['javaw.exe', 'java.exe'] : ['java']);
         if (freshJava) {
           javaBinaryPath = freshJava;
           logToDisk(`✅ Установлена и готова к работе Eclipse Adoptium 21: ${javaBinaryPath}`);

@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.2.6',
-      releaseNotes: latestRelease?.release_notes || 'Официальный стабильный релиз VozduCraft v3.2.6 (Автоматическое создание постоянного ярлыка на Рабочем столе)',
+      latestVersion: latestRelease?.version || config?.value || '3.2.7',
+      releaseNotes: latestRelease?.release_notes || 'Критическое обновление v3.2.7: строгая проверка Java 21, авто-скачивание Adoptium Temurin 21 JDK',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
