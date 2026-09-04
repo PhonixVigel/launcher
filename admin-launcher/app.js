@@ -1948,9 +1948,12 @@ async function loadAdmins() {
 
     tbody.innerHTML = admins.map(a => {
       const isMe = state.adminUser && a.username.toLowerCase() === state.adminUser.toLowerCase();
-      const roleBadge = a.role === 'ADMIN' 
-        ? '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">👑 Главный Администратор</span>'
-        : '<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">🛡️ Модератор</span>';
+      let roleBadge = '<span class="badge" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">🎮 Игрок</span>';
+      if (a.role === 'ADMIN') {
+        roleBadge = '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">👑 Главный Администратор</span>';
+      } else if (a.role === 'MODERATOR') {
+        roleBadge = '<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px;">🛡️ Модератор</span>';
+      }
 
       const dateStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU') : 'Не указана';
 

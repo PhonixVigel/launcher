@@ -105,8 +105,8 @@
               <span class="nav-text">Логи крашей</span>
             </button>
             <button class="nav-item" data-tab="admins">
-              <span class="nav-icon">👑</span>
-              <span class="nav-text">Администраторы</span>
+              <span class="nav-icon">👥</span>
+              <span class="nav-text">Пользователи & Админы</span>
             </button>
             <button class="nav-item" data-tab="analytics">
               <span class="nav-icon">📊</span>
@@ -651,15 +651,15 @@
             </div>
           </div>
 
-          <!-- Вкладка 10: Управление администраторами и модераторами -->
+          <!-- Вкладка 10: Управление пользователями, администраторами и модераторами -->
           <div class="dashboard-tab" id="tab-admins">
             <div class="tab-header">
               <div>
-                <h2 class="tab-title">👑 Администраторы & Модераторы</h2>
-                <p class="tab-subtitle">Управление доступом к панели управления, создание администраторов и моментальный отзыв прав</p>
+                <h2 class="tab-title">👥 Управление пользователями и администраторами</h2>
+                <p class="tab-subtitle">Создание аккаунтов игроков и админов, смена паролей и мгновенный отзыв доступа (кик из системы)</p>
               </div>
               <div class="header-actions">
-                <button class="btn-primary" id="btn-open-create-admin">➕ Добавить администратора</button>
+                <button class="btn-primary" id="btn-open-create-admin">➕ Создать пользователя / Админа</button>
                 <button class="btn-secondary" id="btn-refresh-admins">🔄 Обновить</button>
               </div>
             </div>
@@ -927,17 +927,17 @@
     </div>
   </div>
 
-  <!-- Модальное окно создания / добавления администратора -->
+  <!-- Модальное окно создания / добавления пользователя или администратора -->
   <div class="modal-overlay hidden" id="modal-create-admin">
     <div class="modal-card glass-panel" style="max-width: 480px;">
       <div class="modal-header">
-        <h3 class="modal-title">👑 Добавление администратора</h3>
+        <h3 class="modal-title">👥 Создание пользователя / Админа</h3>
         <button class="modal-close" id="btn-close-create-admin">✕</button>
       </div>
       <form id="form-create-admin">
         <div class="input-group">
-          <label for="admin-new-nick">Никнейм администратора</label>
-          <input type="text" id="admin-new-nick" placeholder="Например: Moderator2026" required autocomplete="off">
+          <label for="admin-new-nick">Никнейм пользователя</label>
+          <input type="text" id="admin-new-nick" placeholder="Например: Player2026" required autocomplete="off">
         </div>
         <div class="input-group">
           <label for="admin-new-pwd">Пароль</label>
@@ -946,13 +946,14 @@
         <div class="input-group">
           <label for="admin-new-role">Уровень доступа (Роль)</label>
           <select id="admin-new-role" class="styled-select">
-            <option value="ADMIN" selected>Главный администратор (Полный доступ)</option>
-            <option value="MODERATOR">Модератор (Просмотр логов, крашей, бан-лист)</option>
+            <option value="PLAYER" selected>🎮 Игрок (Обычный аккаунт игрока)</option>
+            <option value="ADMIN">👑 Главный администратор (Полный доступ к панели)</option>
+            <option value="MODERATOR">🛡️ Модератор (Просмотр логов, крашей, бан-лист)</option>
           </select>
         </div>
         <div class="modal-actions" style="margin-top: 20px;">
           <button type="button" class="btn-secondary" id="btn-cancel-create-admin">Отмена</button>
-          <button type="submit" class="btn-primary">Сохранить администратора</button>
+          <button type="submit" class="btn-primary">Сохранить аккаунт</button>
         </div>
       </form>
     </div>

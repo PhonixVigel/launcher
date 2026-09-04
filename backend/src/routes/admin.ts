@@ -97,16 +97,15 @@ router.get('/admins', requireAdmin, async (req: Request, res: Response) => {
     const admins = await db.all(`
       SELECT id, username, role, last_ip, last_hwid, created_at 
       FROM users 
-      WHERE role IN ('ADMIN', 'MODERATOR') 
       ORDER BY id ASC
     `);
     return res.json({ admins: admins || [] });
   } catch (error) {
-    return res.status(500).json({ error: 'Ошибка получения списка администраторов' });
+    return res.status(500).json({ error: 'Ошибка получения списка пользователей' });
   }
 });
 
-// POST /api/v1/admin/admins - Добавление нового администратора или модератора
+// POST /api/v1/admin/admins - Добавление нового пользователя, администратора или модератора
 router.post('/admins', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { username, password, role } = req.body;
@@ -120,7 +119,9 @@ router.post('/admins', requireAdmin, async (req: Request, res: Response) => {
     if (password.length < 6) {
       return res.status(400).json({ error: 'Пароль должен содержать минимум 6 символов' });
     }
-    const adminRole = role === 'MODERATOR' ? 'MODERATOR' : 'ADMIN';
+    let userRole = 'ADMIN';
+    if (role === 'MODERATOR') userRole = 'MODERATOR';
+    else if (role === 'PLAYER') userRole = 'PLAYER';
 
     const db = await getDb();
     const existing = await db.get("SELECT id FROM users WHERE LOWER(username) = LOWER(?)", [cleanNick]);
@@ -129,19 +130,19 @@ router.post('/admins', requireAdmin, async (req: Request, res: Response) => {
     if (existing) {
       await db.run(
         "UPDATE users SET password_hash = ?, role = ? WHERE id = ?",
-        [passwordHash, adminRole, existing.id]
+        [passwordHash, userRole, existing.id]
       );
     } else {
       await db.run(
         "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-        [cleanNick, passwordHash, adminRole]
+        [cleanNick, passwordHash, userRole]
       );
     }
 
     const currentAdmin = (req as any).user?.username || 'Admin';
-    await logAudit(currentAdmin, 'ADMIN', 'ADMIN_CREATE', cleanNick, `Создан/обновлен администратор с ролью ${adminRole}`, req.ip || '');
+    await logAudit(currentAdmin, 'ADMIN', 'ADMIN_CREATE', cleanNick, `Создан/обновлен пользователь/админ с ролью ${userRole}`, req.ip || '');
 
-    return res.json({ success: true, message: `Администратор ${cleanNick} (${adminRole}) успешно сохранен!` });
+    return res.json({ success: true, message: `Пользователь ${cleanNick} (${userRole}) успешно сохранен!` });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка добавления администратора: ' + (error as Error).message });
   }
