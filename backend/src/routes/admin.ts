@@ -6,6 +6,7 @@ import path from 'path';
 import net from 'net';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import AdmZip from 'adm-zip';
 import { getDiscordBotStatus, reloadDiscordBot, sendDiscordLoginRequest } from '../discordBot';
 
 const router = Router();
@@ -731,6 +732,123 @@ router.post('/modpack/apply-update', requireAdmin, async (req: Request, res: Res
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка применения обновления мода: ' + (error as Error).message });
+  }
+});
+
+// POST /api/v1/admin/modpack/batch-update-and-zip - Пакетное обновление всех модов с архивацией в ZIP и выдачей ссылки на скачивание
+router.post('/modpack/batch-update-and-zip', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { serverId, updates } = req.body;
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: 'Список updates обязателен' });
+    }
+
+    const targetServerId = serverId ? parseInt(serverId, 10) : 1;
+    const modsStorageDir = path.resolve(__dirname, '../../public/files/mods');
+    const tempDir = path.resolve(__dirname, '../../public/files/temp');
+
+    if (!fs.existsSync(modsStorageDir)) {
+      fs.mkdirSync(modsStorageDir, { recursive: true });
+    }
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const db = await getDb();
+    const server = await db.get("SELECT name FROM servers WHERE id = ?", [targetServerId]);
+    const serverName = (server?.name || `server_${targetServerId}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
+
+    const updatedFilesOnDisk: { filename: string; filePath: string }[] = [];
+    const errors: string[] = [];
+
+    const zip = new AdmZip();
+
+    for (const item of updates) {
+      try {
+        if (!item.newFileUrl || !item.newFilename) continue;
+
+        const cleanFilename = path.basename(item.newFilename);
+        const targetFilePath = path.join(modsStorageDir, cleanFilename);
+
+        // Скачиваем обновленный .jar
+        const response = await fetch(item.newFileUrl);
+        if (!response.ok) {
+          errors.push(`Не удалось скачать ${cleanFilename} (${response.status})`);
+          continue;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+
+        fs.writeFileSync(targetFilePath, buffer);
+
+        // Добавляем файл в ZIP-архив
+        zip.addFile(cleanFilename, buffer);
+        updatedFilesOnDisk.push({ filename: cleanFilename, filePath: targetFilePath });
+
+        const relativePath = `mods/${cleanFilename}`;
+        const name = item.modName || cleanFilename.replace(/\.jar$/i, '');
+        const desc = item.modDescription || 'Обновлено через Modrinth Batch';
+        const downloadUrl = `http://localhost:3000/files/mods/${cleanFilename}`;
+
+        // Удаляем старый файл с диска, если имя файла изменилось
+        if (item.oldFilepath) {
+          const oldCleanName = path.basename(item.oldFilepath);
+          if (oldCleanName !== cleanFilename) {
+            const oldDiskPath = path.join(modsStorageDir, oldCleanName);
+            if (fs.existsSync(oldDiskPath)) {
+              try { fs.unlinkSync(oldDiskPath); } catch (e) {}
+            }
+          }
+          await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, item.oldFilepath]);
+        }
+
+        await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, relativePath]);
+
+        await db.run(`
+          INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url)
+          VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+        `, [
+          targetServerId,
+          relativePath,
+          sha256,
+          buffer.length,
+          name,
+          desc,
+          downloadUrl
+        ]);
+      } catch (err: any) {
+        errors.push(`Ошибка обработки ${item.newFilename}: ${err.message}`);
+      }
+    }
+
+    if (updatedFilesOnDisk.length === 0) {
+      return res.status(500).json({ error: 'Не удалось обновить ни один мод: ' + errors.join('; ') });
+    }
+
+    // Сохраняем готовый ZIP-архив
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const zipFilename = `updated_mods_${serverName}_${timestamp}.zip`;
+    const zipFilePath = path.join(tempDir, zipFilename);
+
+    zip.writeZip(zipFilePath);
+
+    const zipStat = fs.statSync(zipFilePath);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'MODS_BATCH_UPDATE_ZIP', serverName, `Пакетно обновлено ${updatedFilesOnDisk.length} модов, создан ZIP архив (${(zipStat.size / (1024 * 1024)).toFixed(2)} MB)`, req.ip || '');
+
+    return res.json({
+      success: true,
+      updatedCount: updatedFilesOnDisk.length,
+      errors: errors.length > 0 ? errors : undefined,
+      zipFilename: zipFilename,
+      zipDownloadUrl: `/files/temp/${zipFilename}`,
+      zipSizeBytes: zipStat.size
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка пакетного обновления и архивации: ' + (error as Error).message });
   }
 });
 

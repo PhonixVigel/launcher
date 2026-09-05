@@ -2016,6 +2016,7 @@ function setupModUpdatesControls() {
   const btnCloseBottom = document.getElementById('btn-close-mod-updates-bottom');
   const btnRecheck = document.getElementById('btn-recheck-mod-updates');
   const btnUpdateAll = document.getElementById('btn-update-all-mods');
+  const btnUpdateAllZip = document.getElementById('btn-update-all-zip');
 
   const closeModal = () => {
     if (modal) modal.classList.add('hidden');
@@ -2039,6 +2040,12 @@ function setupModUpdatesControls() {
   if (btnUpdateAll) {
     btnUpdateAll.addEventListener('click', async () => {
       await updateAllPendingMods();
+    });
+  }
+
+  if (btnUpdateAllZip) {
+    btnUpdateAllZip.addEventListener('click', async () => {
+      await updateAllModsAndDownloadZip();
     });
   }
 }
@@ -2284,5 +2291,93 @@ async function updateAllPendingMods() {
   if (btnUpdateAll) {
     btnUpdateAll.textContent = '✅ Все моды обновлены!';
     btnUpdateAll.disabled = true;
+  }
+}
+
+async function updateAllModsAndDownloadZip() {
+  const pendingUpdates = currentModUpdates.filter(u => !u._updated);
+  if (pendingUpdates.length === 0) {
+    alert('Все доступные обновления уже установлены!');
+    return;
+  }
+
+  const btnUpdateAllZip = document.getElementById('btn-update-all-zip');
+  const btnUpdateAll = document.getElementById('btn-update-all-mods');
+  const summaryText = document.getElementById('mod-updates-summary-text');
+
+  if (btnUpdateAllZip) {
+    btnUpdateAllZip.disabled = true;
+    btnUpdateAllZip.textContent = `⏳ Скачивание и сборка ZIP (${pendingUpdates.length} модов)...`;
+  }
+  if (btnUpdateAll) btnUpdateAll.disabled = true;
+  if (summaryText) summaryText.textContent = `Сервер скачивает ${pendingUpdates.length} модов и упаковывает в ZIP архив...`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/modpack/batch-update-and-zip`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        serverId: state.currentServerId || 1,
+        updates: pendingUpdates.map(item => ({
+          oldFilepath: item.currentFilepath,
+          newFileUrl: item.newFileUrl,
+          newFilename: item.newFilename,
+          modName: item.projectTitle || item.currentModName,
+          modDescription: item.changelog || 'Обновлено через Modrinth Batch ZIP'
+        }))
+      })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      // Инициируем скачивание ZIP-архива в браузер
+      triggerBrowserDownload(data.zipDownloadUrl, data.zipFilename);
+
+      // Помечаем все карточки как обновленные
+      currentModUpdates.forEach((item, idx) => {
+        item._updated = true;
+        const card = document.getElementById(`mod-update-card-${idx}`);
+        if (card) {
+          card.classList.remove('updating');
+          card.classList.add('updated');
+          const actions = card.querySelector('.mod-update-actions');
+          if (actions) {
+            actions.innerHTML = '<span style="color: #4ade80; font-weight: 600; font-size: 13px;">✅ Обновлено + В архиве</span>';
+          }
+        }
+      });
+
+      const countPending = document.getElementById('count-pending-updates');
+      if (countPending) countPending.textContent = '0';
+      if (summaryText) {
+        summaryText.textContent = `✅ Успешно обновлено ${data.updatedCount} модов! Архив (${(data.zipSizeBytes / (1024*1024)).toFixed(2)} MB) скачивается в браузер.`;
+      }
+
+      if (btnUpdateAllZip) {
+        btnUpdateAllZip.textContent = '✅ ZIP скачан';
+        btnUpdateAllZip.disabled = true;
+      }
+      if (btnUpdateAll) {
+        btnUpdateAll.textContent = '✅ Всё обновлено';
+        btnUpdateAll.disabled = true;
+      }
+
+      await loadModpack();
+      alert(`Успешно обновлено ${data.updatedCount} модов на сервере!\nАрхив ${data.zipFilename} отправлен в ваши загрузки.`);
+    } else {
+      alert(data.error || 'Ошибка при пакетном обновлении модов');
+      if (btnUpdateAllZip) {
+        btnUpdateAllZip.disabled = false;
+        btnUpdateAllZip.textContent = '📦 Обновить всё и скачать ZIP';
+      }
+      if (btnUpdateAll) btnUpdateAll.disabled = false;
+    }
+  } catch (err) {
+    alert('Ошибка соединения: ' + err.message);
+    if (btnUpdateAllZip) {
+      btnUpdateAllZip.disabled = false;
+      btnUpdateAllZip.textContent = '📦 Обновить всё и скачать ZIP';
+    }
+    if (btnUpdateAll) btnUpdateAll.disabled = false;
   }
 }
