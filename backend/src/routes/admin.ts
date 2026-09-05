@@ -7,6 +7,7 @@ import net from 'net';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import AdmZip from 'adm-zip';
+import SftpClient from 'ssh2-sftp-client';
 import { getDiscordBotStatus, reloadDiscordBot, sendDiscordLoginRequest } from '../discordBot';
 
 const router = Router();
@@ -849,6 +850,257 @@ router.post('/modpack/batch-update-and-zip', requireAdmin, async (req: Request, 
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка пакетного обновления и архивации: ' + (error as Error).message });
+  }
+});
+
+// POST /api/v1/admin/modpack/sftp-test-scan - Проверка подключения к SFTP игрового сервера и сканирование папки модов
+router.post('/modpack/sftp-test-scan', requireAdmin, async (req: Request, res: Response) => {
+  const { host, port, username, password, privateKey, remotePath, updates } = req.body;
+  if (!host || !username || (!password && !privateKey)) {
+    return res.status(400).json({ error: 'Хост, логин и пароль/ключ SFTP обязательны' });
+  }
+
+  const sftp = new SftpClient();
+  const sftpPort = port ? parseInt(port, 10) : 22;
+  const targetRemotePath = remotePath ? remotePath.trim() : 'mods';
+
+  try {
+    const config: SftpClient.ConnectOptions = {
+      host: host.trim(),
+      port: sftpPort,
+      username: username.trim(),
+      readyTimeout: 10000,
+      retries: 1
+    };
+
+    if (privateKey) {
+      config.privateKey = privateKey;
+    } else {
+      config.password = password;
+    }
+
+    await sftp.connect(config);
+
+    // Проверяем существование папки модов
+    let realPath = targetRemotePath;
+    let fileList: SftpClient.FileInfo[] = [];
+
+    try {
+      const exists = await sftp.exists(realPath);
+      if (!exists) {
+        if (await sftp.exists('/mods')) realPath = '/mods';
+        else if (await sftp.exists('./mods')) realPath = './mods';
+      }
+      fileList = await sftp.list(realPath);
+    } catch (listErr) {
+      try {
+        fileList = await sftp.list('.');
+        realPath = '.';
+      } catch (e) {
+        throw new Error(`Не удалось прочитать директорию "${targetRemotePath}" на SFTP: ${(listErr as Error).message}`);
+      }
+    }
+
+    const remoteFilenames = new Set(fileList.map(f => f.name.toLowerCase()));
+
+    // Сверяем с модами на обновление
+    const matchedUpdates: any[] = [];
+    if (updates && Array.isArray(updates)) {
+      for (const item of updates) {
+        const oldName = item.currentFilename ? item.currentFilename.toLowerCase() : '';
+        const existsOnRemote = oldName && remoteFilenames.has(oldName);
+        matchedUpdates.push({
+          ...item,
+          existsOnRemote: !!existsOnRemote,
+          remoteOldFile: existsOnRemote ? item.currentFilename : null
+        });
+      }
+    }
+
+    await sftp.end();
+
+    return res.json({
+      success: true,
+      message: 'Подключение к SFTP успешно установлено!',
+      remotePath: realPath,
+      totalRemoteFiles: fileList.length,
+      matchedUpdates: matchedUpdates
+    });
+  } catch (err: any) {
+    try { await sftp.end(); } catch (e) {}
+    return res.status(500).json({ error: 'Ошибка SFTP подключения: ' + (err.message || 'Не удалось соединиться с сервером') });
+  }
+});
+
+// POST /api/v1/admin/modpack/sftp-deploy-updates - Полный цикл обновления модов: скачивание, обновление лаунчера и замена файлов на Minecraft сервере через SFTP
+router.post('/modpack/sftp-deploy-updates', requireAdmin, async (req: Request, res: Response) => {
+  const { host, port, username, password, privateKey, remotePath, serverId, updates } = req.body;
+  if (!host || !username || (!password && !privateKey)) {
+    return res.status(400).json({ error: 'Учетные данные SFTP обязательны' });
+  }
+  if (!updates || !Array.isArray(updates) || updates.length === 0) {
+    return res.status(400).json({ error: 'Список updates пуст' });
+  }
+
+  const targetServerId = serverId ? parseInt(serverId, 10) : 1;
+  const sftpPort = port ? parseInt(port, 10) : 22;
+  const targetRemotePath = remotePath ? remotePath.trim() : 'mods';
+
+  const modsStorageDir = path.resolve(__dirname, '../../public/files/mods');
+  if (!fs.existsSync(modsStorageDir)) {
+    fs.mkdirSync(modsStorageDir, { recursive: true });
+  }
+
+  const db = await getDb();
+  const server = await db.get("SELECT name FROM servers WHERE id = ?", [targetServerId]);
+  const serverName = server?.name || `Server_${targetServerId}`;
+
+  const downloadedUpdates: {
+    cleanFilename: string;
+    buffer: Buffer;
+    oldCleanName?: string;
+    item: any;
+  }[] = [];
+  const errors: string[] = [];
+
+  // 1. Скачиваем все моды и обновляем локальный лаунчер
+  for (const item of updates) {
+    try {
+      if (!item.newFileUrl || !item.newFilename) continue;
+
+      const cleanFilename = path.basename(item.newFilename);
+      const targetFilePath = path.join(modsStorageDir, cleanFilename);
+
+      const response = await fetch(item.newFileUrl);
+      if (!response.ok) {
+        errors.push(`Не удалось скачать ${cleanFilename} (${response.status})`);
+        continue;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      fs.writeFileSync(targetFilePath, buffer);
+
+      const relativePath = `mods/${cleanFilename}`;
+      const name = item.modName || cleanFilename.replace(/\.jar$/i, '');
+      const desc = item.modDescription || 'Обновлено через Modrinth SFTP Deploy';
+      const downloadUrl = `http://localhost:3000/files/mods/${cleanFilename}`;
+
+      let oldCleanName: string | undefined;
+      if (item.oldFilepath) {
+        oldCleanName = path.basename(item.oldFilepath);
+        if (oldCleanName !== cleanFilename) {
+          const oldDiskPath = path.join(modsStorageDir, oldCleanName);
+          if (fs.existsSync(oldDiskPath)) {
+            try { fs.unlinkSync(oldDiskPath); } catch (e) {}
+          }
+        }
+        await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, item.oldFilepath]);
+      }
+
+      await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, relativePath]);
+
+      await db.run(`
+        INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url)
+        VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+      `, [
+        targetServerId,
+        relativePath,
+        sha256,
+        buffer.length,
+        name,
+        desc,
+        downloadUrl
+      ]);
+
+      downloadedUpdates.push({
+        cleanFilename,
+        buffer,
+        oldCleanName,
+        item
+      });
+    } catch (err: any) {
+      errors.push(`Ошибка загрузки ${item.newFilename}: ${err.message}`);
+    }
+  }
+
+  if (downloadedUpdates.length === 0) {
+    return res.status(500).json({ error: 'Не удалось подготовить файлы модов: ' + errors.join('; ') });
+  }
+
+  // 2. Подключаемся по SFTP и заменяем моды на удаленном Minecraft сервере
+  const sftp = new SftpClient();
+  let sftpUploadedCount = 0;
+  let sftpDeletedCount = 0;
+
+  try {
+    const config: SftpClient.ConnectOptions = {
+      host: host.trim(),
+      port: sftpPort,
+      username: username.trim(),
+      readyTimeout: 15000,
+      retries: 1
+    };
+
+    if (privateKey) config.privateKey = privateKey;
+    else config.password = password;
+
+    await sftp.connect(config);
+
+    // Нормализуем удаленный путь
+    let realPath = targetRemotePath;
+    try {
+      if (!(await sftp.exists(realPath))) {
+        if (await sftp.exists('/mods')) realPath = '/mods';
+        else if (await sftp.exists('./mods')) realPath = './mods';
+      }
+    } catch (e) {}
+
+    for (const d of downloadedUpdates) {
+      try {
+        const remoteDestFile = `${realPath.replace(/\/+$/, '')}/${d.cleanFilename}`;
+
+        // Загружаем новый файл на SFTP
+        await sftp.put(d.buffer, remoteDestFile);
+        sftpUploadedCount++;
+
+        // Если старый файл отличался по имени, удаляем старый .jar на сервере
+        if (d.oldCleanName && d.oldCleanName !== d.cleanFilename) {
+          const remoteOldFile = `${realPath.replace(/\/+$/, '')}/${d.oldCleanName}`;
+          try {
+            if (await sftp.exists(remoteOldFile)) {
+              await sftp.delete(remoteOldFile);
+              sftpDeletedCount++;
+            }
+          } catch (delErr) {
+            // Игнорируем если старого файла не было на сервере
+          }
+        }
+      } catch (uploadErr: any) {
+        errors.push(`Ошибка заливки на SFTP ${d.cleanFilename}: ${uploadErr.message}`);
+      }
+    }
+
+    await sftp.end();
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'MODS_SFTP_DEPLOY', serverName, `Обновлено ${downloadedUpdates.length} модов в лаунчере и ${sftpUploadedCount} на Minecraft сервере (${host}:${sftpPort}${realPath})`, req.ip || '');
+
+    return res.json({
+      success: true,
+      updatedInLauncher: downloadedUpdates.length,
+      uploadedToSftp: sftpUploadedCount,
+      deletedOldOnSftp: sftpDeletedCount,
+      errors: errors.length > 0 ? errors : undefined,
+      remotePath: realPath
+    });
+  } catch (sftpErr: any) {
+    try { await sftp.end(); } catch (e) {}
+    return res.status(500).json({
+      error: `Лаунчер обновлен (${downloadedUpdates.length} модов), но произошла ошибка SFTP передачи на сервер: ${sftpErr.message}`
+    });
   }
 });
 

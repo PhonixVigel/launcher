@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCrashReportsControls();
   setupAdminsControls();
   setupModUpdatesControls();
+  setupSftpSyncControls();
   setupLogViewerModal();
   setupChangePasswordModal();
   startClock();
@@ -2379,5 +2380,274 @@ async function updateAllModsAndDownloadZip() {
       btnUpdateAllZip.textContent = '📦 Обновить всё и скачать ZIP';
     }
     if (btnUpdateAll) btnUpdateAll.disabled = false;
+  }
+}
+
+// ----------------------------------------------------
+// 15. SFTP СИНХРОНИЗАЦИЯ И ОБНОВЛЕНИЕ МОДОВ НА MINECRAFT СЕРВЕРЕ
+// ----------------------------------------------------
+let sftpSessionConfig = null;
+let sftpMatchedUpdates = [];
+
+function setupSftpSyncControls() {
+  const btnOpenSftp = document.getElementById('btn-open-sftp-sync');
+  const modal = document.getElementById('modal-sftp-sync');
+  const btnClose = document.getElementById('btn-close-sftp-sync');
+  const btnCancel = document.getElementById('btn-cancel-sftp-sync');
+  const formConnect = document.getElementById('form-sftp-connect');
+  const btnBackCreds = document.getElementById('btn-back-to-sftp-creds');
+  const btnConfirmDeploy = document.getElementById('btn-confirm-sftp-deploy');
+  const btnDoneClose = document.getElementById('btn-sftp-done-close');
+
+  const closeModal = () => {
+    if (modal) modal.classList.add('hidden');
+    resetSftpModal();
+  };
+
+  if (btnOpenSftp) {
+    btnOpenSftp.addEventListener('click', () => {
+      openSftpSyncModal();
+    });
+  }
+
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  if (btnCancel) btnCancel.addEventListener('click', closeModal);
+  if (btnDoneClose) btnDoneClose.addEventListener('click', closeModal);
+
+  if (btnBackCreds) {
+    btnBackCreds.addEventListener('click', () => {
+      showSftpStep('sftp-step-credentials');
+    });
+  }
+
+  if (formConnect) {
+    formConnect.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await handleSftpTestAndScan();
+    });
+  }
+
+  if (btnConfirmDeploy) {
+    btnConfirmDeploy.addEventListener('click', async () => {
+      await handleSftpDeploy();
+    });
+  }
+}
+
+function resetSftpModal() {
+  showSftpStep('sftp-step-credentials');
+  const passInput = document.getElementById('sftp-pass');
+  if (passInput) passInput.value = '';
+  sftpSessionConfig = null;
+  sftpMatchedUpdates = [];
+}
+
+function showSftpStep(stepId) {
+  ['sftp-step-credentials', 'sftp-step-confirm', 'sftp-step-progress', 'sftp-step-done'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (id === stepId) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+  });
+}
+
+function openSftpSyncModal() {
+  const modal = document.getElementById('modal-sftp-sync');
+  if (!modal) return;
+
+  const pending = currentModUpdates.filter(u => !u._updated);
+  if (pending.length === 0) {
+    alert('Все доступные обновления уже установлены!');
+    return;
+  }
+
+  // Автозаполнение хоста IP сервера
+  const hostInput = document.getElementById('sftp-host');
+  if (hostInput && !hostInput.value) {
+    const activeServer = state.servers?.find(s => s.id === state.currentServerId);
+    if (activeServer && activeServer.server_ip) {
+      hostInput.value = activeServer.server_ip;
+    }
+  }
+
+  resetSftpModal();
+  modal.classList.remove('hidden');
+}
+
+async function handleSftpTestAndScan() {
+  const host = document.getElementById('sftp-host').value.trim();
+  const port = parseInt(document.getElementById('sftp-port').value, 10) || 22;
+  const username = document.getElementById('sftp-user').value.trim();
+  const password = document.getElementById('sftp-pass').value;
+  const remotePath = document.getElementById('sftp-path').value.trim() || 'mods';
+  const submitBtn = document.getElementById('btn-submit-sftp-test');
+
+  if (!host || !username || !password) {
+    alert('Заполните все поля подключения');
+    return;
+  }
+
+  const pending = currentModUpdates.filter(u => !u._updated);
+  if (pending.length === 0) {
+    alert('Нет модов для обновления!');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Подключение к SFTP и проверка...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/modpack/sftp-test-scan`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        host,
+        port,
+        username,
+        password,
+        remotePath,
+        updates: pending
+      })
+    });
+    const data = await res.json();
+
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '🔍 Подключиться и сверить файлы';
+    }
+
+    if (!res.ok) {
+      alert(data.error || 'Ошибка подключения по SFTP');
+      return;
+    }
+
+    sftpSessionConfig = { host, port, username, password, remotePath: data.remotePath || remotePath };
+    sftpMatchedUpdates = data.matchedUpdates || pending;
+
+    const summaryEl = document.getElementById('sftp-confirm-summary');
+    if (summaryEl) {
+      const onRemoteCount = sftpMatchedUpdates.filter(u => u.existsOnRemote).length;
+      summaryEl.textContent = `Директория: "${data.remotePath}" (${data.totalRemoteFiles} файлов). Найдено на сервере для замены: ${onRemoteCount} из ${sftpMatchedUpdates.length} модов.`;
+    }
+
+    renderSftpMatchedList(sftpMatchedUpdates);
+    showSftpStep('sftp-step-confirm');
+  } catch (err) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '🔍 Подключиться и сверить файлы';
+    }
+    alert('Ошибка соединения с бэкендом: ' + err.message);
+  }
+}
+
+function renderSftpMatchedList(updates) {
+  const container = document.getElementById('sftp-matched-files-list');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  updates.forEach(u => {
+    const item = document.createElement('div');
+    item.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px; gap: 8px;';
+
+    const statusBadge = u.existsOnRemote 
+      ? '<span style="color: #4ade80; background: rgba(34,197,94,0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">🔄 Заменит файл на сервере</span>'
+      : '<span style="color: #38bdf8; background: rgba(56,189,248,0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">➕ Добавит новый файл</span>';
+
+    item.innerHTML = `
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+        <strong style="color: #f8fafc;">${escapeHtml(u.projectTitle || u.currentModName)}</strong>
+        <span style="color: #94a3b8; font-family: monospace; font-size: 11px;">
+          ${escapeHtml(u.currentFilename)} ➔ <span style="color: #a7f3d0;">${escapeHtml(u.newFilename)}</span>
+        </span>
+      </div>
+      <div style="flex-shrink: 0;">
+        ${statusBadge}
+      </div>
+    `;
+
+    container.appendChild(item);
+  });
+}
+
+async function handleSftpDeploy() {
+  if (!sftpSessionConfig) {
+    alert('Сессия SFTP истекла. Пожалуйста, введите данные снова.');
+    showSftpStep('sftp-step-credentials');
+    return;
+  }
+
+  const pending = currentModUpdates.filter(u => !u._updated);
+  if (pending.length === 0) {
+    alert('Нет модов для обновления!');
+    return;
+  }
+
+  showSftpStep('sftp-step-progress');
+
+  const titleEl = document.getElementById('sftp-progress-title');
+  const subEl = document.getElementById('sftp-progress-sub');
+  if (titleEl) titleEl.textContent = `Обновление ${pending.length} модов и загрузка на SFTP...`;
+  if (subEl) subEl.textContent = `Сервер ${sftpSessionConfig.host}:${sftpSessionConfig.port} (${sftpSessionConfig.remotePath})`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/modpack/sftp-deploy-updates`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        ...sftpSessionConfig,
+        serverId: state.currentServerId || 1,
+        updates: pending.map(item => ({
+          oldFilepath: item.currentFilepath,
+          newFileUrl: item.newFileUrl,
+          newFilename: item.newFilename,
+          modName: item.projectTitle || item.currentModName,
+          modDescription: item.changelog || 'Обновлено через Modrinth SFTP Deploy'
+        }))
+      })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      currentModUpdates.forEach((item, idx) => {
+        item._updated = true;
+        const card = document.getElementById(`mod-update-card-${idx}`);
+        if (card) {
+          card.classList.remove('updating');
+          card.classList.add('updated');
+          const actions = card.querySelector('.mod-update-actions');
+          if (actions) {
+            actions.innerHTML = '<span style="color: #4ade80; font-weight: 600; font-size: 13px;">✅ Установлено на сервер и лаунчер</span>';
+          }
+        }
+      });
+
+      const countPending = document.getElementById('count-pending-updates');
+      if (countPending) countPending.textContent = '0';
+
+      const detailsEl = document.getElementById('sftp-done-details');
+      if (detailsEl) {
+        detailsEl.innerHTML = `
+          ✅ В лаунчере обновлено: <b>${data.updatedInLauncher}</b> модов<br>
+          🚀 Загружено на Minecraft сервер по SFTP: <b>${data.uploadedToSftp}</b> файлов<br>
+          🗑️ Удалено старых версий с сервера: <b>${data.deletedOldOnSftp}</b> файлов
+        `;
+      }
+
+      showSftpStep('sftp-step-done');
+      await loadModpack();
+    } else {
+      alert(data.error || 'Ошибка установки модов по SFTP');
+      showSftpStep('sftp-step-confirm');
+    }
+  } catch (err) {
+    alert('Ошибка соединения: ' + err.message);
+    showSftpStep('sftp-step-confirm');
+  } finally {
+    if (sftpSessionConfig) sftpSessionConfig.password = '';
   }
 }

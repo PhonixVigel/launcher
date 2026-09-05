@@ -995,10 +995,107 @@
       <div class="modal-actions" style="flex-shrink: 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <button type="button" class="btn-secondary btn-sm" id="btn-recheck-mod-updates">🔄 Перепроверить</button>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button type="button" class="btn-primary" id="btn-open-sftp-sync" style="background: linear-gradient(135deg, #f59e0b, #d97706);">🚀 Обновить и установить на сервер (SFTP)</button>
           <button type="button" class="btn-primary" id="btn-update-all-zip" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">📦 Обновить всё и скачать ZIP</button>
-          <button type="button" class="btn-primary" id="btn-update-all-mods" style="background: linear-gradient(135deg, #10b981, #059669);">⚡ Обновить всё на сервере (<span id="count-pending-updates">0</span>)</button>
+          <button type="button" class="btn-primary" id="btn-update-all-mods" style="background: linear-gradient(135deg, #10b981, #059669);">⚡ Обновить только в лаунчере (<span id="count-pending-updates">0</span>)</button>
           <button type="button" class="btn-secondary" id="btn-close-mod-updates-bottom">Закрыть</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно SFTP синхронизации модов с Minecraft сервером -->
+  <div class="modal-overlay hidden" id="modal-sftp-sync">
+    <div class="modal-card glass-panel" style="max-width: 680px; width: 95%;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <span>🚀 Установка модов на сервер Minecraft через SFTP</span>
+        </h3>
+        <button class="modal-close" id="btn-close-sftp-sync">✕</button>
+      </div>
+
+      <!-- Шаг 1: Ввод SFTP реквизитов -->
+      <div id="sftp-step-credentials">
+        <p style="color: #94a3b8; font-size: 13px; margin-bottom: 16px;">
+          🔒 <b>Безопасное соединение:</b> Ваши учетные данные используются только для текущей сессии обновления и нигде не сохраняются.
+        </p>
+
+        <form id="form-sftp-connect">
+          <div class="grid-2col" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="input-group">
+              <label for="sftp-host">Хост SFTP (IP сервера)</label>
+              <input type="text" id="sftp-host" placeholder="Например: 89.248.236.145" required autocomplete="off">
+            </div>
+            <div class="input-group">
+              <label for="sftp-port">Порт SFTP</label>
+              <input type="number" id="sftp-port" value="22" placeholder="22 или 2022" required>
+            </div>
+          </div>
+
+          <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="input-group">
+              <label for="sftp-user">Логин (Username)</label>
+              <input type="text" id="sftp-user" placeholder="root или pterodactyl" required autocomplete="off">
+            </div>
+            <div class="input-group">
+              <label for="sftp-pass">Пароль SFTP</label>
+              <input type="password" id="sftp-pass" placeholder="Пароль от SFTP" required autocomplete="new-password">
+            </div>
+          </div>
+
+          <div class="input-group" style="margin-bottom: 16px;">
+            <label for="sftp-path">Путь к папке модов на сервере</label>
+            <input type="text" id="sftp-path" value="mods" placeholder="mods или /home/container/mods или /root/server/mods" required>
+            <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">
+              Обычно это <code>mods</code> или полный путь к папке модов сервера Minecraft.
+            </span>
+          </div>
+
+          <div class="modal-actions" style="margin-top: 20px;">
+            <button type="button" class="btn-secondary" id="btn-cancel-sftp-sync">Отмена</button>
+            <button type="submit" class="btn-primary" id="btn-submit-sftp-test" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+              🔍 Подключиться и сверить файлы
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Шаг 2: Проверка и подтверждение замены -->
+      <div id="sftp-step-confirm" class="hidden">
+        <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;">🟢</span>
+          <div>
+            <strong style="color: #4ade80;">Подключение к SFTP успешно!</strong>
+            <p id="sftp-confirm-summary" style="font-size: 12px; color: #94a3b8; margin: 2px 0 0 0;">Найдено файлов на сервере: ...</p>
+          </div>
+        </div>
+
+        <h4 style="font-size: 14px; margin-bottom: 10px; color: #f8fafc;">Спецификация замены файлов модов на сервере:</h4>
+        <div id="sftp-matched-files-list" style="max-height: 240px; overflow-y: auto; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
+          <!-- Карточки сверки -->
+        </div>
+
+        <div class="modal-actions" style="display: flex; justify-content: space-between;">
+          <button type="button" class="btn-secondary" id="btn-back-to-sftp-creds">⬅️ Назад</button>
+          <button type="button" class="btn-primary" id="btn-confirm-sftp-deploy" style="background: linear-gradient(135deg, #10b981, #059669);">
+            ✅ Подтвердить и обновить всё
+          </button>
+        </div>
+      </div>
+
+      <!-- Шаг 3: Прогресс обновления -->
+      <div id="sftp-step-progress" class="hidden" style="text-align: center; padding: 30px 20px;">
+        <div class="spinner" style="margin: 0 auto 16px; width: 44px; height: 44px; border: 4px solid rgba(255,255,255,0.1); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <h4 id="sftp-progress-title" style="color: #f8fafc; font-size: 16px; margin-bottom: 6px;">Скачивание и отправка модов на сервер...</h4>
+        <p id="sftp-progress-sub" style="color: #94a3b8; font-size: 13px;">Файлы обновляются в лаунчере и передаются по SFTP на Minecraft сервер</p>
+      </div>
+
+      <!-- Шаг 4: Завершение -->
+      <div id="sftp-step-done" class="hidden" style="text-align: center; padding: 30px 20px;">
+        <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+        <h4 style="color: #4ade80; font-size: 18px; margin-bottom: 8px;">Моды успешно обновлены!</h4>
+        <p id="sftp-done-details" style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;"></p>
+        <button type="button" class="btn-primary" id="btn-sftp-done-close">Готово</button>
       </div>
     </div>
   </div>
