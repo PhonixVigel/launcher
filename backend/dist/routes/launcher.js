@@ -126,8 +126,8 @@ router.get('/check-update', async (req, res) => {
             macUrl = `${baseHost}/files/launchers/VozduCraft-macOS-Setup.dmg`;
         }
         return res.json({
-            latestVersion: latestRelease?.version || config?.value || '3.3.0',
-            releaseNotes: latestRelease?.release_notes || 'Релиз v3.3.0: исправление запуска на Windows, синхронизация ассетов и языков Minecraft 1.21.1',
+            latestVersion: latestRelease?.version || config?.value || '3.4.0',
+            releaseNotes: latestRelease?.release_notes || 'Релиз v3.4.0: Группировка опциональных модов с превью логотипов, разграничение прав доступа, генератор servers.dat и вкладка Ресурспаков',
             downloadUrl: winUrl,
             macDownloadUrl: macUrl,
             patchUrl: `${baseHost}/files/launchers/app.asar`,

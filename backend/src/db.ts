@@ -367,13 +367,20 @@ async function initDbSchema(db: Database) {
         ('3.3.0', 'Релиз v3.3.0: исправление синтаксической ошибки запуска на Windows, авто-синхронизация ассетов и языков Minecraft 1.21.1, Modrinth SFTP обновление', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
     `);
   }
-  await db.run("UPDATE project_config SET value = '3.3.0' WHERE key = 'launcher_version'");
+  await db.run("UPDATE project_config SET value = '3.4.0' WHERE key = 'launcher_version'");
+  const rel340 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.4.0'");
+  if (!rel340) {
+    await db.run(`
+      INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory)
+      VALUES ('3.4.0', 'Релиз v3.4.0: Группировка опциональных модов с превью логотипов, разграничение прав доступа, генератор servers.dat и вкладка Ресурспаков', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1)
+    `);
+  }
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
   await db.run("DELETE FROM modpack_files WHERE filepath LIKE '%vanishmod%' OR filepath LIKE '%Vanishmod%'");
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.3.0',
+    'launcher_version': '3.4.0',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',
