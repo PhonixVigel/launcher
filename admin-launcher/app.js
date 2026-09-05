@@ -17,8 +17,9 @@ const state = {
 // Interceptor для перехвата 401/403 и немедленного сброса сессии при удалении аккаунта
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
+  const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
   const response = await originalFetch.apply(this, args);
-  if ((response.status === 401 || response.status === 403) && state.token) {
+  if ((response.status === 401 || response.status === 403) && state.token && !url.includes('/api/v1/auth/login')) {
     handleAuthFailure('Ваш аккаунт был удален или авторизация аннулирована.');
   }
   return response;
@@ -151,17 +152,27 @@ function setupAuth() {
     e.preventDefault();
     const username = document.getElementById('admin-username').value.trim();
     const password = document.getElementById('admin-password').value;
+    const submitBtn = authForm.querySelector('button[type="submit"]');
 
-    alertEl.className = 'auth-alert hidden';
+    if (alertEl) {
+      alertEl.className = 'auth-alert hidden';
+      alertEl.textContent = '';
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ Проверка данных...';
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      const res = await originalFetch(`${API_BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
           password,
-          hwid: 'WEB-ADMIN-CONSOLE'
+          hwid: 'WEB-ADMIN-CONSOLE',
+          isAdminApp: true
         })
       });
 
@@ -176,12 +187,23 @@ function setupAuth() {
         showScreen('screen-admin');
         loadDashboardData();
       } else {
-        alertEl.className = 'auth-alert error';
-        alertEl.textContent = data.error || 'Неверный логин или пароль администратора';
+        if (alertEl) {
+          alertEl.className = 'auth-alert error';
+          alertEl.textContent = data.error || 'Неверный логин или пароль администратора';
+          alertEl.classList.remove('hidden');
+        }
       }
     } catch (err) {
-      alertEl.className = 'auth-alert error';
-      alertEl.textContent = 'Ошибка подключения к серверу авторизации';
+      if (alertEl) {
+        alertEl.className = 'auth-alert error';
+        alertEl.textContent = 'Ошибка подключения к серверу авторизации: ' + err.message;
+        alertEl.classList.remove('hidden');
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Войти в Панель Управления';
+      }
     }
   });
 }
