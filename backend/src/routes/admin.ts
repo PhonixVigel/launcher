@@ -853,22 +853,60 @@ router.post('/modpack/batch-update-and-zip', requireAdmin, async (req: Request, 
   }
 });
 
+function normalizeSftpTarget(rawHost: string, rawPort?: any, rawUsername?: string) {
+  let host = (rawHost || '').trim();
+  let port = rawPort ? parseInt(String(rawPort), 10) : 22;
+  let username = (rawUsername || '').trim();
+
+  // Удаляем протоколы: sftp://, ssh://, ftp://
+  if (/^(sftp|ssh|ftp):\/\//i.test(host)) {
+    host = host.replace(/^(sftp|ssh|ftp):\/\//i, '');
+  }
+
+  // Извлекаем username если в формате user@host
+  if (host.includes('@')) {
+    const atParts = host.split('@');
+    if (!username && atParts[0]) {
+      username = atParts[0].trim();
+    }
+    host = atParts.slice(1).join('@');
+  }
+
+  // Извлекаем порт если в формате host:port
+  if (host.includes(':')) {
+    const colonParts = host.split(':');
+    host = colonParts[0].trim();
+    const p = parseInt(colonParts[1], 10);
+    if (!isNaN(p) && p > 0) {
+      port = p;
+    }
+  }
+
+  // Удаляем слеши или путь на конце если есть
+  if (host.includes('/')) {
+    host = host.split('/')[0].trim();
+  }
+
+  return { host, port: isNaN(port) ? 22 : port, username };
+}
+
 // POST /api/v1/admin/modpack/sftp-test-scan - Проверка подключения к SFTP игрового сервера и сканирование папки модов
 router.post('/modpack/sftp-test-scan', requireAdmin, async (req: Request, res: Response) => {
-  const { host, port, username, password, privateKey, remotePath, updates } = req.body;
+  const { host: rawHost, port: rawPort, username: rawUsername, password, privateKey, remotePath, updates } = req.body;
+  const { host, port: sftpPort, username } = normalizeSftpTarget(rawHost, rawPort, rawUsername);
+
   if (!host || !username || (!password && !privateKey)) {
     return res.status(400).json({ error: 'Хост, логин и пароль/ключ SFTP обязательны' });
   }
 
   const sftp = new SftpClient();
-  const sftpPort = port ? parseInt(port, 10) : 22;
   const targetRemotePath = remotePath ? remotePath.trim() : 'mods';
 
   try {
     const config: SftpClient.ConnectOptions = {
-      host: host.trim(),
+      host: host,
       port: sftpPort,
-      username: username.trim(),
+      username: username,
       readyTimeout: 10000,
       retries: 1
     };
@@ -934,7 +972,9 @@ router.post('/modpack/sftp-test-scan', requireAdmin, async (req: Request, res: R
 
 // POST /api/v1/admin/modpack/sftp-deploy-updates - Полный цикл обновления модов: скачивание, обновление лаунчера и замена файлов на Minecraft сервере через SFTP
 router.post('/modpack/sftp-deploy-updates', requireAdmin, async (req: Request, res: Response) => {
-  const { host, port, username, password, privateKey, remotePath, serverId, updates } = req.body;
+  const { host: rawHost, port: rawPort, username: rawUsername, password, privateKey, remotePath, serverId, updates } = req.body;
+  const { host, port: sftpPort, username } = normalizeSftpTarget(rawHost, rawPort, rawUsername);
+
   if (!host || !username || (!password && !privateKey)) {
     return res.status(400).json({ error: 'Учетные данные SFTP обязательны' });
   }
@@ -943,7 +983,6 @@ router.post('/modpack/sftp-deploy-updates', requireAdmin, async (req: Request, r
   }
 
   const targetServerId = serverId ? parseInt(serverId, 10) : 1;
-  const sftpPort = port ? parseInt(port, 10) : 22;
   const targetRemotePath = remotePath ? remotePath.trim() : 'mods';
 
   const modsStorageDir = path.resolve(__dirname, '../../public/files/mods');

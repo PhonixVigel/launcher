@@ -2427,6 +2427,32 @@ function setupSftpSyncControls() {
     });
   }
 
+  const hostInput = document.getElementById('sftp-host');
+  const portInput = document.getElementById('sftp-port');
+  const userInput = document.getElementById('sftp-user');
+
+  if (hostInput) {
+    hostInput.addEventListener('input', () => {
+      let val = hostInput.value.trim();
+      if (/^(sftp|ssh|ftp):\/\//i.test(val) || val.includes(':') || val.includes('@')) {
+        val = val.replace(/^(sftp|ssh|ftp):\/\//i, '');
+        if (val.includes('@')) {
+          const atParts = val.split('@');
+          if (userInput && !userInput.value && atParts[0]) userInput.value = atParts[0].trim();
+          val = atParts.slice(1).join('@');
+        }
+        if (val.includes(':')) {
+          const colonParts = val.split(':');
+          val = colonParts[0].trim();
+          const p = parseInt(colonParts[1], 10);
+          if (portInput && !isNaN(p) && p > 0) portInput.value = p;
+        }
+        if (val.includes('/')) val = val.split('/')[0].trim();
+        hostInput.value = val;
+      }
+    });
+  }
+
   if (btnConfirmDeploy) {
     btnConfirmDeploy.addEventListener('click', async () => {
       await handleSftpDeploy();
