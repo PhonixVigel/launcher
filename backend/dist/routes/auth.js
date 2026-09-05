@@ -9,8 +9,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const db_1 = require("../db");
 const discordBot_1 = require("../discordBot");
+const jwtSecret_1 = require("../jwtSecret");
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET || 'vozducraft_secret_key_2026_super_secure';
 // 1. Регистрация нового игрока
 router.post('/register', async (req, res) => {
     try {
@@ -54,9 +54,9 @@ router.post('/login', async (req, res) => {
     try {
         const { username, password, hwid, isAdminApp } = req.body;
         const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
-        // Проверка блокировки по IP после неудачных попыток (для админки отключена, чтобы избежать блокировок)
+        // Жесткая проверка блокировки по IP после неудачных попыток для всех типов входа
         const attemptInfo = loginAttempts[clientIp];
-        if (!isAdminApp && attemptInfo && attemptInfo.blockedUntil > Date.now()) {
+        if (attemptInfo && attemptInfo.blockedUntil > Date.now()) {
             const waitSeconds = Math.ceil((attemptInfo.blockedUntil - Date.now()) / 1000);
             return res.status(429).json({
                 error: `Слишком много неудачных попыток входа. Доступ заблокирован на ${waitSeconds} сек. для защиты от взлома.`
@@ -124,7 +124,7 @@ router.post('/login', async (req, res) => {
         // Обновляем последний IP и HWID пользователя
         await db.run('UPDATE users SET last_hwid = ?, last_ip = ? WHERE id = ?', [clientHwid, clientIp, user.id]);
         // Генерация криптографического JWT сессионного токена
-        const token = jsonwebtoken_1.default.sign({ userId: user.id, username: user.username, role: user.role, hwid: clientHwid }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, username: user.username, role: user.role, hwid: clientHwid }, (0, jwtSecret_1.getJwtSecret)(), { expiresIn: '7d' });
         // Сохранение сессии в БД
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         await db.run('INSERT INTO sessions (username, access_token, hwid, ip_address, is_admin_bypass, expires_at) VALUES (?, ?, ?, ?, ?, ?)', [user.username, token, clientHwid, clientIp, user.role === 'ADMIN' ? 1 : 0, expiresAt]);
@@ -190,7 +190,7 @@ router.post('/change-password', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+            decoded = jsonwebtoken_1.default.verify(token, (0, jwtSecret_1.getJwtSecret)());
         }
         catch (err) {
             return res.status(401).json({ error: 'Недействительный или просроченный токен' });
@@ -303,7 +303,7 @@ router.get('/discord/status/:requestId', async (req, res) => {
             let token = authReq.token;
             if (!token) {
                 // Генерируем 24-часовой JWT токен (86400 секунд)
-                token = jsonwebtoken_1.default.sign({ username: authReq.username, role: 'PLAYER' }, JWT_SECRET, { expiresIn: '24h' });
+                token = jsonwebtoken_1.default.sign({ username: authReq.username, role: 'PLAYER' }, (0, jwtSecret_1.getJwtSecret)(), { expiresIn: '24h' });
                 const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
                 await db.run('UPDATE discord_auth_requests SET token = ? WHERE id = ?', [token, requestId]);
                 await db.run('INSERT INTO sessions (username, access_token, hwid, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)', [authReq.username, token, 'DISCORD-LAUNCHER', authReq.ip_address || '', expiresAt]);
@@ -333,7 +333,7 @@ router.post('/discord/callback', async (req, res) => {
         }
         if (action === 'approve') {
             // 24 часа сессия
-            const token = jsonwebtoken_1.default.sign({ username: authReq.username, role: 'PLAYER', discordId }, JWT_SECRET, { expiresIn: '24h' });
+            const token = jsonwebtoken_1.default.sign({ username: authReq.username, role: 'PLAYER', discordId }, (0, jwtSecret_1.getJwtSecret)(), { expiresIn: '24h' });
             const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
             await db.run("UPDATE discord_auth_requests SET status = 'APPROVED', token = ?, discord_id = ? WHERE id = ?", [token, discordId || '', requestId]);
             await db.run('INSERT INTO sessions (username, access_token, hwid, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)', [authReq.username, token, 'DISCORD-LAUNCHER', authReq.ip_address || '', expiresAt]);

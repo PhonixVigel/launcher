@@ -9,10 +9,9 @@ import jwt from 'jsonwebtoken';
 import AdmZip from 'adm-zip';
 import SftpClient from 'ssh2-sftp-client';
 import { getDiscordBotStatus, reloadDiscordBot, sendDiscordLoginRequest } from '../discordBot';
+import { getJwtSecret } from '../jwtSecret';
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'vozducraft_secret_key_2026_super_secure';
 
 // Middleware проверки прав администратора
 export const requireAdmin = async (req: Request, res: Response, next: Function) => {
@@ -32,10 +31,10 @@ export const requireAdmin = async (req: Request, res: Response, next: Function) 
       return res.status(401).json({ error: 'Требуется токен авторизации администратора' });
     }
     
-    // Проверка подписи JWT токена
+    // Проверка подписи JWT токена с использованием криптостойкого секрета
     let decoded: any;
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
+      decoded = jwt.verify(token, getJwtSecret());
     } catch (jwtErr) {
       return res.status(401).json({ error: 'Сессия недействительна или истекла' });
     }

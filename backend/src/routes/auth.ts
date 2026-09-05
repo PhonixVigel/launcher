@@ -4,9 +4,9 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getDb } from '../db';
 import { sendDiscordLoginRequest } from '../discordBot';
+import { getJwtSecret } from '../jwtSecret';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'vozducraft_secret_key_2026_super_secure';
 
 // 1. Регистрация нового игрока
 router.post('/register', async (req: Request, res: Response) => {
@@ -71,9 +71,9 @@ router.post('/login', async (req: Request, res: Response) => {
     const { username, password, hwid, isAdminApp } = req.body;
     const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
-    // Проверка блокировки по IP после неудачных попыток (для админки отключена, чтобы избежать блокировок)
+    // Жесткая проверка блокировки по IP после неудачных попыток для всех типов входа
     const attemptInfo = loginAttempts[clientIp];
-    if (!isAdminApp && attemptInfo && attemptInfo.blockedUntil > Date.now()) {
+    if (attemptInfo && attemptInfo.blockedUntil > Date.now()) {
       const waitSeconds = Math.ceil((attemptInfo.blockedUntil - Date.now()) / 1000);
       return res.status(429).json({ 
         error: `Слишком много неудачных попыток входа. Доступ заблокирован на ${waitSeconds} сек. для защиты от взлома.` 
@@ -160,7 +160,7 @@ router.post('/login', async (req: Request, res: Response) => {
     // Генерация криптографического JWT сессионного токена
     const token = jwt.sign(
       { userId: user.id, username: user.username, role: user.role, hwid: clientHwid },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 
@@ -247,7 +247,7 @@ router.post('/change-password', async (req: Request, res: Response) => {
     const token = authHeader.split(' ')[1];
     let decoded: any;
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
+      decoded = jwt.verify(token, getJwtSecret());
     } catch (err) {
       return res.status(401).json({ error: 'Недействительный или просроченный токен' });
     }
@@ -389,7 +389,7 @@ router.get('/discord/status/:requestId', async (req: Request, res: Response) => 
         // Генерируем 24-часовой JWT токен (86400 секунд)
         token = jwt.sign(
           { username: authReq.username, role: 'PLAYER' },
-          JWT_SECRET,
+          getJwtSecret(),
           { expiresIn: '24h' }
         );
 
@@ -432,7 +432,7 @@ router.post('/discord/callback', async (req: Request, res: Response) => {
       // 24 часа сессия
       const token = jwt.sign(
         { username: authReq.username, role: 'PLAYER', discordId },
-        JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: '24h' }
       );
 

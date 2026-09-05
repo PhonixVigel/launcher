@@ -16,8 +16,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const adm_zip_1 = __importDefault(require("adm-zip"));
 const ssh2_sftp_client_1 = __importDefault(require("ssh2-sftp-client"));
 const discordBot_1 = require("../discordBot");
+const jwtSecret_1 = require("../jwtSecret");
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET || 'vozducraft_secret_key_2026_super_secure';
 // Middleware проверки прав администратора
 const requireAdmin = async (req, res, next) => {
     try {
@@ -36,10 +36,10 @@ const requireAdmin = async (req, res, next) => {
         if (!token) {
             return res.status(401).json({ error: 'Требуется токен авторизации администратора' });
         }
-        // Проверка подписи JWT токена
+        // Проверка подписи JWT токена с использованием криптостойкого секрета
         let decoded;
         try {
-            decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+            decoded = jsonwebtoken_1.default.verify(token, (0, jwtSecret_1.getJwtSecret)());
         }
         catch (jwtErr) {
             return res.status(401).json({ error: 'Сессия недействительна или истекла' });
