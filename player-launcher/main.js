@@ -848,7 +848,6 @@ rm -f "$0"
       const classpath = uniqueJvmCpEntries.join(pathSeparator);
       const finalLegacyCpString = uniqueJvmCpEntries.join(pathSeparator);
       
-      const assetsDir = path.join(gamePath, 'assets');
       if (!fs.existsSync(assetsDir)) {
           fs.mkdirSync(assetsDir, { recursive: true });
       }

@@ -234,7 +234,7 @@ app.get('/', (req, res) => {
   res.json({
     status: 'ONLINE',
     service: 'VozduCraft Launcher Backend API',
-    version: '3.2.9',
+    version: '3.3.0',
     downloads: {
       windows: 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe',
       macos: 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg'

@@ -304,22 +304,22 @@ async function initDbSchema(db: Database) {
     `);
   }
 
-  // Обязательная регистрация релиза 3.2.9
-  const r329 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.2.9'");
-  if (!r329) {
+  // Обязательная регистрация релиза 3.3.0
+  const r330 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.3.0'");
+  if (!r330) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, mac_download_url, win_download_url, is_mandatory, created_at)
       VALUES 
-        ('3.2.9', 'Релиз v3.2.9: управление администраторами с мгновенным сбросом сессии, авто-синхронизация ассетов и языков Minecraft 1.21.1, отправка краш-логов в админ-панель', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
+        ('3.3.0', 'Релиз v3.3.0: исправление синтаксической ошибки запуска на Windows, авто-синхронизация ассетов и языков Minecraft 1.21.1, Modrinth SFTP обновление', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
     `);
   }
-  await db.run("UPDATE project_config SET value = '3.2.9' WHERE key = 'launcher_version'");
+  await db.run("UPDATE project_config SET value = '3.3.0' WHERE key = 'launcher_version'");
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
   await db.run("DELETE FROM modpack_files WHERE filepath LIKE '%vanishmod%' OR filepath LIKE '%Vanishmod%'");
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.2.9',
+    'launcher_version': '3.3.0',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

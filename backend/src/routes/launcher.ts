@@ -144,8 +144,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.2.9',
-      releaseNotes: latestRelease?.release_notes || 'Релиз v3.2.9: управление администраторами с мгновенным сбросом сессии, авто-синхронизация ассетов и языков Minecraft 1.21.1, отправка краш-логов в админ-панель',
+      latestVersion: latestRelease?.version || config?.value || '3.3.0',
+      releaseNotes: latestRelease?.release_notes || 'Релиз v3.3.0: исправление запуска на Windows, синхронизация ассетов и языков Minecraft 1.21.1',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
