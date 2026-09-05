@@ -71,9 +71,9 @@ router.post('/login', async (req: Request, res: Response) => {
     const { username, password, hwid, isAdminApp } = req.body;
     const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
-    // Проверка блокировки по IP после неудачных попыток
+    // Проверка блокировки по IP после неудачных попыток (для админки отключена, чтобы избежать блокировок)
     const attemptInfo = loginAttempts[clientIp];
-    if (attemptInfo && attemptInfo.blockedUntil > Date.now()) {
+    if (!isAdminApp && attemptInfo && attemptInfo.blockedUntil > Date.now()) {
       const waitSeconds = Math.ceil((attemptInfo.blockedUntil - Date.now()) / 1000);
       return res.status(429).json({ 
         error: `Слишком много неудачных попыток входа. Доступ заблокирован на ${waitSeconds} сек. для защиты от взлома.` 
