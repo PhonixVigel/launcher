@@ -2926,17 +2926,6 @@ async function loadResourcePacks() {
   }
 }
 
-    const res = await fetch(`${API_BASE}/api/v1/admin/resourcepacks?serverId=${state.currentServerId}`, {
-      headers: getAuthHeaders()
-    });
-    const data = await res.json();
-    currentResourcePacks = data.resourcePacks || [];
-    renderResourcePacksTable(currentResourcePacks);
-  } catch (err) {
-    console.error('Ошибка загрузки ресурспаков:', err);
-  }
-}
-
 function renderResourcePacksTable(packs) {
   const tbody = document.getElementById('resourcepacks-table-body');
   const badge = document.getElementById('rps-count-badge');
