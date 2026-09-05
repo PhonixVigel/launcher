@@ -89,6 +89,7 @@ function initApp() {
   safeRun('setupChangePasswordModal', setupChangePasswordModal);
   safeRun('setupEditModModal', setupEditModModal);
   safeRun('setupBulkEditGroupModal', setupBulkEditGroupModal);
+  safeRun('setupGroupsHubControls', setupGroupsHubControls);
   safeRun('setupResourcePacksControls', setupResourcePacksControls);
   safeRun('setupClientServersControls', setupClientServersControls);
   safeRun('startAuthHeartbeat', startAuthHeartbeat);
@@ -682,10 +683,46 @@ async function loadModpack() {
     });
     const data = await res.json();
     state.currentModpack = data.files || [];
-    renderModpackTable(state.currentModpack);
+    updateGroupFilterOptions();
+    applyModpackFilters();
   } catch (err) {
     console.error('Ошибка загрузки модов:', err);
   }
+}
+
+function updateGroupFilterOptions() {
+  const sel = document.getElementById('filter-group-select');
+  if (!sel) return;
+  const currentVal = sel.value;
+  const groups = Array.from(new Set(state.currentModpack.map(m => m.group_name || 'Общие'))).sort();
+  sel.innerHTML = '<option value="">📁 Все группы модов</option>';
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g;
+    opt.textContent = `📁 ${g}`;
+    if (g === currentVal) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function applyModpackFilters() {
+  const searchInput = document.getElementById('search-local-mods');
+  const groupSelect = document.getElementById('filter-group-select');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const selectedGroup = groupSelect ? groupSelect.value : '';
+
+  let filtered = state.currentModpack;
+  if (selectedGroup) {
+    filtered = filtered.filter(m => (m.group_name || 'Общие') === selectedGroup);
+  }
+  if (query) {
+    filtered = filtered.filter(f => 
+      (f.mod_name && f.mod_name.toLowerCase().includes(query)) ||
+      (f.filepath && f.filepath.toLowerCase().includes(query)) ||
+      (f.group_name && f.group_name.toLowerCase().includes(query))
+    );
+  }
+  renderModpackTable(filtered);
 }
 
 function renderModpackTable(files) {
@@ -807,15 +844,7 @@ function renderModpackTable(files) {
 }
 
 function filterLocalMods(query) {
-  if (!query) {
-    renderModpackTable(state.currentModpack);
-    return;
-  }
-  const filtered = state.currentModpack.filter(f => 
-    (f.mod_name && f.mod_name.toLowerCase().includes(query)) ||
-    (f.filepath && f.filepath.toLowerCase().includes(query))
-  );
-  renderModpackTable(filtered);
+  applyModpackFilters();
 }
 
 async function handleFilesUpload(files) {
@@ -2924,6 +2953,791 @@ function setupBulkEditGroupModal() {
     } catch (err) {
       alert('Ошибка соединения: ' + err.message);
     }
+  });
+}
+
+// ----------------------------------------------------
+// 14.5. ЦЕНТР УПРАВЛЕНИЯ ГРУППАМИ МОДОВ (GROUPS HUB)
+// ----------------------------------------------------
+let groupsHubState = {
+  activeGroupName: 'Общие',
+  whitelistUsers: [],
+  cachedUsers: [],
+  selectedModsToAdd: new Set()
+};
+
+function setupGroupsHubControls() {
+  const btnOpen = document.getElementById('btn-open-all-groups');
+  const modalAll = document.getElementById('modal-all-groups');
+  const btnCloseAll = document.getElementById('btn-close-all-groups');
+  const searchGroups = document.getElementById('search-groups-input');
+  const btnCreateGroup = document.getElementById('btn-create-new-group');
+  const btnRenameGroup = document.getElementById('btn-group-rename');
+  const btnDisbandGroup = document.getElementById('btn-group-disband');
+  const btnAccessAll = document.getElementById('btn-access-all');
+  const btnAccessWhite = document.getElementById('btn-access-whitelist');
+  const btnAddPlayerChip = document.getElementById('btn-add-player-chip');
+  const btnAddAllAdmins = document.getElementById('btn-add-all-admins');
+  const btnAddAllPlayers = document.getElementById('btn-add-all-players');
+  const btnClearMembers = document.getElementById('btn-clear-members');
+  const btnSaveAccess = document.getElementById('btn-save-group-access');
+  const btnSetAllOpt = document.getElementById('btn-group-set-all-opt');
+  const btnSetAllReq = document.getElementById('btn-group-set-all-req');
+  const searchGroupMods = document.getElementById('search-group-mods-input');
+  const groupFilterSelect = document.getElementById('filter-group-select');
+
+  // Добавление модов в группу (дочерняя модалка)
+  const btnOpenAddMods = document.getElementById('btn-group-add-mods-open');
+  const modalAddMods = document.getElementById('modal-group-add-mods');
+  const btnCloseAddMods = document.getElementById('btn-close-group-add-mods');
+  const btnCancelAddMods = document.getElementById('btn-cancel-group-add-mods');
+  const searchAddMods = document.getElementById('group-add-mods-search');
+  const filterAddSource = document.getElementById('group-add-mods-source-filter');
+  const chkAddAll = document.getElementById('chk-group-add-all');
+  const btnSelectAllAdd = document.getElementById('btn-group-add-select-all');
+  const btnConfirmAddMods = document.getElementById('btn-confirm-group-add-mods');
+
+  // Фильтр групп в основной таблице модов
+  if (groupFilterSelect) {
+    groupFilterSelect.addEventListener('change', () => {
+      applyModpackFilters();
+    });
+  }
+
+  // Открытие главного окна управления группами
+  if (btnOpen) {
+    btnOpen.addEventListener('click', () => {
+      openAllGroupsModal();
+    });
+  }
+
+  if (btnCloseAll) {
+    btnCloseAll.addEventListener('click', () => {
+      modalAll?.classList.add('hidden');
+    });
+  }
+
+  if (searchGroups) {
+    searchGroups.addEventListener('input', (e) => {
+      renderGroupsNavList(e.target.value);
+    });
+  }
+
+  // Создание новой группы
+  if (btnCreateGroup) {
+    btnCreateGroup.addEventListener('click', () => {
+      const name = prompt('Введите название новой группы модов:');
+      if (name && name.trim()) {
+        groupsHubState.activeGroupName = name.trim();
+        renderGroupsNavList();
+        selectActiveGroup(groupsHubState.activeGroupName);
+        openGroupAddModsModal();
+      }
+    });
+  }
+
+  // Переименование активной группы
+  if (btnRenameGroup) {
+    btnRenameGroup.addEventListener('click', async () => {
+      const currentName = groupsHubState.activeGroupName;
+      if (currentName === 'Общие') return;
+      const newName = prompt('Новое название группы:', currentName);
+      if (newName && newName.trim() && newName.trim() !== currentName) {
+        try {
+          const res = await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              serverId: state.currentServerId,
+              action: 'rename-group',
+              groupName: currentName,
+              newGroupName: newName.trim()
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            groupsHubState.activeGroupName = newName.trim();
+            await loadModpack();
+            renderGroupsNavList();
+            selectActiveGroup(groupsHubState.activeGroupName);
+          } else {
+            alert(data.error || 'Ошибка переименования группы');
+          }
+        } catch (err) {
+          alert('Ошибка соединения: ' + err.message);
+        }
+      }
+    });
+  }
+
+  // Расформирование активной группы в 'Общие'
+  if (btnDisbandGroup) {
+    btnDisbandGroup.addEventListener('click', async () => {
+      const currentName = groupsHubState.activeGroupName;
+      if (currentName === 'Общие') return;
+      if (confirm(`Расформировать группу «${currentName}»? Все моды группы перейдут в категорию «Общие», а доступ станет публичным.`)) {
+        try {
+          const res = await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              serverId: state.currentServerId,
+              action: 'delete-group',
+              groupName: currentName
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            groupsHubState.activeGroupName = 'Общие';
+            await loadModpack();
+            renderGroupsNavList();
+            selectActiveGroup('Общие');
+          } else {
+            alert(data.error || 'Ошибка расформирования группы');
+          }
+        } catch (err) {
+          alert('Ошибка соединения: ' + err.message);
+        }
+      }
+    });
+  }
+
+  // Переключение режима доступа (Публичная / Вайтлист)
+  if (btnAccessAll) {
+    btnAccessAll.addEventListener('click', () => {
+      setGroupAccessMode(false);
+    });
+  }
+
+  if (btnAccessWhite) {
+    btnAccessWhite.addEventListener('click', () => {
+      setGroupAccessMode(true);
+    });
+  }
+
+  // Добавление участника в чипсы
+  if (btnAddPlayerChip) {
+    btnAddPlayerChip.addEventListener('click', () => {
+      const sel = document.getElementById('select-add-player-dropdown');
+      const customInput = document.getElementById('input-custom-player-nick');
+      const selectedVal = sel?.value?.trim();
+      const typedVal = customInput?.value?.trim();
+      const nick = selectedVal || typedVal;
+      if (nick) {
+        if (!groupsHubState.whitelistUsers.some(u => u.toLowerCase() === nick.toLowerCase())) {
+          groupsHubState.whitelistUsers.push(nick);
+          renderGroupMembersChips();
+        }
+        if (sel) sel.value = '';
+        if (customInput) customInput.value = '';
+      }
+    });
+  }
+
+  // Добавить всех админов
+  if (btnAddAllAdmins) {
+    btnAddAllAdmins.addEventListener('click', () => {
+      const admins = groupsHubState.cachedUsers.filter(u => u.role === 'ADMIN').map(u => u.username);
+      admins.forEach(adm => {
+        if (!groupsHubState.whitelistUsers.some(u => u.toLowerCase() === adm.toLowerCase())) {
+          groupsHubState.whitelistUsers.push(adm);
+        }
+      });
+      renderGroupMembersChips();
+    });
+  }
+
+  // Добавить всех зарегистрированных пользователей
+  if (btnAddAllPlayers) {
+    btnAddAllPlayers.addEventListener('click', () => {
+      const all = groupsHubState.cachedUsers.map(u => u.username);
+      all.forEach(p => {
+        if (!groupsHubState.whitelistUsers.some(u => u.toLowerCase() === p.toLowerCase())) {
+          groupsHubState.whitelistUsers.push(p);
+        }
+      });
+      renderGroupMembersChips();
+    });
+  }
+
+  // Очистить участников
+  if (btnClearMembers) {
+    btnClearMembers.addEventListener('click', () => {
+      groupsHubState.whitelistUsers = [];
+      renderGroupMembersChips();
+    });
+  }
+
+  // Сохранить права доступа группы
+  if (btnSaveAccess) {
+    btnSaveAccess.addEventListener('click', async () => {
+      const isWhitelist = !document.getElementById('group-whitelist-panel')?.classList.contains('hidden');
+      const payloadUsers = isWhitelist ? groupsHubState.whitelistUsers : 'ALL';
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            serverId: state.currentServerId,
+            action: 'set-access',
+            groupName: groupsHubState.activeGroupName,
+            allowedUsers: payloadUsers
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          await loadModpack();
+          renderGroupsNavList();
+          selectActiveGroup(groupsHubState.activeGroupName);
+          alert('✅ Права доступа группы успешно сохранены!');
+        } else {
+          alert(data.error || 'Ошибка сохранения прав доступа');
+        }
+      } catch (err) {
+        alert('Ошибка соединения: ' + err.message);
+      }
+    });
+  }
+
+  // Массовая смена опциональности внутри группы
+  if (btnSetAllOpt) {
+    btnSetAllOpt.addEventListener('click', async () => {
+      await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          serverId: state.currentServerId,
+          action: 'set-optional',
+          groupName: groupsHubState.activeGroupName,
+          isOptional: 1
+        })
+      });
+      await loadModpack();
+      selectActiveGroup(groupsHubState.activeGroupName);
+    });
+  }
+
+  if (btnSetAllReq) {
+    btnSetAllReq.addEventListener('click', async () => {
+      await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          serverId: state.currentServerId,
+          action: 'set-optional',
+          groupName: groupsHubState.activeGroupName,
+          isOptional: 0
+        })
+      });
+      await loadModpack();
+      selectActiveGroup(groupsHubState.activeGroupName);
+    });
+  }
+
+  // Поиск модов внутри группы
+  if (searchGroupMods) {
+    searchGroupMods.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const mods = (state.currentModpack || []).filter(m => (m.group_name || 'Общие') === groupsHubState.activeGroupName);
+      const filtered = mods.filter(m => 
+        (m.mod_name && m.mod_name.toLowerCase().includes(q)) ||
+        (m.filepath && m.filepath.toLowerCase().includes(q))
+      );
+      renderGroupModsTable(filtered);
+    });
+  }
+
+  // Добавление модов в группу (Дочернее окно)
+  if (btnOpenAddMods) {
+    btnOpenAddMods.addEventListener('click', () => {
+      openGroupAddModsModal();
+    });
+  }
+
+  if (btnCloseAddMods) btnCloseAddMods.addEventListener('click', () => modalAddMods?.classList.add('hidden'));
+  if (btnCancelAddMods) btnCancelAddMods.addEventListener('click', () => modalAddMods?.classList.add('hidden'));
+
+  if (searchAddMods) {
+    searchAddMods.addEventListener('input', () => {
+      renderGroupAddModsTable();
+    });
+  }
+
+  if (filterAddSource) {
+    filterAddSource.addEventListener('change', () => {
+      renderGroupAddModsTable();
+    });
+  }
+
+  if (chkAddAll) {
+    chkAddAll.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      document.querySelectorAll('.chk-add-mod-item').forEach(cb => {
+        cb.checked = isChecked;
+        const id = parseInt(cb.dataset.id, 10);
+        if (isChecked) groupsHubState.selectedModsToAdd.add(id);
+        else groupsHubState.selectedModsToAdd.delete(id);
+      });
+      if (btnConfirmAddMods) {
+        btnConfirmAddMods.textContent = `➕ Добавить выбранные (${groupsHubState.selectedModsToAdd.size})`;
+      }
+    });
+  }
+
+  if (btnSelectAllAdd) {
+    btnSelectAllAdd.addEventListener('click', () => {
+      document.querySelectorAll('.chk-add-mod-item').forEach(cb => {
+        cb.checked = true;
+        const id = parseInt(cb.dataset.id, 10);
+        groupsHubState.selectedModsToAdd.add(id);
+      });
+      if (btnConfirmAddMods) {
+        btnConfirmAddMods.textContent = `➕ Добавить выбранные (${groupsHubState.selectedModsToAdd.size})`;
+      }
+    });
+  }
+
+  if (btnConfirmAddMods) {
+    btnConfirmAddMods.addEventListener('click', async () => {
+      const modIds = Array.from(groupsHubState.selectedModsToAdd);
+      if (modIds.length === 0) return alert('Выберите хотя бы один мод для добавления в группу');
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            serverId: state.currentServerId,
+            action: 'add-mods',
+            groupName: groupsHubState.activeGroupName,
+            modIds
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          modalAddMods?.classList.add('hidden');
+          await loadModpack();
+          renderGroupsNavList();
+          selectActiveGroup(groupsHubState.activeGroupName);
+        } else {
+          alert(data.error || 'Ошибка добавления модов');
+        }
+      } catch (err) {
+        alert('Ошибка соединения: ' + err.message);
+      }
+    });
+  }
+}
+
+async function openAllGroupsModal() {
+  const modal = document.getElementById('modal-all-groups');
+  if (!modal) return;
+
+  const serverName = state.servers.find(s => s.id === state.currentServerId)?.name || `Сервер #${state.currentServerId}`;
+  const badgeEl = document.getElementById('groups-modal-server-badge');
+  if (badgeEl) badgeEl.textContent = `Сервер: ${serverName}`;
+
+  if (groupsHubState.cachedUsers.length === 0) {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/admins`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      groupsHubState.cachedUsers = data.admins || [];
+    } catch (_) {}
+  }
+
+  const userSelect = document.getElementById('select-add-player-dropdown');
+  if (userSelect) {
+    userSelect.innerHTML = '<option value="">➕ Выбрать зарегистрированного игрока...</option>';
+    groupsHubState.cachedUsers.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.username;
+      const roleIcon = u.role === 'ADMIN' ? '👑' : (u.role === 'MODERATOR' ? '🛡️' : '👤');
+      opt.textContent = `${roleIcon} ${u.username} (${u.role})`;
+      userSelect.appendChild(opt);
+    });
+  }
+
+  const groups = getUniqueGroupsList();
+  if (!groups.includes(groupsHubState.activeGroupName)) {
+    groupsHubState.activeGroupName = groups[0] || 'Общие';
+  }
+
+  renderGroupsNavList();
+  selectActiveGroup(groupsHubState.activeGroupName);
+
+  modal.classList.remove('hidden');
+}
+
+function getUniqueGroupsList() {
+  const set = new Set();
+  (state.currentModpack || []).forEach(m => {
+    set.add(m.group_name || 'Общие');
+  });
+  if (set.size === 0) set.add('Общие');
+  return Array.from(set).sort();
+}
+
+function renderGroupsNavList(filterQuery = '') {
+  const container = document.getElementById('groups-nav-list');
+  if (!container) return;
+
+  const groups = getUniqueGroupsList();
+  container.innerHTML = '';
+
+  const q = filterQuery.toLowerCase().trim();
+  const filtered = groups.filter(g => !q || g.toLowerCase().includes(q));
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center; padding: 20px;">Группы не найдены</div>';
+    return;
+  }
+
+  filtered.forEach(groupName => {
+    const modsInGroup = (state.currentModpack || []).filter(m => (m.group_name || 'Общие') === groupName);
+    const count = modsInGroup.length;
+
+    let isPrivate = false;
+    let allowedCount = 0;
+    for (const m of modsInGroup) {
+      if (m.allowed_users && m.allowed_users !== 'ALL' && m.allowed_users !== '["ALL"]' && m.allowed_users.trim() !== '') {
+        isPrivate = true;
+        try {
+          const parsed = JSON.parse(m.allowed_users);
+          if (Array.isArray(parsed)) allowedCount = Math.max(allowedCount, parsed.length);
+        } catch (_) {
+          allowedCount = Math.max(allowedCount, m.allowed_users.split(',').length);
+        }
+      }
+    }
+
+    const item = document.createElement('div');
+    item.className = `group-nav-item ${groupName === groupsHubState.activeGroupName ? 'active' : ''}`;
+    
+    const icon = isPrivate ? '🔒' : (groupName === 'Общие' ? '📦' : '📁');
+    const badgePrivacy = isPrivate 
+      ? `<span style="font-size: 10px; padding: 2px 6px; border-radius: 8px; background: rgba(245, 158, 11, 0.2); color: #fbbf24;">🔒 ${allowedCount} игрок.</span>`
+      : `<span style="font-size: 10px; padding: 2px 6px; border-radius: 8px; background: rgba(16, 185, 129, 0.2); color: #34d399;">🌍 Всем</span>`;
+
+    item.innerHTML = `
+      <div class="group-nav-item-title">
+        <span>${icon}</span>
+        <span style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${groupName}</span>
+      </div>
+      <div class="group-nav-item-meta">
+        ${badgePrivacy}
+        <span style="font-size: 11px; font-weight: 700; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 6px;">${count}</span>
+      </div>
+    `;
+
+    item.addEventListener('click', () => {
+      selectActiveGroup(groupName);
+    });
+
+    container.appendChild(item);
+  });
+}
+
+function selectActiveGroup(groupName) {
+  groupsHubState.activeGroupName = groupName;
+
+  document.querySelectorAll('.group-nav-item').forEach(el => {
+    const title = el.querySelector('.group-nav-item-title span:last-child')?.textContent;
+    if (title === groupName) el.classList.add('active');
+    else el.classList.remove('active');
+  });
+
+  const modsInGroup = (state.currentModpack || []).filter(m => (m.group_name || 'Общие') === groupName);
+
+  const titleEl = document.getElementById('active-group-title');
+  const countBadge = document.getElementById('active-group-badge-count');
+  const subtitleEl = document.getElementById('active-group-subtitle');
+  if (titleEl) titleEl.textContent = groupName;
+  if (countBadge) countBadge.textContent = `${modsInGroup.length} модов`;
+  
+  const totalSizeBytes = modsInGroup.reduce((sum, m) => sum + (m.size_bytes || 0), 0);
+  const totalMb = (totalSizeBytes / (1024 * 1024)).toFixed(1);
+  if (subtitleEl) subtitleEl.textContent = `Общий вес: ${totalMb} МБ • Настройка прав доступа и состава файлов`;
+
+  const btnDisband = document.getElementById('btn-group-disband');
+  const btnRename = document.getElementById('btn-group-rename');
+  if (btnDisband) btnDisband.style.display = groupName === 'Общие' ? 'none' : 'inline-block';
+  if (btnRename) btnRename.style.display = groupName === 'Общие' ? 'none' : 'inline-block';
+
+  let parsedUsers = [];
+  let isPrivate = false;
+  for (const m of modsInGroup) {
+    if (m.allowed_users && m.allowed_users !== 'ALL' && m.allowed_users !== '["ALL"]' && m.allowed_users.trim() !== '') {
+      isPrivate = true;
+      try {
+        const p = JSON.parse(m.allowed_users);
+        if (Array.isArray(p)) parsedUsers = Array.from(new Set([...parsedUsers, ...p]));
+      } catch (_) {
+        m.allowed_users.split(',').forEach(u => { if (u.trim()) parsedUsers.push(u.trim()); });
+      }
+    }
+  }
+
+  groupsHubState.whitelistUsers = Array.from(new Set(parsedUsers));
+
+  setGroupAccessMode(isPrivate);
+  renderGroupModsTable(modsInGroup);
+}
+
+function setGroupAccessMode(isWhitelist) {
+  const label = document.getElementById('group-access-type-label');
+  const panel = document.getElementById('group-whitelist-panel');
+  const btnAll = document.getElementById('btn-access-all');
+  const btnWhite = document.getElementById('btn-access-whitelist');
+
+  if (isWhitelist) {
+    if (label) {
+      label.textContent = '🔒 Приватная (Вайтлист)';
+      label.style.background = 'rgba(245, 158, 11, 0.2)';
+      label.style.color = '#fbbf24';
+    }
+    if (panel) panel.classList.remove('hidden');
+    if (btnAll) {
+      btnAll.style.background = 'rgba(255, 255, 255, 0.05)';
+      btnAll.style.color = '#94a3b8';
+    }
+    if (btnWhite) {
+      btnWhite.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+      btnWhite.style.color = '#fff';
+    }
+    renderGroupMembersChips();
+  } else {
+    if (label) {
+      label.textContent = '🌍 Публичная (Все игроки)';
+      label.style.background = 'rgba(16, 185, 129, 0.15)';
+      label.style.color = '#34d399';
+    }
+    if (panel) panel.classList.add('hidden');
+    if (btnAll) {
+      btnAll.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+      btnAll.style.color = '#fff';
+    }
+    if (btnWhite) {
+      btnWhite.style.background = 'rgba(255, 255, 255, 0.05)';
+      btnWhite.style.color = '#94a3b8';
+    }
+  }
+}
+
+function renderGroupMembersChips() {
+  const container = document.getElementById('group-members-chips');
+  if (!container) return;
+
+  container.innerHTML = '';
+  if (groupsHubState.whitelistUsers.length === 0) {
+    container.innerHTML = '<span style="color: #94a3b8; font-size: 12px; font-style: italic;">Игроки не добавлены (выберите игрока из списка или введите ник)</span>';
+    return;
+  }
+
+  groupsHubState.whitelistUsers.forEach(username => {
+    const userObj = groupsHubState.cachedUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const isAdmin = userObj && userObj.role === 'ADMIN';
+    const isMod = userObj && userObj.role === 'MODERATOR';
+
+    const chip = document.createElement('div');
+    chip.className = `user-chip ${isAdmin ? 'user-chip-admin' : ''}`;
+    
+    const initial = username.charAt(0).toUpperCase();
+    const roleTag = isAdmin ? ' 👑' : (isMod ? ' 🛡️' : '');
+
+    chip.innerHTML = `
+      <div class="user-chip-avatar">${initial}</div>
+      <span>${username}${roleTag}</span>
+      <button type="button" class="user-chip-remove" data-user="${username}" title="Удалить из группы">✕</button>
+    `;
+
+    chip.querySelector('.user-chip-remove')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const u = e.currentTarget.dataset.user;
+      groupsHubState.whitelistUsers = groupsHubState.whitelistUsers.filter(x => x.toLowerCase() !== u.toLowerCase());
+      renderGroupMembersChips();
+    });
+
+    container.appendChild(chip);
+  });
+}
+
+function renderGroupModsTable(mods) {
+  const tbody = document.getElementById('group-mods-table-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  if (!mods || mods.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 30px;">В этой группе пока нет модов. Нажмите «➕ Добавить мод», чтобы включить файлы в группу.</td></tr>';
+    return;
+  }
+
+  const allGroups = getUniqueGroupsList();
+
+  mods.forEach(mod => {
+    const tr = document.createElement('tr');
+    const sizeMb = (mod.size_bytes / (1024 * 1024)).toFixed(2);
+
+    const iconHtml = mod.icon_url 
+      ? `<img src="${mod.icon_url}" style="width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0;" alt="logo" onerror="this.style.display='none'">`
+      : `<div style="width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: rgba(255,107,0,0.15); color: #ff6b00; font-size: 14px; flex-shrink: 0;">🧩</div>`;
+
+    let optionsHtml = `<option value="">📂 Переместить в...</option>`;
+    allGroups.forEach(g => {
+      if (g !== groupsHubState.activeGroupName) {
+        optionsHtml += `<option value="${g}">${g}</option>`;
+      }
+    });
+
+    tr.innerHTML = `
+      <td>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          ${iconHtml}
+          <div style="overflow: hidden;">
+            <div style="font-weight: 700; color: #f8fafc; font-size: 13px; max-width: 260px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${mod.mod_name || mod.filepath}">${mod.mod_name || mod.filepath}</div>
+            <div style="font-size: 11px; color: #94a3b8; max-width: 260px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${mod.filepath}</div>
+          </div>
+        </div>
+      </td>
+      <td>${sizeMb} MB</td>
+      <td>
+        <span class="tag-badge ${mod.is_optional ? 'optional' : 'required'}" style="cursor: pointer;" title="Нажмите для переключения">
+          ${mod.is_optional ? 'Опциональный' : 'Обязательный'}
+        </span>
+      </td>
+      <td style="text-align: right;">
+        <select class="styled-select group-move-select" data-id="${mod.id}" style="font-size: 11px; padding: 3px 6px; margin-right: 4px; max-width: 140px;">
+          ${optionsHtml}
+        </select>
+        <button class="btn-icon btn-remove-mod-from-group" data-id="${mod.id}" title="Убрать из группы в 'Общие'" style="color: #f87171;">✕</button>
+      </td>
+    `;
+
+    tr.querySelector('.tag-badge')?.addEventListener('click', async () => {
+      await fetch(`${API_BASE}/api/v1/admin/modpack/${mod.id}/toggle-optional`, {
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      });
+      await loadModpack();
+      selectActiveGroup(groupsHubState.activeGroupName);
+    });
+
+    tr.querySelector('.group-move-select')?.addEventListener('change', async (e) => {
+      const targetGroup = e.target.value;
+      if (!targetGroup) return;
+      await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          serverId: state.currentServerId,
+          action: 'add-mods',
+          groupName: targetGroup,
+          modIds: [mod.id]
+        })
+      });
+      await loadModpack();
+      renderGroupsNavList();
+      selectActiveGroup(groupsHubState.activeGroupName);
+    });
+
+    tr.querySelector('.btn-remove-mod-from-group')?.addEventListener('click', async () => {
+      await fetch(`${API_BASE}/api/v1/admin/modpack/group-manager`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          serverId: state.currentServerId,
+          action: 'remove-mods',
+          modIds: [mod.id]
+        })
+      });
+      await loadModpack();
+      renderGroupsNavList();
+      selectActiveGroup(groupsHubState.activeGroupName);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+function openGroupAddModsModal() {
+  const modal = document.getElementById('modal-group-add-mods');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('group-add-mods-title');
+  if (titleEl) titleEl.textContent = `➕ Добавить моды в группу «${groupsHubState.activeGroupName}»`;
+
+  groupsHubState.selectedModsToAdd.clear();
+  renderGroupAddModsTable();
+
+  modal.classList.remove('hidden');
+}
+
+function renderGroupAddModsTable() {
+  const tbody = document.getElementById('group-add-mods-table-body');
+  const searchInput = document.getElementById('group-add-mods-search');
+  const sourceFilter = document.getElementById('group-add-mods-source-filter');
+  const confirmBtn = document.getElementById('btn-confirm-group-add-mods');
+  if (!tbody) return;
+
+  const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const filterType = sourceFilter ? sourceFilter.value : 'unassigned';
+
+  let mods = state.currentModpack || [];
+
+  mods = mods.filter(m => (m.group_name || 'Общие') !== groupsHubState.activeGroupName);
+
+  if (filterType === 'unassigned') {
+    mods = mods.filter(m => (m.group_name || 'Общие') === 'Общие');
+  } else if (filterType === 'other') {
+    mods = mods.filter(m => (m.group_name || 'Общие') !== 'Общие');
+  }
+
+  if (q) {
+    mods = mods.filter(m => 
+      (m.mod_name && m.mod_name.toLowerCase().includes(q)) ||
+      (m.filepath && m.filepath.toLowerCase().includes(q)) ||
+      (m.group_name && m.group_name.toLowerCase().includes(q))
+    );
+  }
+
+  if (confirmBtn) {
+    confirmBtn.textContent = `➕ Добавить выбранные (${groupsHubState.selectedModsToAdd.size})`;
+  }
+
+  tbody.innerHTML = '';
+  if (mods.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">Нет доступных модов по выбранному фильтру</td></tr>';
+    return;
+  }
+
+  mods.forEach(mod => {
+    const tr = document.createElement('tr');
+    const isChecked = groupsHubState.selectedModsToAdd.has(mod.id);
+    const sizeMb = (mod.size_bytes / (1024 * 1024)).toFixed(2);
+
+    tr.innerHTML = `
+      <td style="text-align: center;">
+        <input type="checkbox" class="styled-checkbox chk-add-mod-item" data-id="${mod.id}" ${isChecked ? 'checked' : ''}>
+      </td>
+      <td>
+        <div style="font-weight: 700; color: #f8fafc; font-size: 13px;">${mod.mod_name || mod.filepath}</div>
+        <div style="font-size: 11px; color: #94a3b8;">${mod.filepath}</div>
+      </td>
+      <td>
+        <span style="font-size: 11px; padding: 2px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); color: #94a3b8;">
+          ${mod.group_name || 'Общие'}
+        </span>
+      </td>
+      <td>${sizeMb} MB</td>
+    `;
+
+    tr.querySelector('.chk-add-mod-item')?.addEventListener('change', (e) => {
+      const id = parseInt(e.target.dataset.id, 10);
+      if (e.target.checked) groupsHubState.selectedModsToAdd.add(id);
+      else groupsHubState.selectedModsToAdd.delete(id);
+      if (confirmBtn) confirmBtn.textContent = `➕ Добавить выбранные (${groupsHubState.selectedModsToAdd.size})`;
+    });
+
+    tbody.appendChild(tr);
   });
 }
 

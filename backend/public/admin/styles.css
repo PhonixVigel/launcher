@@ -1099,3 +1099,106 @@ body {
   }
 }
 
+/* GROUPS HUB & USER CHIPS */
+.group-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.group-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: translateX(3px);
+}
+
+.group-nav-item.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.2));
+  border-color: #38bdf8;
+  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.2);
+}
+
+.group-nav-item-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-nav-item.active .group-nav-item-title {
+  color: #38bdf8;
+}
+
+.group-nav-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(99, 102, 241, 0.15));
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.user-chip:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+}
+
+.user-chip-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0284c7;
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.user-chip-admin {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(245, 158, 11, 0.2));
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.user-chip-admin .user-chip-avatar {
+  background: #dc2626;
+}
+
+.user-chip-remove {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.user-chip-remove:hover {
+  color: #f87171;
+}
+

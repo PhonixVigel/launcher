@@ -1369,6 +1369,117 @@ router.post('/modpack/bulk-edit-details', requireAdmin, async (req: Request, res
   }
 });
 
+// POST /api/v1/admin/modpack/group-manager - Централизованное управление группой (переименование, удаление, смена прав, массовый статус)
+router.post('/modpack/group-manager', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { serverId, action, groupName, newGroupName, allowedUsers, isOptional, modIds } = req.body;
+    if (!serverId || !action) {
+      return res.status(400).json({ error: 'serverId и action обязательны' });
+    }
+
+    const sId = parseInt(serverId, 10);
+    const db = await getDb();
+    const adminUser = (req as any).user?.username || 'Admin';
+
+    if (action === 'set-access') {
+      if (!groupName) return res.status(400).json({ error: 'Имя группы не указано' });
+      let normUsers = 'ALL';
+      if (allowedUsers !== undefined && allowedUsers !== null) {
+        if (Array.isArray(allowedUsers)) {
+          normUsers = JSON.stringify(allowedUsers.map((u: string) => u.trim()).filter(Boolean));
+        } else if (typeof allowedUsers === 'string') {
+          normUsers = allowedUsers.trim();
+        }
+      }
+      await db.run(
+        'UPDATE modpack_files SET allowed_users = ? WHERE server_id = ? AND group_name = ?',
+        [normUsers, sId, groupName]
+      );
+      await logAudit(adminUser, 'ADMIN', 'GROUP_ACCESS_UPDATE', groupName, `Обновлены права доступа для группы ${groupName} (сервер #${sId})`, req.ip || '');
+      return res.json({ success: true, groupName, allowedUsers: normUsers });
+    }
+
+    if (action === 'rename-group') {
+      if (!groupName || !newGroupName || !newGroupName.trim()) {
+        return res.status(400).json({ error: 'Укажите старое и новое имя группы' });
+      }
+      const trimmedNew = newGroupName.trim();
+      await db.run(
+        'UPDATE modpack_files SET group_name = ? WHERE server_id = ? AND group_name = ?',
+        [trimmedNew, sId, groupName]
+      );
+      await logAudit(adminUser, 'ADMIN', 'GROUP_RENAME', `${groupName} -> ${trimmedNew}`, `Переименование группы модов (сервер #${sId})`, req.ip || '');
+      return res.json({ success: true, oldName: groupName, newName: trimmedNew });
+    }
+
+    if (action === 'delete-group') {
+      if (!groupName) return res.status(400).json({ error: 'Имя группы не указано' });
+      // Моды не удаляются с диска, а перемещаются в группу 'Общие' со сбросом прав на ALL
+      await db.run(
+        "UPDATE modpack_files SET group_name = 'Общие', allowed_users = 'ALL' WHERE server_id = ? AND group_name = ?",
+        [sId, groupName]
+      );
+      await logAudit(adminUser, 'ADMIN', 'GROUP_DELETE', groupName, `Группа ${groupName} расформирована в Общие (сервер #${sId})`, req.ip || '');
+      return res.json({ success: true, groupName });
+    }
+
+    if (action === 'set-optional') {
+      if (!groupName) return res.status(400).json({ error: 'Имя группы не указано' });
+      const optVal = isOptional === true || isOptional === 1 || isOptional === '1' ? 1 : 0;
+      await db.run(
+        'UPDATE modpack_files SET is_optional = ? WHERE server_id = ? AND group_name = ?',
+        [optVal, sId, groupName]
+      );
+      await logAudit(adminUser, 'ADMIN', 'GROUP_OPTIONAL_UPDATE', groupName, `Смена статуса обязательности для группы ${groupName} на ${optVal} (сервер #${sId})`, req.ip || '');
+      return res.json({ success: true, groupName, isOptional: optVal });
+    }
+
+    if (action === 'add-mods') {
+      if (!groupName || !Array.isArray(modIds) || modIds.length === 0) {
+        return res.status(400).json({ error: 'Не указаны моды или имя группы' });
+      }
+      const placeholders = modIds.map(() => '?').join(',');
+      let query = `UPDATE modpack_files SET group_name = ?`;
+      const params: any[] = [groupName.trim()];
+
+      if (allowedUsers !== undefined) {
+        let normUsers = 'ALL';
+        if (Array.isArray(allowedUsers)) {
+          normUsers = JSON.stringify(allowedUsers.map((u: string) => u.trim()).filter(Boolean));
+        } else if (typeof allowedUsers === 'string') {
+          normUsers = allowedUsers.trim();
+        }
+        query += `, allowed_users = ?`;
+        params.push(normUsers);
+      }
+
+      query += ` WHERE server_id = ? AND id IN (${placeholders})`;
+      params.push(sId, ...modIds);
+
+      await db.run(query, params);
+      await logAudit(adminUser, 'ADMIN', 'GROUP_ADD_MODS', `${modIds.length} модов`, `Добавление ${modIds.length} модов в группу ${groupName} (сервер #${sId})`, req.ip || '');
+      return res.json({ success: true, count: modIds.length, groupName });
+    }
+
+    if (action === 'remove-mods') {
+      if (!Array.isArray(modIds) || modIds.length === 0) {
+        return res.status(400).json({ error: 'Не указаны моды' });
+      }
+      const placeholders = modIds.map(() => '?').join(',');
+      await db.run(
+        `UPDATE modpack_files SET group_name = 'Общие', allowed_users = 'ALL' WHERE server_id = ? AND id IN (${placeholders})`,
+        [sId, ...modIds]
+      );
+      await logAudit(adminUser, 'ADMIN', 'GROUP_REMOVE_MODS', `${modIds.length} модов`, `Удаление ${modIds.length} модов из группы в Общие (сервер #${sId})`, req.ip || '');
+      return res.json({ success: true, count: modIds.length });
+    }
+
+    return res.status(400).json({ error: 'Неизвестное действие' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка выполнения действия с группой' });
+  }
+});
+
 // PATCH /api/v1/admin/modpack/:id/toggle-optional - Переключение статуса опциональности
 router.patch('/modpack/:id/toggle-optional', requireAdmin, async (req: Request, res: Response) => {
   try {
