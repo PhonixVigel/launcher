@@ -114,7 +114,29 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Неверный никнейм или пароль' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
+    // Проверка пароля с поддержкой bcrypt и SHA-256 (с солью и без)
+    let isMatch = false;
+    const storedHash = user.password_hash || '';
+    if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$') || storedHash.startsWith('$2y$')) {
+      try {
+        isMatch = await bcrypt.compare(password, storedHash);
+      } catch (_) {
+        isMatch = false;
+      }
+    } else {
+      const salt = 'vozducraft_salt';
+      const hashWithSalt = crypto.createHash('sha256').update(password + salt).digest('hex');
+      const hashPlain = crypto.createHash('sha256').update(password).digest('hex');
+      if (storedHash === hashWithSalt || storedHash === hashPlain || storedHash === password) {
+        isMatch = true;
+        // Автоматически обновляем устаревший хеш на безопасный bcrypt
+        try {
+          const newBcryptHash = await bcrypt.hash(password, 10);
+          await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newBcryptHash, user.id]);
+        } catch (_) {}
+      }
+    }
+
     if (!isMatch) {
       recordFailedAttempt(clientIp);
       await db.run(

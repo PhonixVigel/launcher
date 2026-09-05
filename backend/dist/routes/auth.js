@@ -85,7 +85,31 @@ router.post('/login', async (req, res) => {
             await db.run('INSERT INTO connection_stats (username, event_type, details, ip_address) VALUES (?, ?, ?, ?)', [username, 'FAILED_AUTH', 'Пользователь не найден', clientIp]);
             return res.status(401).json({ error: 'Неверный никнейм или пароль' });
         }
-        const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
+        // Проверка пароля с поддержкой bcrypt и SHA-256 (с солью и без)
+        let isMatch = false;
+        const storedHash = user.password_hash || '';
+        if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$') || storedHash.startsWith('$2y$')) {
+            try {
+                isMatch = await bcryptjs_1.default.compare(password, storedHash);
+            }
+            catch (_) {
+                isMatch = false;
+            }
+        }
+        else {
+            const salt = 'vozducraft_salt';
+            const hashWithSalt = crypto_1.default.createHash('sha256').update(password + salt).digest('hex');
+            const hashPlain = crypto_1.default.createHash('sha256').update(password).digest('hex');
+            if (storedHash === hashWithSalt || storedHash === hashPlain || storedHash === password) {
+                isMatch = true;
+                // Автоматически обновляем устаревший хеш на безопасный bcrypt
+                try {
+                    const newBcryptHash = await bcryptjs_1.default.hash(password, 10);
+                    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newBcryptHash, user.id]);
+                }
+                catch (_) { }
+            }
+        }
         if (!isMatch) {
             recordFailedAttempt(clientIp);
             await db.run('INSERT INTO connection_stats (username, event_type, details, ip_address) VALUES (?, ?, ?, ?)', [username, 'FAILED_AUTH', 'Неверный пароль', clientIp]);

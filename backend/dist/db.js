@@ -7,7 +7,7 @@ exports.getDb = getDb;
 const sqlite3_1 = __importDefault(require("sqlite3"));
 const sqlite_1 = require("sqlite");
 const path_1 = __importDefault(require("path"));
-const crypto_1 = __importDefault(require("crypto"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 let dbInstance = null;
 async function getDb() {
     if (dbInstance)
@@ -367,11 +367,10 @@ async function initDbSchema(db) {
         }
     }
     // Создание администратора VozduHAN (если нет)
-    const adminUser = await db.get('SELECT id FROM users WHERE username = ?', ['VozduHAN']);
+    const adminUser = await db.get('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', ['VozduHAN']);
     if (!adminUser) {
-        // Пароль по умолчанию: admin123
-        const salt = 'vozducraft_salt';
-        const hash = crypto_1.default.createHash('sha256').update('admin123' + salt).digest('hex');
+        // Пароль по умолчанию: admin123 (bcrypt)
+        const hash = await bcryptjs_1.default.hash('admin123', 10);
         await db.run(`
       INSERT INTO users (username, password_hash, role)
       VALUES (?, ?, 'ADMIN')

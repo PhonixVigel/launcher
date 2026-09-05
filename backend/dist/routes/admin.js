@@ -45,16 +45,11 @@ const requireAdmin = async (req, res, next) => {
             return res.status(401).json({ error: 'Сессия недействительна или истекла' });
         }
         const db = await (0, db_1.getDb)();
-        const session = await db.get(`
-      SELECT s.*, u.role, u.username
-      FROM sessions s
-      JOIN users u ON s.username = u.username
-      WHERE s.access_token = ? AND s.expires_at > CURRENT_TIMESTAMP
-    `, [token]);
-        if (!session || (session.role !== 'ADMIN' && session.role !== 'MODERATOR')) {
-            return res.status(401).json({ error: 'Доступ запрещен. Аккаунт был удален или сессия аннулирована.' });
+        const userFromDb = await db.get('SELECT id, username, role FROM users WHERE LOWER(username) = LOWER(?)', [decoded.username || decoded.sub]);
+        if (!userFromDb || (userFromDb.role !== 'ADMIN' && userFromDb.role !== 'MODERATOR')) {
+            return res.status(401).json({ error: 'Доступ запрещен. Аккаунт был удален или права аннулированы.' });
         }
-        req.user = session;
+        req.user = userFromDb;
         next();
     }
     catch (error) {

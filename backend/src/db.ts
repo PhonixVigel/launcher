@@ -2,6 +2,7 @@ import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 let dbInstance: Database | null = null;
 
@@ -390,11 +391,10 @@ async function initDbSchema(db: Database) {
   }
 
   // Создание администратора VozduHAN (если нет)
-  const adminUser = await db.get('SELECT id FROM users WHERE username = ?', ['VozduHAN']);
+  const adminUser = await db.get('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', ['VozduHAN']);
   if (!adminUser) {
-    // Пароль по умолчанию: admin123
-    const salt = 'vozducraft_salt';
-    const hash = crypto.createHash('sha256').update('admin123' + salt).digest('hex');
+    // Пароль по умолчанию: admin123 (bcrypt)
+    const hash = await bcrypt.hash('admin123', 10);
     await db.run(`
       INSERT INTO users (username, password_hash, role)
       VALUES (?, ?, 'ADMIN')
