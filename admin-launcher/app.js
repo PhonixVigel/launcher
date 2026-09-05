@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupLogViewerModal();
   setupChangePasswordModal();
   setupEditModModal();
+  setupBulkEditGroupModal();
   setupResourcePacksControls();
   setupClientServersControls();
   startClock();
@@ -327,12 +328,15 @@ async function loadServers() {
 }
 
 function updateServerSelectDropdowns() {
-  const selects = [
-    document.getElementById('select-modpack-server'),
-    document.getElementById('select-modrinth-server')
+  const selectConfigs = [
+    { id: 'select-modpack-server', handler: loadModpack },
+    { id: 'select-modrinth-server', handler: loadModpack },
+    { id: 'select-rp-server', handler: loadResourcePacks },
+    { id: 'select-cs-server', handler: loadClientServers }
   ];
 
-  selects.forEach(sel => {
+  selectConfigs.forEach(({ id, handler }) => {
+    const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '';
     state.servers.forEach(s => {
@@ -345,12 +349,21 @@ function updateServerSelectDropdowns() {
 
     sel.onchange = (e) => {
       state.currentServerId = parseInt(e.target.value, 10);
+      syncServerDropdownValues();
       updateCurrentServerBadge();
-      loadModpack();
+      if (handler) handler();
     };
   });
 
+  syncServerDropdownValues();
   updateCurrentServerBadge();
+}
+
+function syncServerDropdownValues() {
+  ['select-modpack-server', 'select-modrinth-server', 'select-rp-server', 'select-cs-server'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = state.currentServerId;
+  });
 }
 
 function updateCurrentServerBadge() {
@@ -2721,7 +2734,7 @@ async function handleSftpDeploy() {
 // 14. МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ МОДА
 // ----------------------------------------------------
 function openEditModModal(modId) {
-  const mod = state.currentModpack.find(m => m.id === modId);
+  const mod = state.currentModpack.find(m => Number(m.id) === Number(modId));
   if (!mod) return;
 
   document.getElementById('edit-mod-id').value = mod.id;
@@ -2794,26 +2807,102 @@ function setupEditModModal() {
 }
 
 // ----------------------------------------------------
+// 14.1. МОДАЛЬНОЕ ОКНО МАССОВОЙ НАСТРОЙКИ МОДОВ
+// ----------------------------------------------------
+function setupBulkEditGroupModal() {
+  const modal = document.getElementById('modal-bulk-edit-group');
+  const form = document.getElementById('form-bulk-edit-group');
+  const btnOpen = document.getElementById('btn-bulk-edit-group');
+  const btnClose = document.getElementById('btn-close-bulk-edit-group');
+  const btnCancel = document.getElementById('btn-cancel-bulk-edit-group');
+  const countLabel = document.getElementById('bulk-mods-count-label');
+
+  const closeModal = () => modal?.classList.add('hidden');
+  btnClose?.addEventListener('click', closeModal);
+  btnCancel?.addEventListener('click', closeModal);
+
+  btnOpen?.addEventListener('click', () => {
+    const selectedCount = state.selectedModIds.size;
+    if (selectedCount === 0) {
+      alert('Пожалуйста, выберите хотя бы один мод из списка (установите галочки в таблице).');
+      return;
+    }
+    if (countLabel) countLabel.textContent = `${selectedCount} шт.`;
+    form?.reset();
+    modal?.classList.remove('hidden');
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ids = Array.from(state.selectedModIds);
+    if (ids.length === 0) {
+      alert('Нет выбранных модов.');
+      return;
+    }
+
+    const group = document.getElementById('bulk-mod-group').value.trim();
+    const rawUsers = document.getElementById('bulk-mod-users').value.trim();
+    const optChoice = document.getElementById('bulk-mod-optional').value;
+
+    let usersPayload = undefined;
+    if (rawUsers) {
+      if (rawUsers.toUpperCase() === 'ALL' || rawUsers === '*') {
+        usersPayload = 'ALL';
+      } else {
+        usersPayload = rawUsers.split(',').map(u => u.trim()).filter(Boolean);
+      }
+    }
+
+    let isOptPayload = undefined;
+    if (optChoice === '1') isOptPayload = 1;
+    else if (optChoice === '0') isOptPayload = 0;
+
+    const payload = {
+      ids,
+      group_name: group || undefined,
+      allowed_users: usersPayload,
+      is_optional: isOptPayload
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/modpack/bulk-edit-details`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        closeModal();
+        state.selectedModIds.clear();
+        await loadModpack();
+      } else {
+        alert(data.error || 'Ошибка группового изменения параметров');
+      }
+    } catch (err) {
+      alert('Ошибка соединения: ' + err.message);
+    }
+  });
+}
+
+// ----------------------------------------------------
 // 15. УПРАВЛЕНИЕ РЕСУРСПАКАМИ (RESOURCE PACKS)
 // ----------------------------------------------------
 let currentResourcePacks = [];
 
 async function loadResourcePacks() {
   try {
-    const serverSelect = document.getElementById('select-rp-server');
-    if (serverSelect && serverSelect.options.length === 0) {
-      state.servers.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = `${s.name} (${s.minecraft_version})`;
-        serverSelect.appendChild(opt);
-      });
-      serverSelect.value = state.currentServerId;
-      serverSelect.addEventListener('change', () => {
-        state.currentServerId = parseInt(serverSelect.value, 10);
-        loadResourcePacks();
-      });
-    }
+    syncServerDropdownValues();
+    const res = await fetch(`${API_BASE}/api/v1/admin/resourcepacks?serverId=${state.currentServerId}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    currentResourcePacks = data.resourcePacks || [];
+    renderResourcePacksTable(currentResourcePacks);
+  } catch (err) {
+    console.error('Ошибка загрузки ресурспаков:', err);
+  }
+}
 
     const res = await fetch(`${API_BASE}/api/v1/admin/resourcepacks?serverId=${state.currentServerId}`, {
       headers: getAuthHeaders()
@@ -3180,21 +3269,7 @@ let currentClientServers = [];
 
 async function loadClientServers() {
   try {
-    const serverSelect = document.getElementById('select-cs-server');
-    if (serverSelect && serverSelect.options.length === 0) {
-      state.servers.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = `${s.name} (${s.minecraft_version})`;
-        serverSelect.appendChild(opt);
-      });
-      serverSelect.value = state.currentServerId;
-      serverSelect.addEventListener('change', () => {
-        state.currentServerId = parseInt(serverSelect.value, 10);
-        loadClientServers();
-      });
-    }
-
+    syncServerDropdownValues();
     const res = await fetch(`${API_BASE}/api/v1/admin/client-servers?serverId=${state.currentServerId}`, {
       headers: getAuthHeaders()
     });

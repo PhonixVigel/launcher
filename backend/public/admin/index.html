@@ -184,9 +184,10 @@
                 <span>Выбрано модов: <strong id="selected-mods-count" style="color: #38bdf8; font-size: 16px;">0</strong></span>
               </div>
               <div class="bulk-actions-group">
-                <button class="btn-danger btn-sm" id="btn-bulk-delete-mods">🗑️ Удалить выбранные</button>
+                <button class="btn-primary btn-sm" id="btn-bulk-edit-group" style="background: linear-gradient(135deg, #a855f7, #6366f1);">📂 Настроить группу и доступ</button>
                 <button class="btn-secondary btn-sm" id="btn-bulk-set-optional">⚙️ Сделать опциональными</button>
                 <button class="btn-secondary btn-sm" id="btn-bulk-set-required">🔒 Сделать обязательными</button>
+                <button class="btn-danger btn-sm" id="btn-bulk-delete-mods">🗑️ Удалить выбранные</button>
                 <button class="btn-secondary btn-sm" id="btn-bulk-deselect-all">✖️ Снять выбор</button>
               </div>
             </div>
@@ -1182,6 +1183,56 @@
         <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
         <h4 style="color: #4ade80; font-size: 18px; margin-bottom: 8px;">Моды успешно обновлены!</h4>
         <p id="sftp-done-details" style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;"></p>
+        <div style="margin-top: 20px;">
+          <button type="button" class="btn-primary" id="btn-sftp-done-close" style="width: 100%;">Готово</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно: Массовая настройка группы и доступа для выбранных модов -->
+  <div class="modal hidden" id="modal-bulk-edit-group">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 class="modal-title">📂 Массовая настройка модов (<span id="bulk-mods-count-label">0</span>)</h3>
+        <button class="modal-close" id="btn-close-bulk-edit-group">✕</button>
+      </div>
+      <form id="form-bulk-edit-group">
+        <div class="input-group">
+          <label for="bulk-mod-group">Категория / Группа</label>
+          <input type="text" id="bulk-mod-group" list="bulk-mod-groups-datalist" placeholder="Оставьте пустым, чтобы не менять">
+          <datalist id="bulk-mod-groups-datalist">
+            <option value="Шейдеры и Графика">
+            <option value="Камера и Контент (Freecam)">
+            <option value="Звуки и Атмосфера">
+            <option value="Интерфейс и Карта">
+            <option value="Оптимизация и FPS">
+            <option value="Общие">
+          </datalist>
+          <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Моды с одинаковой группой объединяются в один аккордеон в лаунчере игрока.</span>
+        </div>
+        <div class="input-group">
+          <label for="bulk-mod-users">Разрешённые игроки (Белый список / Права)</label>
+          <input type="text" id="bulk-mod-users" placeholder="Оставьте пустым, чтобы не менять, или ALL / никнеймы">
+          <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Например: <code>ALL</code> для всех, либо <code>phonixvogel, youtuber1</code>.</span>
+        </div>
+        <div class="input-group">
+          <label for="bulk-mod-optional">Тип модов</label>
+          <select id="bulk-mod-optional" class="styled-select">
+            <option value="keep">-- Не менять тип --</option>
+            <option value="1">Опциональные (игрок может включать/выключать)</option>
+            <option value="0">Обязательные (всегда скачиваются)</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-bulk-edit-group">Отмена</button>
+          <button type="submit" class="btn-primary">💾 Применить к выбранным</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Модальное окно: Редактирование параметров мода (Группа, доступ, иконка) -->
   <div class="modal hidden" id="modal-edit-mod">
     <div class="modal-backdrop"></div>

@@ -1321,6 +1321,56 @@ router.post('/modpack/bulk-set-optional', requireAdmin, async (req: Request, res
   }
 });
 
+// POST /api/v1/admin/modpack/bulk-edit-details - Массовое изменение группы и прав доступа для выбранных модов
+router.post('/modpack/bulk-edit-details', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { ids, group_name, allowed_users, is_optional } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Список ID модов не предоставлен' });
+    }
+
+    let normUsers: string | undefined = undefined;
+    if (allowed_users !== undefined && allowed_users !== null) {
+      if (Array.isArray(allowed_users)) {
+        normUsers = JSON.stringify(allowed_users.map((u: string) => u.trim()).filter(Boolean));
+      } else if (typeof allowed_users === 'string') {
+        normUsers = allowed_users.trim();
+      }
+    }
+
+    const db = await getDb();
+    const placeholders = ids.map(() => '?').join(',');
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (group_name !== undefined && group_name !== null && group_name.trim() !== '') {
+      updates.push('group_name = ?');
+      params.push(group_name.trim());
+    }
+    if (normUsers !== undefined) {
+      updates.push('allowed_users = ?');
+      params.push(normUsers);
+    }
+    if (is_optional !== undefined && is_optional !== null && is_optional !== '') {
+      updates.push('is_optional = ?');
+      params.push(is_optional === true || is_optional === 1 || is_optional === '1' ? 1 : 0);
+    }
+
+    if (updates.length > 0) {
+      params.push(...ids);
+      await db.run(`UPDATE modpack_files SET ${updates.join(', ')} WHERE id IN (${placeholders})`, params);
+    }
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'MOD_BULK_EDIT', `${ids.length} модов`, `Групповое изменение параметров для ${ids.length} модов`, req.ip || '');
+
+    return res.json({ success: true, updatedCount: ids.length });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка группового изменения модов' });
+  }
+});
+
 // PATCH /api/v1/admin/modpack/:id/toggle-optional - Переключение статуса опциональности
 router.patch('/modpack/:id/toggle-optional', requireAdmin, async (req: Request, res: Response) => {
   try {
