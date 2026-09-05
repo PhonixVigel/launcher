@@ -30,6 +30,8 @@ const appState = {
   customBg: localStorage.getItem('vozducraft_custom_bg') || '',
   optionalMods: [],
   selectedOptionalMods: JSON.parse(localStorage.getItem('vozducraft_selected_opt_mods') || '[]'),
+  optionalResourcePacks: [],
+  selectedOptionalResourcePacks: JSON.parse(localStorage.getItem('vozducraft_selected_opt_rps') || '[]'),
   servers: [],
   currentServerIndex: 0
 };
@@ -852,6 +854,7 @@ function launchSelectedServer(server) {
     token: appState.token || 'LOCAL-TOKEN',
     disableJvmFlags: appState.disableJvmFlags,
     selectedOptionalMods: appState.selectedOptionalMods,
+    selectedOptionalResourcePacks: appState.selectedOptionalResourcePacks,
     serverId: server.id,
     serverIp: server.server_ip,
     serverPort: server.server_port,
@@ -1011,51 +1014,298 @@ function setupLightboxEvents() {
 }
 
 // ----------------------------------------------------
-// 8. ОПЦИОНАЛЬНЫЕ МОДЫ
+// 8. ОПЦИОНАЛЬНЫЕ МОДЫ И ГРУППИРОВКА
 // ----------------------------------------------------
 async function fetchOptionalModsFor(serverId) {
   try {
-    const data = await apiFetch(`/manifest?serverId=${serverId}`);
+    const userNick = appState.username || localStorage.getItem('vozducraft_username') || '';
+    const data = await apiFetch(`/manifest?serverId=${serverId}&username=${encodeURIComponent(userNick)}`);
 
     const container = document.getElementById('optional-mods-container');
     if (!container) return;
     container.innerHTML = '';
 
     if (!data.optionalFiles || data.optionalFiles.length === 0) {
-      container.innerHTML = '<div class="gallery-empty">Для этого сервера нет опциональных модов</div>';
+      container.innerHTML = '<div class="gallery-empty">Для этого сервера нет доступных опциональных модов</div>';
       return;
     }
 
+    // Группировка модов по названию группы (group_name)
+    const groups = {};
     data.optionalFiles.forEach(mod => {
-      const card = document.createElement('div');
-      card.className = 'mod-card';
-      const isChecked = appState.selectedOptionalMods.includes(mod.filepath);
+      const gName = (mod.group_name || 'Общие').trim();
+      if (!groups[gName]) groups[gName] = [];
+      groups[gName].push(mod);
+    });
 
-      card.innerHTML = `
-        <div class="mod-info">
-          <span class="mod-title">${mod.mod_name || mod.filepath}</span>
-          <span class="mod-desc">${mod.mod_description || 'Опциональный мод'}</span>
+    Object.keys(groups).sort().forEach(groupName => {
+      const groupMods = groups[groupName];
+      const allChecked = groupMods.every(m => appState.selectedOptionalMods.includes(m.filepath));
+      const someChecked = groupMods.some(m => appState.selectedOptionalMods.includes(m.filepath));
+
+      const groupCard = document.createElement('div');
+      groupCard.className = 'mod-group-card';
+
+      groupCard.innerHTML = `
+        <div class="mod-group-header">
+          <div class="mod-group-left">
+            <span class="mod-group-title">${groupName}</span>
+            <span class="mod-group-badge">${groupMods.length} модов</span>
+          </div>
+          <div class="mod-group-controls">
+            <span class="mod-group-toggle-label">Вся группа</span>
+            <label class="switch" onclick="event.stopPropagation()">
+              <input type="checkbox" class="group-master-toggle" ${allChecked ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
+            <span class="mod-group-arrow">▼</span>
+          </div>
         </div>
-        <label class="switch">
-          <input type="checkbox" data-filepath="${mod.filepath}" ${isChecked ? 'checked' : ''}>
-          <span class="slider round"></span>
-        </label>
+        <div class="mod-group-body"></div>
       `;
 
-      card.querySelector('input').addEventListener('change', (e) => {
-        const path = e.target.dataset.filepath;
-        if (e.target.checked) {
-          if (!appState.selectedOptionalMods.includes(path)) appState.selectedOptionalMods.push(path);
-        } else {
-          appState.selectedOptionalMods = appState.selectedOptionalMods.filter(p => p !== path);
-        }
+      const header = groupCard.querySelector('.mod-group-header');
+      const body = groupCard.querySelector('.mod-group-body');
+      const masterToggle = groupCard.querySelector('.group-master-toggle');
+
+      // Клик по шапке сворачивает / разворачивает группу
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.switch')) return;
+        groupCard.classList.toggle('collapsed');
+      });
+
+      // Рендер каждого мода в группе
+      groupMods.forEach(mod => {
+        const modCard = document.createElement('div');
+        modCard.className = 'mod-card';
+        const isChecked = appState.selectedOptionalMods.includes(mod.filepath);
+
+        const iconHtml = mod.icon_url 
+          ? `<img src="${mod.icon_url}" class="mod-logo-img" alt="logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'38\\' height=\\'38\\' fill=\\'%23ff6b00\\' viewBox=\\'0 0 24 24\\'><path d=\\'M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18s-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18s.41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z\\'/></svg>'">`
+          : `<div class="mod-logo-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(255,107,0,0.1);color:var(--accent-orange);">🧩</div>`;
+
+        modCard.innerHTML = `
+          <div class="mod-left-box">
+            ${iconHtml}
+            <div class="mod-info">
+              <span class="mod-title">${mod.mod_name || mod.filepath}</span>
+              <span class="mod-desc">${mod.mod_description || 'Опциональный мод клиента'}</span>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" class="mod-single-toggle" data-filepath="${mod.filepath}" ${isChecked ? 'checked' : ''}>
+            <span class="slider round"></span>
+          </label>
+        `;
+
+        const singleInput = modCard.querySelector('.mod-single-toggle');
+        singleInput.addEventListener('change', (e) => {
+          const path = e.target.dataset.filepath;
+          if (e.target.checked) {
+            if (!appState.selectedOptionalMods.includes(path)) appState.selectedOptionalMods.push(path);
+          } else {
+            appState.selectedOptionalMods = appState.selectedOptionalMods.filter(p => p !== path);
+          }
+          localStorage.setItem('vozducraft_selected_opt_mods', JSON.stringify(appState.selectedOptionalMods));
+
+          // Обновляем состояние мастер-переключателя группы
+          const currentAll = groupMods.every(m => appState.selectedOptionalMods.includes(m.filepath));
+          masterToggle.checked = currentAll;
+        });
+
+        body.appendChild(modCard);
+      });
+
+      // Мастер-переключатель включает/выключает все моды в группе
+      masterToggle.addEventListener('change', (e) => {
+        const turnOn = e.target.checked;
+        const allCheckboxes = body.querySelectorAll('.mod-single-toggle');
+        allCheckboxes.forEach(cb => {
+          cb.checked = turnOn;
+          const path = cb.dataset.filepath;
+          if (turnOn) {
+            if (!appState.selectedOptionalMods.includes(path)) appState.selectedOptionalMods.push(path);
+          } else {
+            appState.selectedOptionalMods = appState.selectedOptionalMods.filter(p => p !== path);
+          }
+        });
         localStorage.setItem('vozducraft_selected_opt_mods', JSON.stringify(appState.selectedOptionalMods));
       });
 
-      container.appendChild(card);
+      container.appendChild(groupCard);
     });
   } catch (err) {
     console.error('Ошибка загрузки опциональных модов:', err);
+  }
+}
+
+// ----------------------------------------------------
+// 8.1. РЕСУРСПАКИ (RESOURCE PACKS)
+// ----------------------------------------------------
+async function fetchResourcePacksFor(serverId) {
+  try {
+    const userNick = appState.username || localStorage.getItem('vozducraft_username') || '';
+    const data = await apiFetch(`/manifest?serverId=${serverId}&username=${encodeURIComponent(userNick)}`);
+
+    const container = document.getElementById('resourcepacks-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const reqPacks = data.resourcePacks || [];
+    const optPacks = data.optionalResourcePacks || [];
+
+    if (reqPacks.length === 0 && optPacks.length === 0) {
+      container.innerHTML = '<div class="gallery-empty">Для этого сервера пока нет ресурспаков</div>';
+      return;
+    }
+
+    // 1. Обязательные ресурспаки
+    if (reqPacks.length > 0) {
+      const reqGroupCard = document.createElement('div');
+      reqGroupCard.className = 'mod-group-card';
+      reqGroupCard.innerHTML = `
+        <div class="mod-group-header">
+          <div class="mod-group-left">
+            <span class="mod-group-title">🔒 Обязательные текстурпаки сервера</span>
+            <span class="mod-group-badge" style="background:rgba(59,130,246,0.2);color:#60a5fa;border-color:rgba(59,130,246,0.4);">${reqPacks.length} паков</span>
+          </div>
+          <div class="mod-group-controls">
+            <span class="mod-group-arrow">▼</span>
+          </div>
+        </div>
+        <div class="mod-group-body"></div>
+      `;
+
+      const reqBody = reqGroupCard.querySelector('.mod-group-body');
+      reqGroupCard.querySelector('.mod-group-header').addEventListener('click', () => {
+        reqGroupCard.classList.toggle('collapsed');
+      });
+
+      reqPacks.forEach(rp => {
+        const card = document.createElement('div');
+        card.className = 'mod-card';
+        const iconHtml = rp.icon_url
+          ? `<img src="${rp.icon_url}" class="mod-logo-img" alt="logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'38\\' height=\\'38\\' fill=\\'%233b82f6\\' viewBox=\\'0 0 24 24\\'><path d=\\'M12 3L2 12h3v8h14v-8h3L12 3z\\'/></svg>'">`
+          : `<div class="mod-logo-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(59,130,246,0.1);color:#60a5fa;">🎨</div>`;
+
+        card.innerHTML = `
+          <div class="mod-left-box">
+            ${iconHtml}
+            <div class="mod-info">
+              <span class="mod-title">${rp.name || rp.filename} <span class="mod-badge-req">Обязательный</span></span>
+              <span class="mod-desc">${rp.description || 'Официальный ресурспак сборки'}</span>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); padding: 4px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">🔒 Авто-синхронизация</div>
+        `;
+        reqBody.appendChild(card);
+      });
+
+      container.appendChild(reqGroupCard);
+    }
+
+    // 2. Опциональные ресурспаки (сгруппированные)
+    if (optPacks.length > 0) {
+      const groups = {};
+      optPacks.forEach(rp => {
+        const gName = (rp.group_name || 'Опциональные текстуры').trim();
+        if (!groups[gName]) groups[gName] = [];
+        groups[gName].push(rp);
+      });
+
+      Object.keys(groups).sort().forEach(gName => {
+        const groupRps = groups[gName];
+        const allChecked = groupRps.every(rp => appState.selectedOptionalResourcePacks.includes(rp.filepath || rp.filename));
+
+        const optGroupCard = document.createElement('div');
+        optGroupCard.className = 'mod-group-card';
+        optGroupCard.innerHTML = `
+          <div class="mod-group-header">
+            <div class="mod-group-left">
+              <span class="mod-group-title">⚡ ${gName}</span>
+              <span class="mod-group-badge">${groupRps.length} паков</span>
+            </div>
+            <div class="mod-group-controls">
+              <span class="mod-group-toggle-label">Вся группа</span>
+              <label class="switch" onclick="event.stopPropagation()">
+                <input type="checkbox" class="rp-master-toggle" ${allChecked ? 'checked' : ''}>
+                <span class="slider round"></span>
+              </label>
+              <span class="mod-group-arrow">▼</span>
+            </div>
+          </div>
+          <div class="mod-group-body"></div>
+        `;
+
+        const optBody = optGroupCard.querySelector('.mod-group-body');
+        const masterToggle = optGroupCard.querySelector('.rp-master-toggle');
+
+        optGroupCard.querySelector('.mod-group-header').addEventListener('click', (e) => {
+          if (e.target.closest('.switch')) return;
+          optGroupCard.classList.toggle('collapsed');
+        });
+
+        groupRps.forEach(rp => {
+          const card = document.createElement('div');
+          card.className = 'mod-card';
+          const packKey = rp.filepath || rp.filename;
+          const isChecked = appState.selectedOptionalResourcePacks.includes(packKey);
+
+          const iconHtml = rp.icon_url
+            ? `<img src="${rp.icon_url}" class="mod-logo-img" alt="logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'38\\' height=\\'38\\' fill=\\'%23ff6b00\\' viewBox=\\'0 0 24 24\\'><path d=\\'M12 3L2 12h3v8h14v-8h3L12 3z\\'/></svg>'">`
+            : `<div class="mod-logo-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(255,107,0,0.1);color:var(--accent-orange);">🎨</div>`;
+
+          card.innerHTML = `
+            <div class="mod-left-box">
+              ${iconHtml}
+              <div class="mod-info">
+                <span class="mod-title">${rp.name || rp.filename}</span>
+                <span class="mod-desc">${rp.description || 'Опциональный ресурспак'}</span>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" class="rp-single-toggle" data-key="${packKey}" ${isChecked ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
+          `;
+
+          const singleInput = card.querySelector('.rp-single-toggle');
+          singleInput.addEventListener('change', (e) => {
+            const key = e.target.dataset.key;
+            if (e.target.checked) {
+              if (!appState.selectedOptionalResourcePacks.includes(key)) appState.selectedOptionalResourcePacks.push(key);
+            } else {
+              appState.selectedOptionalResourcePacks = appState.selectedOptionalResourcePacks.filter(k => k !== key);
+            }
+            localStorage.setItem('vozducraft_selected_opt_rps', JSON.stringify(appState.selectedOptionalResourcePacks));
+
+            const currentAll = groupRps.every(r => appState.selectedOptionalResourcePacks.includes(r.filepath || r.filename));
+            masterToggle.checked = currentAll;
+          });
+
+          optBody.appendChild(card);
+        });
+
+        masterToggle.addEventListener('change', (e) => {
+          const turnOn = e.target.checked;
+          const allCheckboxes = optBody.querySelectorAll('.rp-single-toggle');
+          allCheckboxes.forEach(cb => {
+            cb.checked = turnOn;
+            const key = cb.dataset.key;
+            if (turnOn) {
+              if (!appState.selectedOptionalResourcePacks.includes(key)) appState.selectedOptionalResourcePacks.push(key);
+            } else {
+              appState.selectedOptionalResourcePacks = appState.selectedOptionalResourcePacks.filter(k => k !== key);
+            }
+          });
+          localStorage.setItem('vozducraft_selected_opt_rps', JSON.stringify(appState.selectedOptionalResourcePacks));
+        });
+
+        container.appendChild(optGroupCard);
+      });
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки ресурспаков:', err);
   }
 }
 
@@ -1076,11 +1326,14 @@ function setupNavigation() {
       const targetTab = document.getElementById(targetTabId);
       if (targetTab) targetTab.classList.add('active');
 
+      const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
+
       if (item.dataset.tab === 'screenshots') {
         loadScreenshots();
       } else if (item.dataset.tab === 'mods') {
-        const activeServer = appState.servers[appState.currentServerIndex] || appState.servers[0];
         if (activeServer) fetchOptionalModsFor(activeServer.id);
+      } else if (item.dataset.tab === 'resourcepacks') {
+        if (activeServer) fetchResourcePacksFor(activeServer.id);
       }
     });
   });

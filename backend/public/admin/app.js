@@ -72,6 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSftpSyncControls();
   setupLogViewerModal();
   setupChangePasswordModal();
+  setupEditModModal();
+  setupResourcePacksControls();
+  setupClientServersControls();
   startClock();
   startAuthHeartbeat();
 
@@ -114,6 +117,8 @@ function setupNavigation() {
       // Обновление данных для активной вкладки
       if (btn.dataset.tab === 'servers') loadServers();
       if (btn.dataset.tab === 'modpack') loadModpack();
+      if (btn.dataset.tab === 'resourcepacks') loadResourcePacks();
+      if (btn.dataset.tab === 'client-servers') loadClientServers();
       if (btn.dataset.tab === 'releases') loadReleases();
       if (btn.dataset.tab === 'bans') loadBans();
       if (btn.dataset.tab === 'mirrors') loadMirrors();
@@ -639,7 +644,7 @@ function renderModpackTable(files) {
   tbody.innerHTML = '';
 
   if (files.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">В сборке этого сервера пока нет модов. Перетащите файлы сюда или добавьте из Modrinth.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">В сборке этого сервера пока нет модов. Перетащите файлы сюда или добавьте из Modrinth.</td></tr>';
     updateBulkBar();
     return;
   }
@@ -649,14 +654,40 @@ function renderModpackTable(files) {
     const sizeMb = (file.size_bytes / (1024 * 1024)).toFixed(2);
     const isChecked = state.selectedModIds.has(file.id);
 
+    const iconHtml = file.icon_url 
+      ? `<img src="${file.icon_url}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);" alt="logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'32\\' height=\\'32\\' fill=\\'%23ff6b00\\' viewBox=\\'0 0 24 24\\'><path d=\\'M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18s-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18s.41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z\\'/></svg>'">`
+      : `<div style="width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: rgba(255,107,0,0.1); color: #ff6b00; font-size: 16px; flex-shrink: 0;">🧩</div>`;
+
+    const isAllUsers = !file.allowed_users || file.allowed_users === 'ALL' || file.allowed_users === '["ALL"]' || file.allowed_users.trim() === '';
+    let userBadgeHtml = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(34, 197, 94, 0.15); color: #4ade80; font-weight: 600;">Всем</span>`;
+    if (!isAllUsers) {
+      let displayUsers = file.allowed_users;
+      try {
+        const parsed = JSON.parse(file.allowed_users);
+        if (Array.isArray(parsed)) displayUsers = parsed.join(', ');
+      } catch (_) {}
+      userBadgeHtml = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-weight: 600; max-width: 140px; display: inline-block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${displayUsers}">🔒 ${displayUsers}</span>`;
+    }
+
     tr.innerHTML = `
       <td style="text-align: center;">
         <input type="checkbox" class="mod-checkbox styled-checkbox" data-id="${file.id}" ${isChecked ? 'checked' : ''}>
       </td>
       <td>
-        <div class="mod-title-cell">${file.mod_name || file.filepath}</div>
-        <div class="mod-path-sub">${file.filepath}</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${iconHtml}
+          <div style="overflow: hidden;">
+            <div class="mod-title-cell" title="${file.mod_name || file.filepath}">${file.mod_name || file.filepath}</div>
+            <div class="mod-path-sub">${file.filepath}</div>
+          </div>
+        </div>
       </td>
+      <td>
+        <span style="font-size: 11px; padding: 3px 8px; border-radius: 12px; background: rgba(255, 107, 0, 0.15); color: #ff6b00; border: 1px solid rgba(255, 107, 0, 0.3); font-weight: 600;">
+          ${file.group_name || 'Общие'}
+        </span>
+      </td>
+      <td>${userBadgeHtml}</td>
       <td>${sizeMb} MB</td>
       <td>
         <span class="tag-badge ${file.is_optional ? 'optional' : 'required'}">
@@ -664,7 +695,8 @@ function renderModpackTable(files) {
         </span>
       </td>
       <td>
-        <button class="btn-icon btn-toggle-opt" data-id="${file.id}" title="Переключить тип">${file.is_optional ? '🔒 Сделать обязательным' : '⚙️ Сделать опциональным'}</button>
+        <button class="btn-icon btn-edit-mod-details" data-id="${file.id}" title="⚙️ Настроить группу, доступ и превью" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; margin-right: 4px;">⚙️</button>
+        <button class="btn-icon btn-toggle-opt" data-id="${file.id}" title="Переключить тип">${file.is_optional ? '🔒' : '⚡'}</button>
         <button class="btn-icon btn-delete-mod" data-id="${file.id}" title="Удалить из сборки">🗑️</button>
       </td>
     `;
@@ -684,9 +716,16 @@ function renderModpackTable(files) {
     });
   });
 
+  document.querySelectorAll('.btn-edit-mod-details').forEach(b => {
+    b.addEventListener('click', (e) => {
+      const id = parseInt(e.currentTarget.dataset.id, 10);
+      openEditModModal(id);
+    });
+  });
+
   document.querySelectorAll('.btn-toggle-opt').forEach(b => {
     b.addEventListener('click', async (e) => {
-      const id = e.target.dataset.id;
+      const id = e.currentTarget.dataset.id;
       await fetch(`${API_BASE}/api/v1/admin/modpack/${id}/toggle-optional`, {
         method: 'PATCH',
         headers: getAuthHeaders()
@@ -697,7 +736,7 @@ function renderModpackTable(files) {
 
   document.querySelectorAll('.btn-delete-mod').forEach(b => {
     b.addEventListener('click', async (e) => {
-      const id = e.target.dataset.id;
+      const id = e.currentTarget.dataset.id;
       if (confirm('Удалить этот мод из сборки сервера?')) {
         await fetch(`${API_BASE}/api/v1/admin/modpack/${id}`, {
           method: 'DELETE',
@@ -2676,4 +2715,606 @@ async function handleSftpDeploy() {
   } finally {
     if (sftpSessionConfig) sftpSessionConfig.password = '';
   }
+}
+
+// ----------------------------------------------------
+// 14. МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ МОДА
+// ----------------------------------------------------
+function openEditModModal(modId) {
+  const mod = state.currentModpack.find(m => m.id === modId);
+  if (!mod) return;
+
+  document.getElementById('edit-mod-id').value = mod.id;
+  document.getElementById('edit-mod-name').value = mod.mod_name || '';
+  document.getElementById('edit-mod-group').value = mod.group_name || 'Общие';
+
+  let displayUsers = mod.allowed_users || 'ALL';
+  try {
+    const parsed = JSON.parse(displayUsers);
+    if (Array.isArray(parsed)) displayUsers = parsed.join(', ');
+  } catch (_) {}
+  document.getElementById('edit-mod-users').value = displayUsers;
+  document.getElementById('edit-mod-icon').value = mod.icon_url || '';
+  document.getElementById('edit-mod-desc').value = mod.mod_description || '';
+  document.getElementById('edit-mod-optional').checked = mod.is_optional === 1;
+
+  document.getElementById('modal-edit-mod').classList.remove('hidden');
+}
+
+function setupEditModModal() {
+  const modal = document.getElementById('modal-edit-mod');
+  const form = document.getElementById('form-edit-mod');
+  const btnClose = document.getElementById('btn-close-edit-mod');
+  const btnCancel = document.getElementById('btn-cancel-edit-mod');
+
+  const closeModal = () => modal?.classList.add('hidden');
+  btnClose?.addEventListener('click', closeModal);
+  btnCancel?.addEventListener('click', closeModal);
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-mod-id').value;
+    const name = document.getElementById('edit-mod-name').value.trim();
+    const group = document.getElementById('edit-mod-group').value.trim() || 'Общие';
+    const rawUsers = document.getElementById('edit-mod-users').value.trim();
+    const iconUrl = document.getElementById('edit-mod-icon').value.trim();
+    const desc = document.getElementById('edit-mod-desc').value.trim();
+    const isOpt = document.getElementById('edit-mod-optional').checked;
+
+    let usersPayload = 'ALL';
+    if (rawUsers && rawUsers.toUpperCase() !== 'ALL' && rawUsers !== '*') {
+      usersPayload = rawUsers.split(',').map(u => u.trim()).filter(Boolean);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/modpack/${id}/details`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          mod_name: name,
+          mod_description: desc,
+          group_name: group,
+          allowed_users: usersPayload,
+          icon_url: iconUrl,
+          is_optional: isOpt
+        })
+      });
+
+      if (res.ok) {
+        closeModal();
+        await loadModpack();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Ошибка сохранения параметров мода');
+      }
+    } catch (err) {
+      alert('Ошибка соединения: ' + err.message);
+    }
+  });
+}
+
+// ----------------------------------------------------
+// 15. УПРАВЛЕНИЕ РЕСУРСПАКАМИ (RESOURCE PACKS)
+// ----------------------------------------------------
+let currentResourcePacks = [];
+
+async function loadResourcePacks() {
+  try {
+    const serverSelect = document.getElementById('select-rp-server');
+    if (serverSelect && serverSelect.options.length === 0) {
+      state.servers.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.minecraft_version})`;
+        serverSelect.appendChild(opt);
+      });
+      serverSelect.value = state.currentServerId;
+      serverSelect.addEventListener('change', () => {
+        state.currentServerId = parseInt(serverSelect.value, 10);
+        loadResourcePacks();
+      });
+    }
+
+    const res = await fetch(`${API_BASE}/api/v1/admin/resourcepacks?serverId=${state.currentServerId}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    currentResourcePacks = data.resourcePacks || [];
+    renderResourcePacksTable(currentResourcePacks);
+  } catch (err) {
+    console.error('Ошибка загрузки ресурспаков:', err);
+  }
+}
+
+function renderResourcePacksTable(packs) {
+  const tbody = document.getElementById('resourcepacks-table-body');
+  const badge = document.getElementById('rps-count-badge');
+  if (!tbody) return;
+
+  if (badge) badge.textContent = `Всего ресурспаков: ${packs.length}`;
+  tbody.innerHTML = '';
+
+  if (packs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Для этого сервера пока нет ресурспаков. Нажмите «Загрузить .ZIP» или найдите в Modrinth.</td></tr>';
+    return;
+  }
+
+  packs.forEach(pack => {
+    const tr = document.createElement('tr');
+    const sizeMb = (pack.size_bytes / (1024 * 1024)).toFixed(2);
+
+    const iconHtml = pack.icon_url
+      ? `<img src="${pack.icon_url}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);" alt="logo">`
+      : `<div style="width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); color: #60a5fa; font-size: 16px; flex-shrink: 0;">🎨</div>`;
+
+    const isAllUsers = !pack.allowed_users || pack.allowed_users === 'ALL' || pack.allowed_users === '["ALL"]' || pack.allowed_users.trim() === '';
+    let userBadgeHtml = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(34, 197, 94, 0.15); color: #4ade80; font-weight: 600;">Всем</span>`;
+    if (!isAllUsers) {
+      let displayUsers = pack.allowed_users;
+      try {
+        const parsed = JSON.parse(pack.allowed_users);
+        if (Array.isArray(parsed)) displayUsers = parsed.join(', ');
+      } catch (_) {}
+      userBadgeHtml = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-weight: 600; max-width: 140px; display: inline-block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${displayUsers}">🔒 ${displayUsers}</span>`;
+    }
+
+    tr.innerHTML = `
+      <td>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${iconHtml}
+          <div>
+            <div style="font-weight: 600; font-size: 14px; color: #fff;">${pack.name}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${pack.description || ''}</div>
+          </div>
+        </div>
+      </td>
+      <td><code style="font-size: 12px;">${pack.filename}</code></td>
+      <td>
+        <span style="font-size: 11px; padding: 3px 8px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600;">
+          ${pack.group_name || 'Текстуры'}
+        </span>
+      </td>
+      <td>${userBadgeHtml}</td>
+      <td>${sizeMb} MB</td>
+      <td>
+        <span class="tag-badge ${pack.is_optional ? 'optional' : 'required'}">
+          ${pack.is_optional ? 'Опциональный' : 'Обязательный'}
+        </span>
+      </td>
+      <td>
+        <button class="btn-icon btn-edit-rp" data-id="${pack.id}" title="Редактировать" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; margin-right: 4px;">⚙️</button>
+        <button class="btn-icon btn-delete-rp" data-id="${pack.id}" title="Удалить ресурспак">🗑️</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.btn-edit-rp').forEach(b => {
+    b.addEventListener('click', (e) => {
+      const id = parseInt(e.currentTarget.dataset.id, 10);
+      openEditRpModal(id);
+    });
+  });
+
+  document.querySelectorAll('.btn-delete-rp').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      const id = e.currentTarget.dataset.id;
+      if (confirm('Удалить этот ресурспак?')) {
+        await fetch(`${API_BASE}/api/v1/admin/resourcepacks/${id}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        loadResourcePacks();
+      }
+    });
+  });
+}
+
+function openEditRpModal(packId) {
+  const pack = currentResourcePacks.find(p => p.id === packId);
+  if (!pack) return;
+
+  document.getElementById('edit-rp-id').value = pack.id;
+  document.getElementById('edit-rp-name').value = pack.name || '';
+  document.getElementById('edit-rp-group').value = pack.group_name || 'Текстуры';
+
+  let displayUsers = pack.allowed_users || 'ALL';
+  try {
+    const parsed = JSON.parse(displayUsers);
+    if (Array.isArray(parsed)) displayUsers = parsed.join(', ');
+  } catch (_) {}
+  document.getElementById('edit-rp-users').value = displayUsers;
+  document.getElementById('edit-rp-icon').value = pack.icon_url || '';
+  document.getElementById('edit-rp-desc').value = pack.description || '';
+  document.getElementById('edit-rp-optional').checked = pack.is_optional === 1;
+
+  document.getElementById('modal-edit-rp').classList.remove('hidden');
+}
+
+function setupResourcePacksControls() {
+  const searchInput = document.getElementById('search-local-rps');
+  searchInput?.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase().trim();
+    if (!q) {
+      renderResourcePacksTable(currentResourcePacks);
+      return;
+    }
+    const filtered = currentResourcePacks.filter(p => 
+      (p.name && p.name.toLowerCase().includes(q)) || 
+      (p.filename && p.filename.toLowerCase().includes(q)) ||
+      (p.group_name && p.group_name.toLowerCase().includes(q))
+    );
+    renderResourcePacksTable(filtered);
+  });
+
+  // Загрузка .ZIP модалка
+  const btnOpenUpload = document.getElementById('btn-open-upload-rp');
+  const modalUpload = document.getElementById('modal-upload-rp');
+  const formUpload = document.getElementById('form-upload-rp');
+  const btnCloseUpload = document.getElementById('btn-close-upload-rp');
+  const btnCancelUpload = document.getElementById('btn-cancel-upload-rp');
+
+  btnOpenUpload?.addEventListener('click', () => modalUpload?.classList.remove('hidden'));
+  btnCloseUpload?.addEventListener('click', () => modalUpload?.classList.add('hidden'));
+  btnCancelUpload?.addEventListener('click', () => modalUpload?.classList.add('hidden'));
+
+  formUpload?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fileInput = document.getElementById('input-rp-file');
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const name = document.getElementById('input-rp-name').value.trim() || file.name.replace(/\.zip$/i, '');
+    const group = document.getElementById('input-rp-group').value.trim() || 'Текстуры';
+    const rawUsers = document.getElementById('input-rp-users').value.trim();
+    const icon = document.getElementById('input-rp-icon').value.trim();
+    const desc = document.getElementById('input-rp-desc').value.trim();
+    const isOpt = document.getElementById('input-rp-optional').checked;
+
+    let usersPayload = 'ALL';
+    if (rawUsers && rawUsers.toUpperCase() !== 'ALL') {
+      usersPayload = rawUsers.split(',').map(u => u.trim()).filter(Boolean);
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result.split(',')[1];
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/resourcepacks/upload`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            serverId: state.currentServerId,
+            filename: file.name,
+            base64Data,
+            name,
+            description: desc,
+            isOptional: isOpt,
+            isRequired: !isOpt,
+            groupName: group,
+            allowedUsers: usersPayload,
+            iconUrl: icon
+          })
+        });
+
+        if (res.ok) {
+          modalUpload?.classList.add('hidden');
+          formUpload.reset();
+          loadResourcePacks();
+        } else {
+          const errData = await res.json();
+          alert(errData.error || 'Ошибка загрузки ресурспака');
+        }
+      } catch (err) {
+        alert('Ошибка отправки: ' + err.message);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Редактирование ресурспака
+  const modalEditRp = document.getElementById('modal-edit-rp');
+  const formEditRp = document.getElementById('form-edit-rp');
+  const btnCloseEditRp = document.getElementById('btn-close-edit-rp');
+  const btnCancelEditRp = document.getElementById('btn-cancel-edit-rp');
+
+  btnCloseEditRp?.addEventListener('click', () => modalEditRp?.classList.add('hidden'));
+  btnCancelEditRp?.addEventListener('click', () => modalEditRp?.classList.add('hidden'));
+
+  formEditRp?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-rp-id').value;
+    const name = document.getElementById('edit-rp-name').value.trim();
+    const group = document.getElementById('edit-rp-group').value.trim() || 'Текстуры';
+    const rawUsers = document.getElementById('edit-rp-users').value.trim();
+    const icon = document.getElementById('edit-rp-icon').value.trim();
+    const desc = document.getElementById('edit-rp-desc').value.trim();
+    const isOpt = document.getElementById('edit-rp-optional').checked;
+
+    let usersPayload = 'ALL';
+    if (rawUsers && rawUsers.toUpperCase() !== 'ALL') {
+      usersPayload = rawUsers.split(',').map(u => u.trim()).filter(Boolean);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/resourcepacks/${id}/details`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name,
+          description: desc,
+          group_name: group,
+          allowed_users: usersPayload,
+          icon_url: icon,
+          is_optional: isOpt,
+          is_required: !isOpt
+        })
+      });
+
+      if (res.ok) {
+        modalEditRp?.classList.add('hidden');
+        loadResourcePacks();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Ошибка обновления ресурспака');
+      }
+    } catch (err) {
+      alert('Ошибка соединения: ' + err.message);
+    }
+  });
+
+  // Modrinth ресурспаки
+  const btnOpenModrinthRp = document.getElementById('btn-open-modrinth-rp');
+  const modalModrinthRp = document.getElementById('modal-modrinth-rp');
+  const btnCloseModrinthRp = document.getElementById('btn-close-modrinth-rp');
+  const btnSearchRp = document.getElementById('btn-search-modrinth-rp');
+  const rpQueryInput = document.getElementById('modrinth-rp-query');
+
+  btnOpenModrinthRp?.addEventListener('click', () => modalModrinthRp?.classList.remove('hidden'));
+  btnCloseModrinthRp?.addEventListener('click', () => modalModrinthRp?.classList.add('hidden'));
+
+  const doSearchRp = async () => {
+    const q = rpQueryInput?.value.trim() || '';
+    const container = document.getElementById('modrinth-rp-results-container');
+    if (!container) return;
+    container.innerHTML = '<div class="spinner" style="margin: 30px auto;"></div>';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/modrinth/search?q=${encodeURIComponent(q)}&projectType=resourcepack`, {
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      const hits = data.hits || [];
+
+      if (hits.length === 0) {
+        container.innerHTML = '<div class="empty-state">Ресурспаки не найдены</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+      hits.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'modrinth-card glass-panel';
+        const iconSrc = item.icon_url || '';
+
+        card.innerHTML = `
+          <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
+            ${iconSrc ? `<img src="${iconSrc}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 8px; background: rgba(59,130,246,0.1); color: #60a5fa; font-size: 22px; display: flex; align-items: center; justify-content: center;">🎨</div>`}
+            <div>
+              <h4 style="color: #fff; font-size: 15px; margin: 0;">${item.title}</h4>
+              <span style="font-size: 11px; color: var(--text-muted);">${item.author} • ${(item.downloads || 0).toLocaleString()} скачиваний</span>
+            </div>
+          </div>
+          <p style="font-size: 12px; color: #94a3b8; line-height: 1.4; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${item.description || ''}</p>
+          <button class="btn-primary btn-sm btn-install-modrinth-rp" data-project-id="${item.project_id}" style="width: 100%; background: linear-gradient(135deg, #10b981, #059669);">➕ Установить в сборку</button>
+        `;
+
+        card.querySelector('.btn-install-modrinth-rp').addEventListener('click', async (e) => {
+          const btn = e.currentTarget;
+          const pId = btn.dataset.projectId;
+          btn.disabled = true;
+          btn.textContent = '⏳ Получение версий...';
+
+          try {
+            const vRes = await fetch(`${API_BASE}/api/v1/admin/modrinth/versions?projectId=${pId}&projectType=resourcepack`, {
+              headers: getAuthHeaders()
+            });
+            const versions = await vRes.json();
+            if (!versions || versions.length === 0) {
+              alert('Не найдено версий ресурспака для Minecraft 1.21.1');
+              btn.disabled = false;
+              btn.textContent = '➕ Установить в сборку';
+              return;
+            }
+
+            const latestVer = versions[0];
+            btn.textContent = '📥 Установка...';
+
+            const addRes = await fetch(`${API_BASE}/api/v1/admin/resourcepacks/add-modrinth`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({
+                serverId: state.currentServerId,
+                projectId: pId,
+                versionId: latestVer.id,
+                isOptional: true,
+                groupName: 'Текстуры и Анимации'
+              })
+            });
+
+            if (addRes.ok) {
+              btn.textContent = '✅ Установлено!';
+              modalModrinthRp?.classList.add('hidden');
+              loadResourcePacks();
+            } else {
+              const err = await addRes.json();
+              alert(err.error || 'Ошибка установки ресурспака');
+              btn.disabled = false;
+              btn.textContent = '➕ Установить в сборку';
+            }
+          } catch (verErr) {
+            alert('Ошибка: ' + verErr.message);
+            btn.disabled = false;
+            btn.textContent = '➕ Установить в сборку';
+          }
+        });
+
+        container.appendChild(card);
+      });
+    } catch (err) {
+      container.innerHTML = '<div class="empty-state">Ошибка поиска: ' + err.message + '</div>';
+    }
+  };
+
+  btnSearchRp?.addEventListener('click', doSearchRp);
+  rpQueryInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSearchRp();
+  });
+}
+
+// ----------------------------------------------------
+// 16. КЛИЕНТСКИЕ СЕРВЕРЫ (SERVERS.DAT)
+// ----------------------------------------------------
+let currentClientServers = [];
+
+async function loadClientServers() {
+  try {
+    const serverSelect = document.getElementById('select-cs-server');
+    if (serverSelect && serverSelect.options.length === 0) {
+      state.servers.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.minecraft_version})`;
+        serverSelect.appendChild(opt);
+      });
+      serverSelect.value = state.currentServerId;
+      serverSelect.addEventListener('change', () => {
+        state.currentServerId = parseInt(serverSelect.value, 10);
+        loadClientServers();
+      });
+    }
+
+    const res = await fetch(`${API_BASE}/api/v1/admin/client-servers?serverId=${state.currentServerId}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    currentClientServers = data.servers || [];
+    renderClientServersTable(currentClientServers);
+  } catch (err) {
+    console.error('Ошибка загрузки клиентских серверов:', err);
+  }
+}
+
+function renderClientServersTable(servers) {
+  const tbody = document.getElementById('client-servers-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (servers.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Нет настроенных серверов для servers.dat. Нажмите «Добавить сервер».</td></tr>';
+    return;
+  }
+
+  servers.forEach((s, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong style="color: #fff;">${s.name}</strong></td>
+      <td><code style="color: #38bdf8; font-size: 13px;">${s.address}</code></td>
+      <td>
+        <span class="tag-badge ${s.is_active ? 'optional' : 'required'}" style="${s.is_active ? 'background:rgba(34,197,94,0.15);color:#4ade80;' : ''}">
+          ${s.is_active ? 'Включен в servers.dat' : 'Отключен'}
+        </span>
+      </td>
+      <td>${s.sort_order || (idx + 1)}</td>
+      <td>
+        <button class="btn-icon btn-edit-cs" data-id="${s.id}" title="Редактировать" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; margin-right: 4px;">✏️</button>
+        <button class="btn-icon btn-delete-cs" data-id="${s.id}" title="Удалить">🗑️</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.btn-edit-cs').forEach(b => {
+    b.addEventListener('click', (e) => {
+      const id = parseInt(e.currentTarget.dataset.id, 10);
+      const server = currentClientServers.find(s => s.id === id);
+      if (!server) return;
+
+      document.getElementById('client-server-id').value = server.id;
+      document.getElementById('cs-name').value = server.name;
+      document.getElementById('cs-address').value = server.address;
+      document.getElementById('cs-active').checked = server.is_active === 1;
+      document.getElementById('client-server-modal-title').textContent = '✏️ Редактировать сервер servers.dat';
+      document.getElementById('modal-client-server').classList.remove('hidden');
+    });
+  });
+
+  document.querySelectorAll('.btn-delete-cs').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      const id = e.currentTarget.dataset.id;
+      if (confirm('Удалить этот сервер из списка servers.dat?')) {
+        await fetch(`${API_BASE}/api/v1/admin/client-servers/${id}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        loadClientServers();
+      }
+    });
+  });
+}
+
+function setupClientServersControls() {
+  const modal = document.getElementById('modal-client-server');
+  const form = document.getElementById('form-client-server');
+  const btnOpen = document.getElementById('btn-open-add-client-server');
+  const btnClose = document.getElementById('btn-close-client-server');
+  const btnCancel = document.getElementById('btn-cancel-client-server');
+
+  btnOpen?.addEventListener('click', () => {
+    document.getElementById('client-server-id').value = '';
+    form.reset();
+    document.getElementById('cs-active').checked = true;
+    document.getElementById('client-server-modal-title').textContent = '➕ Добавить сервер в servers.dat';
+    modal?.classList.remove('hidden');
+  });
+
+  const closeModal = () => modal?.classList.add('hidden');
+  btnClose?.addEventListener('click', closeModal);
+  btnCancel?.addEventListener('click', closeModal);
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('client-server-id').value;
+    const name = document.getElementById('cs-name').value.trim();
+    const address = document.getElementById('cs-address').value.trim();
+    const isActive = document.getElementById('cs-active').checked;
+
+    try {
+      let res;
+      if (id) {
+        res = await fetch(`${API_BASE}/api/v1/admin/client-servers/${id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ name, address, is_active: isActive })
+        });
+      } else {
+        res = await fetch(`${API_BASE}/api/v1/admin/client-servers`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ server_id: state.currentServerId, name, address, is_active: isActive })
+        });
+      }
+
+      if (res.ok) {
+        closeModal();
+        loadClientServers();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Ошибка сохранения сервера');
+      }
+    } catch (err) {
+      alert('Ошибка соединения: ' + err.message);
+    }
+  });
 }

@@ -171,6 +171,82 @@ $s.Save()
   }
 }
 
+// Бинарный NBT генератор/записыватель servers.dat для Minecraft Java
+function writeServersDat(serversList, targetPath) {
+  if (!Array.isArray(serversList) || serversList.length === 0) return;
+  const buffers = [];
+
+  function writeByte(val) {
+    const b = Buffer.alloc(1);
+    b.writeUInt8(val, 0);
+    buffers.push(b);
+  }
+
+  function writeShort(val) {
+    const b = Buffer.alloc(2);
+    b.writeUInt16BE(val, 0);
+    buffers.push(b);
+  }
+
+  function writeInt(val) {
+    const b = Buffer.alloc(4);
+    b.writeInt32BE(val, 0);
+    buffers.push(b);
+  }
+
+  function writeString(str) {
+    const strBuf = Buffer.from(str || '', 'utf8');
+    writeShort(strBuf.length);
+    buffers.push(strBuf);
+  }
+
+  function writeNamedTag(tagType, name) {
+    writeByte(tagType);
+    writeString(name);
+  }
+
+  // Root Compound (Tag ID 10, empty name "")
+  writeByte(0x0A);
+  writeShort(0x00);
+
+  // TAG_List (Tag ID 9), name "servers"
+  writeNamedTag(0x09, 'servers');
+  writeByte(0x0A); // Tag ID of items inside list: TAG_Compound (10)
+  writeInt(serversList.length);
+
+  for (const s of serversList) {
+    const sName = s.name || 'VozduCraft Server';
+    const sIp = s.address || s.ip || '89.248.236.145:27123';
+
+    // String "name"
+    writeNamedTag(0x08, 'name');
+    writeString(sName);
+
+    // String "ip"
+    writeNamedTag(0x08, 'ip');
+    writeString(sIp);
+
+    // Optional Base64 icon
+    if (s.icon_base64 || s.icon) {
+      writeNamedTag(0x08, 'icon');
+      writeString(s.icon_base64 || s.icon);
+    }
+
+    // Byte "acceptTextures" = 1 (Enabled)
+    writeNamedTag(0x01, 'acceptTextures');
+    writeByte(0x01);
+
+    // TAG_End (0) for this server Compound
+    writeByte(0x00);
+  }
+
+  // TAG_End (0) for Root Compound
+  writeByte(0x00);
+
+  const finalBuf = Buffer.concat(buffers);
+  fs.writeFileSync(targetPath, finalBuf);
+}
+
 function createWindow() {
   ensureDesktopShortcut();
 
@@ -678,11 +754,12 @@ rm -f "$0"
         }
       }
 
-      // 3.5. Синхронизация файлов модпака и модов с сервера
-      sendStatus(86, 'Синхронизация модов и конфигов сборки...');
+      // 3.5. Синхронизация файлов модпака, серверов и ресурспаков с сервера
+      sendStatus(86, 'Синхронизация сборки, серверов и текстур...');
       const serverId = launchData?.serverId || 1;
+      const currentUsername = launchData?.username || '';
       const apiBase = launchData?.apiBaseUrl || 'http://185.221.213.43:3000/api/v1';
-      const manifestUrl = `${apiBase.replace(/\/+$/, '')}/manifest?serverId=${serverId}`;
+      const manifestUrl = `${apiBase.replace(/\/+$/, '')}/manifest?serverId=${serverId}&username=${encodeURIComponent(currentUsername)}`;
       
       try {
         const manifestData = await new Promise((resolve) => {
@@ -698,6 +775,18 @@ rm -f "$0"
         });
 
         if (manifestData) {
+          // 3.5.1. Автоматическая запись/обновление servers.dat для списка серверов
+          if (manifestData.clientServers && Array.isArray(manifestData.clientServers) && manifestData.clientServers.length > 0) {
+            try {
+              const serversDatPath = path.join(gamePath, 'servers.dat');
+              writeServersDat(manifestData.clientServers, serversDatPath);
+              logToDisk(`[Servers.dat] Успешно записан servers.dat (${manifestData.clientServers.length} серверов)`);
+            } catch (sDatErr) {
+              logToDisk(`[Servers.dat Warning] ${sDatErr.message}`);
+            }
+          }
+
+          // 3.5.2. Синхронизация модов
           const selectedOpts = launchData?.selectedOptionalMods || launchData?.optionalMods || [];
           const filesToSync = [];
 
@@ -770,7 +859,7 @@ rm -f "$0"
 
               syncedCount++;
               if (syncedCount % 5 === 0 || syncedCount === filesToSync.length) {
-                const pct = 86 + Math.floor((syncedCount / Math.max(1, filesToSync.length)) * 4);
+                const pct = 86 + Math.floor((syncedCount / Math.max(1, filesToSync.length)) * 3);
                 sendStatus(pct, `[Синхронизация модов] ${syncedCount}/${filesToSync.length}`);
               }
             }
@@ -792,6 +881,80 @@ rm -f "$0"
               }
             }
           }
+
+          // 3.5.3. Синхронизация Ресурспаков (Resource Packs)
+          const resourcepacksDir = path.join(gamePath, 'resourcepacks');
+          if (!fs.existsSync(resourcepacksDir)) {
+            fs.mkdirSync(resourcepacksDir, { recursive: true });
+          }
+
+          const selectedOptPacks = launchData?.selectedOptionalResourcePacks || launchData?.selectedResourcePacks || [];
+          const rpToSync = [];
+          if (Array.isArray(manifestData.resourcePacks)) {
+            manifestData.resourcePacks.forEach(rp => rpToSync.push({ ...rp, isOpt: false }));
+          }
+          if (Array.isArray(manifestData.optionalResourcePacks)) {
+            manifestData.optionalResourcePacks.forEach(rp => {
+              if (selectedOptPacks.includes(rp.filepath) || selectedOptPacks.includes(rp.filename)) {
+                rpToSync.push({ ...rp, isOpt: true });
+              } else {
+                const targetRpPath = path.join(gamePath, rp.filepath || `resourcepacks/${rp.filename}`);
+                if (fs.existsSync(targetRpPath)) {
+                  try { fs.unlinkSync(targetRpPath); } catch (_) {}
+                }
+              }
+            });
+          }
+
+          const allowedRpFiles = new Set();
+          for (const rp of rpToSync) {
+            const relPath = rp.filepath || `resourcepacks/${rp.filename}`;
+            const targetRpPath = path.join(gamePath, relPath);
+            allowedRpFiles.add(path.basename(relPath).toLowerCase());
+
+            let downloadUrl = rp.download_url || '';
+            if (!downloadUrl) {
+              downloadUrl = `${masterHost}/files/${relPath.replace(/^\/+/, '')}`;
+            } else if (downloadUrl.includes('localhost:3000') || downloadUrl.includes('127.0.0.1:3000')) {
+              downloadUrl = downloadUrl.replace(/https?:\/\/(localhost|127\.0\.0\.1):3000/, masterHost);
+            } else if (downloadUrl.startsWith('/')) {
+              downloadUrl = `${masterHost}${downloadUrl}`;
+            }
+
+            if (downloadUrl) {
+              try {
+                let needDownload = true;
+                if (fs.existsSync(targetRpPath)) {
+                  const localSize = fs.statSync(targetRpPath).size;
+                  if (rp.size_bytes && localSize === rp.size_bytes && localSize > 0) {
+                    needDownload = false;
+                  }
+                }
+                if (needDownload) {
+                  logToDisk(`[Скачивание ресурспака] ${relPath} с ${downloadUrl}...`);
+                  fs.mkdirSync(path.dirname(targetRpPath), { recursive: true });
+                  await downloadFile(downloadUrl, targetRpPath, null).catch(e => {
+                    logToDisk(`[RP Sync Error] ${relPath}: ${e.message}`);
+                  });
+                }
+              } catch (rpErr) {
+                logToDisk(`[RP Warning] ${rpErr.message}`);
+              }
+            }
+          }
+
+          // 🛡️ Античит: очистка resourcepacks от посторонних .zip файлов (блокировка читерских X-Ray паков)
+          try {
+            if (fs.existsSync(resourcepacksDir)) {
+              const localRps = fs.readdirSync(resourcepacksDir);
+              for (const file of localRps) {
+                if (file.endsWith('.zip') && !allowedRpFiles.has(file.toLowerCase())) {
+                  logToDisk(`🛡️ Удален неразрешенный ресурспак: ${file}`);
+                  try { fs.unlinkSync(path.join(resourcepacksDir, file)); } catch (_) {}
+                }
+              }
+            }
+          } catch (_) {}
         }
       } catch (err) {
         logToDisk(`[Modpack Sync Error] ${err.message}`);

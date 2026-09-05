@@ -31,6 +31,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const db = await getDb();
     const serverIdParam = req.query.serverId ? parseInt(req.query.serverId as string, 10) : null;
+    const username = (req.query.username as string || '').trim();
 
     let targetServer = null;
     if (serverIdParam) {
@@ -43,8 +44,40 @@ router.get('/', async (req: Request, res: Response) => {
 
     const serverId = targetServer ? targetServer.id : 1;
 
+    // Функция проверки персонального доступа к моду/ресурспаку
+    const isUserAllowed = (allowedUsersStr: string | null | undefined, user: string): boolean => {
+      if (!allowedUsersStr || allowedUsersStr === 'ALL' || allowedUsersStr === '*' || allowedUsersStr.trim() === '') {
+        return true;
+      }
+      if (!user) return false;
+      try {
+        const list = JSON.parse(allowedUsersStr);
+        if (Array.isArray(list)) {
+          if (list.length === 0 || list.includes('ALL')) return true;
+          return list.some((u: any) => String(u).trim().toLowerCase() === user.toLowerCase());
+        }
+      } catch (_) {
+        const list = allowedUsersStr.split(',').map(s => s.trim().toLowerCase());
+        if (list.includes('all')) return true;
+        return list.includes(user.toLowerCase());
+      }
+      return false;
+    };
+
+    // Обязательные и опциональные моды
     const files = await db.all("SELECT * FROM modpack_files WHERE server_id = ? AND is_optional = 0 ORDER BY mod_name ASC", [serverId]);
-    const optionalFiles = await db.all("SELECT * FROM modpack_files WHERE server_id = ? AND is_optional = 1 ORDER BY mod_name ASC", [serverId]);
+    const rawOptionalFiles = await db.all("SELECT * FROM modpack_files WHERE server_id = ? AND is_optional = 1 ORDER BY group_name ASC, mod_name ASC", [serverId]);
+    
+    // Фильтруем опциональные моды по правам доступа игрока (например, Freecam только ютуберу)
+    const filteredOptionalFiles = (rawOptionalFiles || []).filter(f => isUserAllowed(f.allowed_users, username));
+
+    // Обязательные и опциональные ресурспаки
+    const rawReqResourcePacks = await db.all("SELECT * FROM resource_packs WHERE server_id = ? AND (is_optional = 0 OR is_required = 1) ORDER BY name ASC", [serverId]);
+    const rawOptResourcePacks = await db.all("SELECT * FROM resource_packs WHERE server_id = ? AND is_optional = 1 ORDER BY group_name ASC, name ASC", [serverId]);
+    const filteredOptResourcePacks = (rawOptResourcePacks || []).filter(rp => isUserAllowed(rp.allowed_users, username));
+
+    // Клиентские серверы для генерации servers.dat
+    const clientServers = await db.all("SELECT name, address, icon_base64 FROM client_servers WHERE server_id = ? AND is_active = 1 ORDER BY sort_order ASC, id ASC", [serverId]);
 
     const baseHost = `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}`;
 
@@ -59,12 +92,15 @@ router.get('/', async (req: Request, res: Response) => {
       }
       return {
         ...f,
+        group_name: f.group_name || 'Общие',
         download_url: downloadUrl
       };
     };
 
     const normalizedFiles = (files || []).map(normalizeFile);
-    const normalizedOptionalFiles = (optionalFiles || []).map(normalizeFile);
+    const normalizedOptionalFiles = filteredOptionalFiles.map(normalizeFile);
+    const normalizedReqResourcePacks = (rawReqResourcePacks || []).map(normalizeFile);
+    const normalizedOptResourcePacks = filteredOptResourcePacks.map(normalizeFile);
 
     const jvmConfig = await db.get("SELECT value FROM project_config WHERE key = 'jvm_flags'");
 
@@ -90,7 +126,12 @@ router.get('/', async (req: Request, res: Response) => {
       gameArgs: targetServer?.game_args || '',
       autoJoinServer: targetServer?.auto_join_server !== undefined ? targetServer.auto_join_server : 1,
       files: normalizedFiles,
-      optionalFiles: normalizedOptionalFiles
+      optionalFiles: normalizedOptionalFiles,
+      resourcePacks: normalizedReqResourcePacks,
+      optionalResourcePacks: normalizedOptResourcePacks,
+      clientServers: clientServers && clientServers.length > 0 ? clientServers : [
+        { name: targetServer?.name || 'VozduCraft Server', address: `${targetServer?.server_ip || '89.248.236.145'}:${targetServer?.server_port || 27123}` }
+      ]
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка сервера при получении манифеста' });

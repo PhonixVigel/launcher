@@ -244,6 +244,41 @@ async function initDbSchema(db: Database) {
     );
   `);
 
+  // 11. Таблица ресурспаков (Resource Packs)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS resource_packs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      server_id INTEGER NOT NULL DEFAULT 1,
+      name TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      filepath TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      description TEXT,
+      icon_url TEXT,
+      is_optional INTEGER DEFAULT 0,
+      is_required INTEGER DEFAULT 1,
+      group_name TEXT DEFAULT 'Текстуры',
+      allowed_users TEXT DEFAULT 'ALL',
+      download_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // 12. Таблица клиентских серверов (для автоматической генерации servers.dat)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS client_servers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      server_id INTEGER NOT NULL DEFAULT 1,
+      name TEXT NOT NULL,
+      address TEXT NOT NULL,
+      icon_base64 TEXT,
+      is_active INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Миграции столбцов
   const migrations = [
     'ALTER TABLE users ADD COLUMN last_ip TEXT;',
@@ -252,6 +287,12 @@ async function initDbSchema(db: Database) {
     'ALTER TABLE sessions ADD COLUMN is_admin_bypass INTEGER DEFAULT 0;',
     'ALTER TABLE modpack_files ADD COLUMN server_id INTEGER NOT NULL DEFAULT 1;',
     'ALTER TABLE modpack_files ADD COLUMN download_url TEXT;',
+    'ALTER TABLE modpack_files ADD COLUMN group_name TEXT DEFAULT \'Общие\';',
+    'ALTER TABLE modpack_files ADD COLUMN allowed_users TEXT DEFAULT \'ALL\';',
+    'ALTER TABLE modpack_files ADD COLUMN icon_url TEXT;',
+    'ALTER TABLE resource_packs ADD COLUMN group_name TEXT DEFAULT \'Текстуры\';',
+    'ALTER TABLE resource_packs ADD COLUMN allowed_users TEXT DEFAULT \'ALL\';',
+    'ALTER TABLE resource_packs ADD COLUMN icon_url TEXT;',
     'ALTER TABLE connection_stats ADD COLUMN server_id INTEGER DEFAULT 1;',
     'ALTER TABLE connection_stats ADD COLUMN ip_address TEXT;',
     'ALTER TABLE connection_stats ADD COLUMN hwid TEXT;',
@@ -264,6 +305,7 @@ async function initDbSchema(db: Database) {
     'ALTER TABLE servers ADD COLUMN game_args TEXT;',
     'ALTER TABLE servers ADD COLUMN auto_join_server INTEGER DEFAULT 1;',
     'CREATE INDEX IF NOT EXISTS idx_modpack_server ON modpack_files(server_id);',
+    'CREATE INDEX IF NOT EXISTS idx_resource_server ON resource_packs(server_id);',
     'CREATE INDEX IF NOT EXISTS idx_bans_target ON bans(ban_type, target_value);'
   ];
 
@@ -273,6 +315,17 @@ async function initDbSchema(db: Database) {
     } catch (e) {
       // Игнорируем дублирующиеся столбцы
     }
+  }
+
+  // Сид серверов по умолчанию для servers.dat
+  const existingClientServers = await db.get('SELECT COUNT(*) as count FROM client_servers');
+  if (!existingClientServers || existingClientServers.count === 0) {
+    await db.run(`
+      INSERT INTO client_servers (server_id, name, address, is_active, sort_order)
+      VALUES 
+        (1, 'VozduCraft Season #2', '89.248.236.145:27123', 1, 1),
+        (2, 'VozduCraft Tech & Create', '185.221.213.43:25566', 1, 2)
+    `);
   }
 
   // Сид начальных зеркал API при первом запуске

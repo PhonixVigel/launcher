@@ -439,14 +439,15 @@ router.post('/modpack/add-modrinth', requireAdmin, async (req: Request, res: Res
     const modDesc = pData.description || 'Установлено через Modrinth API';
     const filepath = `mods/${primaryFile.filename}`;
 
+    const iconUrl = pData.icon_url || null;
     const db = await getDb();
 
     // Удаляем старую версию мода в этом сервере если была
     await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, filepath]);
 
     await db.run(`
-      INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url)
-      VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+      INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url, icon_url, group_name, allowed_users)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, 'Общие', 'ALL')
     `, [
       targetServerId,
       filepath,
@@ -454,7 +455,8 @@ router.post('/modpack/add-modrinth', requireAdmin, async (req: Request, res: Res
       primaryFile.size,
       modName,
       modDesc,
-      primaryFile.url
+      primaryFile.url,
+      iconUrl
     ]);
 
     const adminUser = (req as any).user?.username || 'Admin';
@@ -1146,7 +1148,7 @@ router.post('/modpack/sftp-deploy-updates', requireAdmin, async (req: Request, r
 // POST /api/v1/admin/modpack/upload - Загрузка локального файла мода (.jar / .zip)
 router.post('/modpack/upload', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { serverId, filename, base64Data, modName, modDescription, isOptional } = req.body;
+    const { serverId, filename, base64Data, modName, modDescription, isOptional, groupName, allowedUsers, iconUrl } = req.body;
     if (!filename || !base64Data) {
       return res.status(400).json({ error: 'Имя файла и base64Data обязательны' });
     }
@@ -1170,11 +1172,18 @@ router.post('/modpack/upload', requireAdmin, async (req: Request, res: Response)
     const desc = modDescription || 'Загружено администратором';
     const downloadUrl = `http://localhost:3000/files/mods/${cleanFilename}`;
 
+    let normUsers = 'ALL';
+    if (Array.isArray(allowedUsers)) {
+      normUsers = JSON.stringify(allowedUsers.map((u: string) => u.trim()).filter(Boolean));
+    } else if (typeof allowedUsers === 'string') {
+      normUsers = allowedUsers.trim();
+    }
+
     const db = await getDb();
     await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, relativePath]);
     await db.run(`
-      INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url, icon_url, group_name, allowed_users)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       targetServerId,
       relativePath,
@@ -1183,7 +1192,10 @@ router.post('/modpack/upload', requireAdmin, async (req: Request, res: Response)
       isOptional ? 1 : 0,
       name,
       desc,
-      downloadUrl
+      downloadUrl,
+      iconUrl || null,
+      groupName || 'Общие',
+      normUsers
     ]);
 
     const adminUser = (req as any).user?.username || 'Admin';
@@ -1319,6 +1331,319 @@ router.patch('/modpack/:id/toggle-optional', requireAdmin, async (req: Request, 
     return res.json({ success: true, is_optional: file?.is_optional });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка изменения статуса опциональности' });
+  }
+});
+
+// PATCH /api/v1/admin/modpack/:id/details - Изменение параметров мода (Группа, доступ, иконка, описание)
+router.patch('/modpack/:id/details', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { mod_name, mod_description, group_name, allowed_users, icon_url, is_optional } = req.body;
+    const db = await getDb();
+
+    let normUsers = 'ALL';
+    if (Array.isArray(allowed_users)) {
+      normUsers = JSON.stringify(allowed_users.map((u: string) => u.trim()).filter(Boolean));
+    } else if (typeof allowed_users === 'string') {
+      normUsers = allowed_users.trim();
+    }
+
+    await db.run(`
+      UPDATE modpack_files 
+      SET mod_name = COALESCE(?, mod_name),
+          mod_description = COALESCE(?, mod_description),
+          group_name = COALESCE(?, group_name),
+          allowed_users = ?,
+          icon_url = COALESCE(?, icon_url),
+          is_optional = CASE WHEN ? IS NOT NULL THEN ? ELSE is_optional END
+      WHERE id = ?
+    `, [
+      mod_name,
+      mod_description,
+      group_name,
+      normUsers,
+      icon_url,
+      is_optional !== undefined ? (is_optional ? 1 : 0) : null,
+      is_optional !== undefined ? (is_optional ? 1 : 0) : 0,
+      id
+    ]);
+
+    const updated = await db.get("SELECT * FROM modpack_files WHERE id = ?", [id]);
+    return res.json({ success: true, mod: updated });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка обновления параметров мода' });
+  }
+});
+
+// ----------------------------------------------------
+// 2.1. КЛИЕНТСКИЕ СЕРВЕРЫ (ДЛЯ SERVERS.DAT)
+// ----------------------------------------------------
+
+// GET /api/v1/admin/client-servers
+router.get('/client-servers', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const serverId = req.query.serverId ? parseInt(req.query.serverId as string, 10) : 1;
+    const db = await getDb();
+    const list = await db.all("SELECT * FROM client_servers WHERE server_id = ? ORDER BY sort_order ASC, id ASC", [serverId]);
+    return res.json({ servers: list || [] });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения клиентских серверов' });
+  }
+});
+
+// POST /api/v1/admin/client-servers
+router.post('/client-servers', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { server_id, name, address, icon_base64, is_active } = req.body;
+    if (!name || !address) return res.status(400).json({ error: 'Название и IP:порт обязательны' });
+    const targetServerId = server_id ? parseInt(server_id, 10) : 1;
+    const db = await getDb();
+    const result = await db.run(`
+      INSERT INTO client_servers (server_id, name, address, icon_base64, is_active, sort_order)
+      VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM client_servers WHERE server_id = ?))
+    `, [targetServerId, name.trim(), address.trim(), icon_base64 || null, is_active !== undefined ? (is_active ? 1 : 0) : 1, targetServerId]);
+
+    return res.json({ success: true, id: result.lastID });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка добавления клиентского сервера' });
+  }
+});
+
+// PUT /api/v1/admin/client-servers/:id
+router.put('/client-servers/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { name, address, icon_base64, is_active, sort_order } = req.body;
+    const db = await getDb();
+    await db.run(`
+      UPDATE client_servers 
+      SET name = COALESCE(?, name),
+          address = COALESCE(?, address),
+          icon_base64 = COALESCE(?, icon_base64),
+          is_active = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
+          sort_order = COALESCE(?, sort_order)
+      WHERE id = ?
+    `, [
+      name,
+      address,
+      icon_base64,
+      is_active !== undefined ? (is_active ? 1 : 0) : null,
+      is_active !== undefined ? (is_active ? 1 : 0) : 1,
+      sort_order,
+      id
+    ]);
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка обновления клиентского сервера' });
+  }
+});
+
+// DELETE /api/v1/admin/client-servers/:id
+router.delete('/client-servers/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const db = await getDb();
+    await db.run("DELETE FROM client_servers WHERE id = ?", [id]);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка удаления клиентского сервера' });
+  }
+});
+
+// ----------------------------------------------------
+// 2.2. УПРАВЛЕНИЕ РЕСУРСПАКАМИ (RESOURCE PACKS)
+// ----------------------------------------------------
+
+// GET /api/v1/admin/resourcepacks
+router.get('/resourcepacks', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const serverId = req.query.serverId ? parseInt(req.query.serverId as string, 10) : 1;
+    const db = await getDb();
+    const packs = await db.all("SELECT * FROM resource_packs WHERE server_id = ? ORDER BY name ASC", [serverId]);
+    return res.json({ resourcePacks: packs || [], serverId });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка получения списка ресурспаков' });
+  }
+});
+
+// POST /api/v1/admin/resourcepacks/upload - Загрузка локального .zip ресурспака
+router.post('/resourcepacks/upload', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { serverId, filename, base64Data, name, description, isOptional, isRequired, groupName, allowedUsers, iconUrl } = req.body;
+    if (!filename || !base64Data) return res.status(400).json({ error: 'Имя файла и base64Data обязательны' });
+
+    const targetServerId = serverId ? parseInt(serverId, 10) : 1;
+    const cleanFilename = path.basename(filename);
+    const rpStorageDir = path.resolve(__dirname, '../../public/files/resourcepacks');
+    if (!fs.existsSync(rpStorageDir)) {
+      fs.mkdirSync(rpStorageDir, { recursive: true });
+    }
+
+    const buffer = Buffer.from(base64Data, 'base64');
+    const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+    const targetFilePath = path.join(rpStorageDir, cleanFilename);
+    fs.writeFileSync(targetFilePath, buffer);
+
+    const relativePath = `resourcepacks/${cleanFilename}`;
+    const packName = name || cleanFilename.replace(/\.zip$/i, '');
+    const packDesc = description || 'Ресурспак загружен администратором';
+    const downloadUrl = `http://localhost:3000/files/resourcepacks/${cleanFilename}`;
+
+    let normUsers = 'ALL';
+    if (Array.isArray(allowedUsers)) {
+      normUsers = JSON.stringify(allowedUsers.map((u: string) => u.trim()).filter(Boolean));
+    } else if (typeof allowedUsers === 'string') {
+      normUsers = allowedUsers.trim();
+    }
+
+    const db = await getDb();
+    await db.run("DELETE FROM resource_packs WHERE server_id = ? AND filepath = ?", [targetServerId, relativePath]);
+    const result = await db.run(`
+      INSERT INTO resource_packs (server_id, name, filename, filepath, sha256, size_bytes, description, icon_url, is_optional, is_required, group_name, allowed_users, download_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      targetServerId,
+      packName,
+      cleanFilename,
+      relativePath,
+      sha256,
+      buffer.length,
+      packDesc,
+      iconUrl || null,
+      isOptional ? 1 : 0,
+      isRequired !== undefined ? (isRequired ? 1 : 0) : (isOptional ? 0 : 1),
+      groupName || 'Текстуры',
+      normUsers,
+      downloadUrl
+    ]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'RESOURCEPACK_UPLOAD', packName, `Загружен ресурспак ${cleanFilename} (${buffer.length} B)`, req.ip || '');
+
+    return res.json({ success: true, id: result.lastID, name: packName, filename: cleanFilename, sha256, sizeBytes: buffer.length });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка сохранения ресурспака' });
+  }
+});
+
+// POST /api/v1/admin/resourcepacks/add-modrinth - Установка ресурспака из Modrinth
+router.post('/resourcepacks/add-modrinth', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { serverId, projectId, versionId, isOptional, groupName, allowedUsers } = req.body;
+    if (!projectId || !versionId) return res.status(400).json({ error: 'projectId и versionId обязательны' });
+    const targetServerId = serverId ? parseInt(serverId, 10) : 1;
+
+    const vRes = await fetch(`https://api.modrinth.com/v2/version/${versionId}`);
+    if (!vRes.ok) return res.status(404).json({ error: 'Версия ресурспака не найдена на Modrinth' });
+    const vData = await vRes.json();
+
+    const pRes = await fetch(`https://api.modrinth.com/v2/project/${projectId}`);
+    const pData = pRes.ok ? await pRes.json() : {};
+
+    const primaryFile = vData.files.find((f: any) => f.primary) || vData.files[0];
+    if (!primaryFile) return res.status(400).json({ error: 'У версии нет файлов для скачивания' });
+
+    const packName = pData.title || vData.name || primaryFile.filename;
+    const packDesc = pData.description || 'Установлено через Modrinth API';
+    const cleanFilename = primaryFile.filename;
+    const filepath = `resourcepacks/${cleanFilename}`;
+    const iconUrl = pData.icon_url || null;
+
+    let normUsers = 'ALL';
+    if (Array.isArray(allowedUsers)) {
+      normUsers = JSON.stringify(allowedUsers.map((u: string) => u.trim()).filter(Boolean));
+    } else if (typeof allowedUsers === 'string') {
+      normUsers = allowedUsers.trim();
+    }
+
+    const db = await getDb();
+    await db.run("DELETE FROM resource_packs WHERE server_id = ? AND filepath = ?", [targetServerId, filepath]);
+    const result = await db.run(`
+      INSERT INTO resource_packs (server_id, name, filename, filepath, sha256, size_bytes, description, icon_url, is_optional, is_required, group_name, allowed_users, download_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      targetServerId,
+      packName,
+      cleanFilename,
+      filepath,
+      primaryFile.hashes?.sha256 || primaryFile.hashes?.sha1 || 'MODRINTH_HASH',
+      primaryFile.size,
+      packDesc,
+      iconUrl,
+      isOptional ? 1 : 0,
+      isOptional ? 0 : 1,
+      groupName || 'Текстуры',
+      normUsers,
+      primaryFile.url
+    ]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'RESOURCEPACK_MODRINTH', packName, `Добавлен ресурспак ${packName} из Modrinth`, req.ip || '');
+
+    return res.json({ success: true, id: result.lastID, name: packName, filepath, downloadUrl: primaryFile.url });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка добавления ресурспака из Modrinth' });
+  }
+});
+
+// PATCH /api/v1/admin/resourcepacks/:id/details
+router.patch('/resourcepacks/:id/details', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { name, description, group_name, allowed_users, icon_url, is_optional, is_required } = req.body;
+    const db = await getDb();
+
+    let normUsers = 'ALL';
+    if (Array.isArray(allowed_users)) {
+      normUsers = JSON.stringify(allowed_users.map((u: string) => u.trim()).filter(Boolean));
+    } else if (typeof allowed_users === 'string') {
+      normUsers = allowed_users.trim();
+    }
+
+    await db.run(`
+      UPDATE resource_packs
+      SET name = COALESCE(?, name),
+          description = COALESCE(?, description),
+          group_name = COALESCE(?, group_name),
+          allowed_users = ?,
+          icon_url = COALESCE(?, icon_url),
+          is_optional = CASE WHEN ? IS NOT NULL THEN ? ELSE is_optional END,
+          is_required = CASE WHEN ? IS NOT NULL THEN ? ELSE is_required END
+      WHERE id = ?
+    `, [
+      name,
+      description,
+      group_name,
+      normUsers,
+      icon_url,
+      is_optional !== undefined ? (is_optional ? 1 : 0) : null,
+      is_optional !== undefined ? (is_optional ? 1 : 0) : 0,
+      is_required !== undefined ? (is_required ? 1 : 0) : null,
+      is_required !== undefined ? (is_required ? 1 : 0) : 1,
+      id
+    ]);
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка обновления ресурспака' });
+  }
+});
+
+// DELETE /api/v1/admin/resourcepacks/:id
+router.delete('/resourcepacks/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const db = await getDb();
+    const pack = await db.get("SELECT * FROM resource_packs WHERE id = ?", [id]);
+    await db.run("DELETE FROM resource_packs WHERE id = ?", [id]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'RESOURCEPACK_DELETE', pack?.name || `ID:${id}`, `Удален ресурспак ${pack?.filename}`, req.ip || '');
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка удаления ресурспака' });
   }
 });
 
@@ -1511,7 +1836,14 @@ router.get('/neoforge-versions', requireAdmin, async (req: Request, res: Respons
 router.get('/modrinth/search', requireAdmin, async (req: Request, res: Response) => {
   try {
     const query = req.query.q as string || '';
-    const response = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&limit=15&facets=[["categories:neoforge"],["versions:1.21.1"]]`);
+    const projectType = (req.query.projectType as string || 'mod').toLowerCase();
+    
+    let facets = '[["project_type:mod"],["categories:neoforge"],["versions:1.21.1"]]';
+    if (projectType === 'resourcepack') {
+      facets = '[["project_type:resourcepack"],["versions:1.21.1"]]';
+    }
+
+    const response = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&limit=20&facets=${encodeURIComponent(facets)}`);
     const data = await response.json();
     return res.json(data);
   } catch (error) {
@@ -1523,9 +1855,15 @@ router.get('/modrinth/search', requireAdmin, async (req: Request, res: Response)
 router.get('/modrinth/versions', requireAdmin, async (req: Request, res: Response) => {
   try {
     const projectId = req.query.projectId as string;
+    const projectType = (req.query.projectType as string || 'mod').toLowerCase();
     if (!projectId) return res.status(400).json({ error: 'projectId обязателен' });
 
-    const response = await fetch(`https://api.modrinth.com/v2/project/${projectId}/version?loaders=["neoforge"]&game_versions=["1.21.1"]`);
+    let url = `https://api.modrinth.com/v2/project/${projectId}/version?loaders=["neoforge"]&game_versions=["1.21.1"]`;
+    if (projectType === 'resourcepack') {
+      url = `https://api.modrinth.com/v2/project/${projectId}/version?game_versions=["1.21.1"]`;
+    }
+
+    const response = await fetch(url);
     const versions = response.ok ? await response.json() : [];
     return res.json(versions);
   } catch (error) {

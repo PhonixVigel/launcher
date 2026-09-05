@@ -926,35 +926,158 @@ body.has-custom-bg .titlebar {
 .optional-mods-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   overflow-y: auto;
-  max-height: 440px;
+  max-height: 480px;
+  padding-right: 6px;
+}
+
+/* Mod Group Accordion Card */
+.mod-group-card {
+  background: rgba(22, 27, 34, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.mod-group-card:hover {
+  border-color: rgba(255, 107, 0, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.mod-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  user-select: none;
+}
+
+.mod-group-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mod-group-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+}
+
+.mod-group-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(255, 107, 0, 0.15);
+  color: var(--accent-orange);
+  font-weight: 600;
+  border: 1px solid rgba(255, 107, 0, 0.3);
+}
+
+.mod-group-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mod-group-toggle-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mod-group-arrow {
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: transform 0.25s ease;
+}
+
+.mod-group-card.collapsed .mod-group-arrow {
+  transform: rotate(-90deg);
+}
+
+.mod-group-card.collapsed .mod-group-body {
+  display: none;
+}
+
+.mod-group-body {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .mod-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: rgba(13, 17, 23, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mod-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.mod-left-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 80%;
+}
+
+.mod-logo-img {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .mod-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  overflow: hidden;
 }
 
 .mod-title {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mod-desc {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mod-badge-req {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  font-weight: 600;
+  margin-left: 6px;
 }
 
 /* Switches */

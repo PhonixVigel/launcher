@@ -76,6 +76,14 @@
               <span class="nav-icon">📦</span>
               <span class="nav-text">Управление Модами</span>
             </button>
+            <button class="nav-item" data-tab="resourcepacks">
+              <span class="nav-icon">🎨</span>
+              <span class="nav-text">Ресурспаки</span>
+            </button>
+            <button class="nav-item" data-tab="client-servers">
+              <span class="nav-icon">📋</span>
+              <span class="nav-text">Клиентские servers.dat</span>
+            </button>
             <button class="nav-item" data-tab="modrinth">
               <span class="nav-icon">🔍</span>
               <span class="nav-text">Каталог Modrinth</span>
@@ -191,13 +199,92 @@
                     <th style="width: 40px; text-align: center;">
                       <input type="checkbox" id="th-mod-select-all" class="styled-checkbox" title="Выбрать все моды">
                     </th>
-                    <th>Файл / Имя Мода</th>
+                    <th>Лого / Имя Мода</th>
+                    <th>Категория / Группа</th>
+                    <th>Доступ игрокам</th>
                     <th>Размер</th>
                     <th>Тип</th>
                     <th>Действия</th>
                   </tr>
                 </thead>
                 <tbody id="modpack-table-body">
+                  <!-- Загружается динамически -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 2.1: РЕСУРСПАКИ (RESOURCE PACKS) -->
+          <div class="dashboard-tab" id="tab-resourcepacks">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">🎨 Управление Ресурспаками</h2>
+                <p class="tab-subheading">Официальные обязательные и опциональные пакеты ресурсов с защитой по SHA-256</p>
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <button class="btn-primary" id="btn-open-modrinth-rp" style="background: linear-gradient(135deg, #10b981, #059669); font-size: 13px;">🔍 Найти в Modrinth</button>
+                <button class="btn-primary" id="btn-open-upload-rp" style="background: linear-gradient(135deg, #ff6b00, #ff8800); font-size: 13px;">➕ Загрузить .ZIP Ресурспак</button>
+                <div class="server-selector-wrap">
+                  <label for="select-rp-server">Выбранный сервер:</label>
+                  <select id="select-rp-server" class="styled-select"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Поиск ресурспаков -->
+            <div class="mods-toolbar glass-panel">
+              <input type="text" id="search-local-rps" class="styled-input" placeholder="🔍 Поиск ресурспаков...">
+              <div class="mods-stats-badge" id="rps-count-badge">Всего ресурспаков: 0</div>
+            </div>
+
+            <div class="table-container glass-panel">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Лого / Название</th>
+                    <th>Файл</th>
+                    <th>Категория</th>
+                    <th>Доступ игрокам</th>
+                    <th>Размер</th>
+                    <th>Тип</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="resourcepacks-table-body">
+                  <!-- Загружается динамически -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ВКЛАДКА 2.2: КЛИЕНТСКИЕ СЕРВЕРЫ (SERVERS.DAT) -->
+          <div class="dashboard-tab" id="tab-client-servers">
+            <div class="tab-header-row">
+              <div>
+                <h2 class="tab-heading">📋 Клиентский список серверов (servers.dat)</h2>
+                <p class="tab-subheading">Автоматическое добавление серверов в сетевую игру игрока перед запуском</p>
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <button class="btn-primary" id="btn-open-add-client-server">➕ Добавить сервер в servers.dat</button>
+                <div class="server-selector-wrap">
+                  <label for="select-cs-server">Выбранный профиль:</label>
+                  <select id="select-cs-server" class="styled-select"></select>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-container glass-panel">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Название сервера</th>
+                    <th>IP адрес и Порт</th>
+                    <th>Статус</th>
+                    <th>Порядок</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="client-servers-table-body">
                   <!-- Загружается динамически -->
                 </tbody>
               </table>
@@ -1095,11 +1182,193 @@
         <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
         <h4 style="color: #4ade80; font-size: 18px; margin-bottom: 8px;">Моды успешно обновлены!</h4>
         <p id="sftp-done-details" style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;"></p>
-        <button type="button" class="btn-primary" id="btn-sftp-done-close">Готово</button>
+  <!-- Модальное окно: Редактирование параметров мода (Группа, доступ, иконка) -->
+  <div class="modal hidden" id="modal-edit-mod">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ Параметры и доступ мода</h3>
+        <button class="modal-close" id="btn-close-edit-mod">✕</button>
+      </div>
+      <form id="form-edit-mod">
+        <input type="hidden" id="edit-mod-id">
+        <div class="input-group">
+          <label for="edit-mod-name">Отображаемое название</label>
+          <input type="text" id="edit-mod-name" placeholder="Название мода" required>
+        </div>
+        <div class="input-group">
+          <label for="edit-mod-group">Категория / Группа</label>
+          <input type="text" id="edit-mod-group" list="mod-groups-datalist" placeholder="Например: Шейдеры и Графика, Камера и Контент, Звуки, Интерфейс, Оптимизация">
+          <datalist id="mod-groups-datalist">
+            <option value="Шейдеры и Графика">
+            <option value="Камера и Контент (Freecam)">
+            <option value="Звуки и Атмосфера">
+            <option value="Интерфейс и Карта">
+            <option value="Оптимизация и FPS">
+            <option value="Общие">
+          </datalist>
+          <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Моды с одинаковой группой объединяются в удобные аккордеоны с общим переключателем.</span>
+        </div>
+        <div class="input-group">
+          <label for="edit-mod-users">Разрешённые игроки (Белый список / Права)</label>
+          <input type="text" id="edit-mod-users" placeholder="ALL или список ников через запятую: phonixvogel, youtuber1">
+          <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Оставьте <code>ALL</code> для доступа всем игрокам, либо укажите конкретные никнеймы (например, для Freecam).</span>
+        </div>
+        <div class="input-group">
+          <label for="edit-mod-icon">URL логотипа / иконки</label>
+          <input type="url" id="edit-mod-icon" placeholder="https://cdn.modrinth.com/... (или пусто)">
+        </div>
+        <div class="input-group">
+          <label for="edit-mod-desc">Краткое описание</label>
+          <textarea id="edit-mod-desc" rows="2" placeholder="Описание возможностей мода..."></textarea>
+        </div>
+        <div class="checkbox-group" style="margin: 12px 0 20px 0;">
+          <input type="checkbox" id="edit-mod-optional" class="styled-checkbox">
+          <label for="edit-mod-optional">Опциональный мод (игрок может включать/отключать сам)</label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-edit-mod">Отмена</button>
+          <button type="submit" class="btn-primary">💾 Сохранить изменения</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно: Загрузка локального .ZIP Ресурспака -->
+  <div class="modal hidden" id="modal-upload-rp">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 class="modal-title">➕ Загрузить .ZIP Ресурспак</h3>
+        <button class="modal-close" id="btn-close-upload-rp">✕</button>
+      </div>
+      <form id="form-upload-rp">
+        <div class="input-group">
+          <label for="input-rp-file">Файл ресурспака (.zip)</label>
+          <input type="file" id="input-rp-file" accept=".zip" required>
+        </div>
+        <div class="input-group">
+          <label for="input-rp-name">Название ресурспака</label>
+          <input type="text" id="input-rp-name" placeholder="Например: Fresh Animations или Faithful 32x">
+        </div>
+        <div class="input-group">
+          <label for="input-rp-group">Категория</label>
+          <input type="text" id="input-rp-group" value="Текстуры и Анимации" placeholder="Текстуры, Шейдеры, Звуки">
+        </div>
+        <div class="input-group">
+          <label for="input-rp-users">Доступ игрокам</label>
+          <input type="text" id="input-rp-users" value="ALL" placeholder="ALL или список ников">
+        </div>
+        <div class="input-group">
+          <label for="input-rp-icon">URL иконки / превью</label>
+          <input type="url" id="input-rp-icon" placeholder="https://cdn.modrinth.com/...">
+        </div>
+        <div class="input-group">
+          <label for="input-rp-desc">Описание</label>
+          <textarea id="input-rp-desc" rows="2" placeholder="Описание ресурспака..."></textarea>
+        </div>
+        <div class="checkbox-group" style="margin: 12px 0 20px 0;">
+          <input type="checkbox" id="input-rp-optional" class="styled-checkbox">
+          <label for="input-rp-optional">Опциональный (если выключено — обязателен для всех игроков)</label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-upload-rp">Отмена</button>
+          <button type="submit" class="btn-primary">📤 Загрузить ресурспак</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно: Каталог Modrinth Ресурспаков -->
+  <div class="modal hidden" id="modal-modrinth-rp">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel" style="max-width: 750px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔍 Каталог Ресурспаков (Modrinth)</h3>
+        <button class="modal-close" id="btn-close-modrinth-rp">✕</button>
+      </div>
+      <div class="search-bar-wrap glass-panel" style="margin-bottom: 16px;">
+        <input type="text" id="modrinth-rp-query" class="styled-input" placeholder="Введите название ресурспака (например: Fresh Animations, Faithful, Bare Bones)...">
+        <button class="btn-primary" id="btn-search-modrinth-rp">Найти</button>
+      </div>
+      <div id="modrinth-rp-results-container" class="modrinth-results-grid" style="max-height: 380px; overflow-y: auto;">
+        <div class="empty-state">Введите название ресурспака для поиска</div>
       </div>
     </div>
   </div>
 
-  <script src="app.js?v=8.0"></script>
+  <!-- Модальное окно: Редактирование параметров Ресурспака -->
+  <div class="modal hidden" id="modal-edit-rp">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ Параметры ресурспака</h3>
+        <button class="modal-close" id="btn-close-edit-rp">✕</button>
+      </div>
+      <form id="form-edit-rp">
+        <input type="hidden" id="edit-rp-id">
+        <div class="input-group">
+          <label for="edit-rp-name">Название</label>
+          <input type="text" id="edit-rp-name" required>
+        </div>
+        <div class="input-group">
+          <label for="edit-rp-group">Категория</label>
+          <input type="text" id="edit-rp-group">
+        </div>
+        <div class="input-group">
+          <label for="edit-rp-users">Доступ игрокам</label>
+          <input type="text" id="edit-rp-users" placeholder="ALL или список ников">
+        </div>
+        <div class="input-group">
+          <label for="edit-rp-icon">URL иконки</label>
+          <input type="url" id="edit-rp-icon">
+        </div>
+        <div class="input-group">
+          <label for="edit-rp-desc">Описание</label>
+          <textarea id="edit-rp-desc" rows="2"></textarea>
+        </div>
+        <div class="checkbox-group" style="margin: 12px 0 20px 0;">
+          <input type="checkbox" id="edit-rp-optional" class="styled-checkbox">
+          <label for="edit-rp-optional">Опциональный текстурпак</label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-edit-rp">Отмена</button>
+          <button type="submit" class="btn-primary">💾 Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно: Добавление/Редактирование Клиентского Сервера (servers.dat) -->
+  <div class="modal hidden" id="modal-client-server">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="client-server-modal-title">➕ Сервер для servers.dat</h3>
+        <button class="modal-close" id="btn-close-client-server">✕</button>
+      </div>
+      <form id="form-client-server">
+        <input type="hidden" id="client-server-id">
+        <div class="input-group">
+          <label for="cs-name">Название в меню «Сетевая игра»</label>
+          <input type="text" id="cs-name" placeholder="Например: VozduCraft Season #2" required>
+        </div>
+        <div class="input-group">
+          <label for="cs-address">IP адрес и порт сервера</label>
+          <input type="text" id="cs-address" placeholder="89.248.236.145:27123" required>
+        </div>
+        <div class="checkbox-group" style="margin: 12px 0 20px 0;">
+          <input type="checkbox" id="cs-active" class="styled-checkbox" checked>
+          <label for="cs-active">Активен (включать в servers.dat игроков)</label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btn-cancel-client-server">Отмена</button>
+          <button type="submit" class="btn-primary">💾 Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=9.0"></script>
 </body>
 </html>
