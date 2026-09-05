@@ -66,8 +66,9 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
+        rejectUnauthorized: false,
         headers: {
-          'User-Agent': 'VozduCraft-Launcher/3.0.6 (Windows; x64; Adoptium Java Installer)'
+          'User-Agent': 'VozduCraft-Launcher/3.4.0 (Windows; x64; Adoptium Java Installer)'
         }
       };
 
@@ -280,13 +281,18 @@ function createWindow() {
         throw new Error(`Директория resources не найдена: ${resourcesDir}`);
       }
 
-      // 1. Скачивание пакета обновления (~24 МБ) в безопасный временный каталог
+      // 1. Скачивание пакета обновления (~4.4 МБ) в безопасный временный каталог
       await downloadFile(asarUrl, tempAsar, (downloaded, total) => {
         const pct = total > 0 ? Math.round((downloaded / total) * 100) : 50;
         if (mainWindow) mainWindow.webContents.send('update-progress', { percent: pct, downloaded, total });
       });
 
-      logToDisk(`Пакет app.asar скачан (${fs.statSync(tempAsar).size} байт). Запуск автономного агента обновления...`);
+      const asarStats = fs.statSync(tempAsar);
+      if (asarStats.size < 500000) {
+        throw new Error(`Файл обновления поврежден или пуст (${asarStats.size} байт)`);
+      }
+
+      logToDisk(`Пакет app.asar скачан (${asarStats.size} байт). Запуск автономного агента обновления...`);
 
       // 2. Генерация и запуск выделенного агента обновления
       if (isWin) {

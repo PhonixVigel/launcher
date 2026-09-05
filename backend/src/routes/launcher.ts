@@ -129,18 +129,22 @@ router.post('/report-crash', async (req: Request, res: Response) => {
 router.get('/check-update', async (req: Request, res: Response) => {
   try {
     const db = await getDb();
-    const latestRelease = await db.get("SELECT * FROM launcher_releases ORDER BY created_at DESC LIMIT 1");
+    const latestRelease = await db.get("SELECT * FROM launcher_releases ORDER BY id DESC LIMIT 1");
     const config = await db.get("SELECT value FROM project_config WHERE key = 'launcher_version'");
 
-    const baseHost = 'http://185.221.213.43:3000';
+    const baseHost = `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}`;
     let winUrl = latestRelease?.win_download_url;
     let macUrl = latestRelease?.mac_download_url;
 
     if (!winUrl || winUrl.includes('3.0.0.zip') || winUrl.trim() === '') {
       winUrl = `${baseHost}/files/launchers/VozduCraft-Windows-Setup.exe`;
+    } else if (winUrl.startsWith('/')) {
+      winUrl = `${baseHost}${winUrl}`;
     }
     if (!macUrl || macUrl.includes('3.0.0.dmg') || macUrl.trim() === '') {
       macUrl = `${baseHost}/files/launchers/VozduCraft-macOS-Setup.dmg`;
+    } else if (macUrl.startsWith('/')) {
+      macUrl = `${baseHost}${macUrl}`;
     }
 
     return res.json({

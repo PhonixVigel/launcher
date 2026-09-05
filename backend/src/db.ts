@@ -358,21 +358,15 @@ async function initDbSchema(db: Database) {
     `);
   }
 
-  // Обязательная регистрация релиза 3.3.0
-  const r330 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.3.0'");
-  if (!r330) {
-    await db.run(`
-      INSERT INTO launcher_releases (version, release_notes, mac_download_url, win_download_url, is_mandatory, created_at)
-      VALUES 
-        ('3.3.0', 'Релиз v3.3.0: исправление синтаксической ошибки запуска на Windows, авто-синхронизация ассетов и языков Minecraft 1.21.1, Modrinth SFTP обновление', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 1, CURRENT_TIMESTAMP)
-    `);
-  }
+  // Удаляем устаревшие тестовые дубликаты версий
+  await db.run("DELETE FROM launcher_releases WHERE version IN ('3.3.0')");
+
   await db.run("UPDATE project_config SET value = '3.4.0' WHERE key = 'launcher_version'");
   const rel340 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.4.0'");
   if (!rel340) {
     await db.run(`
-      INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory)
-      VALUES ('3.4.0', 'Релиз v3.4.0: Группировка опциональных модов с превью логотипов, разграничение прав доступа, генератор servers.dat и вкладка Ресурспаков', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1)
+      INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
+      VALUES ('3.4.0', 'Релиз v3.4.0: Группировка опциональных модов с превью логотипов, разграничение прав доступа, генератор servers.dat и вкладка Ресурспаков', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
     `);
   }
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
