@@ -145,8 +145,9 @@
                 <h2 class="tab-heading">Состав сборки модов</h2>
                 <p class="tab-subheading">Управление файлами модов для выбранного сервера</p>
               </div>
-              <div style="display: flex; gap: 12px; align-items: center;">
-                <button class="btn-primary" id="btn-open-copy-mods" style="background: linear-gradient(135deg, #a855f7, #6366f1); font-size: 13px;">📥 Позаимствовать моды из другой сборки</button>
+              <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <button class="btn-primary" id="btn-check-all-updates" style="background: linear-gradient(135deg, #0ea5e9, #3b82f6); font-size: 13px;">🔄 Проверить обновление всего</button>
+                <button class="btn-primary" id="btn-open-copy-mods" style="background: linear-gradient(135deg, #a855f7, #6366f1); font-size: 13px;">📥 Позаимствовать моды</button>
                 <div class="server-selector-wrap">
                   <label for="select-modpack-server">Выбранный сервер:</label>
                   <select id="select-modpack-server" class="styled-select"></select>
@@ -956,6 +957,48 @@
           <button type="submit" class="btn-primary">Сохранить аккаунт</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно проверки и обновления модов с Modrinth -->
+  <div class="modal-overlay hidden" id="modal-mod-updates">
+    <div class="modal-card glass-panel" style="max-width: 920px; width: 95%; max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="flex-shrink: 0; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <div>
+          <h3 class="modal-title" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span>🚀 Обновления модов с Modrinth</span>
+            <span id="badge-update-server-loader" class="badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.4); font-size: 12px; padding: 3px 8px; border-radius: 4px;">NeoForge 1.21.1</span>
+          </h3>
+          <p class="modal-subtitle" id="mod-updates-summary-text" style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Проверка наличия новых версий модов...</p>
+        </div>
+        <button class="modal-close" id="btn-close-mod-updates">✕</button>
+      </div>
+      
+      <div class="modal-body-scroll" style="overflow-y: auto; flex: 1; padding: 16px 4px;">
+        <div id="mod-updates-loading" style="text-align: center; padding: 40px 20px;">
+          <div class="spinner" style="margin: 0 auto 16px; width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+          <p style="color: #f8fafc; font-weight: 600; font-size: 15px;">Сверка установленных модов с базой Modrinth API...</p>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Фильтрация версий под текущую версию Minecraft и загрузчик сервера</p>
+        </div>
+        
+        <div id="mod-updates-empty" class="hidden" style="text-align: center; padding: 40px 20px;">
+          <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+          <h4 style="color: #4ade80; font-size: 18px; margin-bottom: 6px;">Все моды обновлены до актуальных версий!</h4>
+          <p style="color: #94a3b8; font-size: 14px;">Для текущего сервера не найдено новых версий на Modrinth.</p>
+        </div>
+
+        <div id="mod-updates-list-container" class="mod-updates-list hidden" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Карточки обновлений генерируются динамически -->
+        </div>
+      </div>
+
+      <div class="modal-actions" style="flex-shrink: 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn-secondary btn-sm" id="btn-recheck-mod-updates">🔄 Перепроверить</button>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn-primary" id="btn-update-all-mods" style="background: linear-gradient(135deg, #10b981, #059669);">⚡ Обновить всё (<span id="count-pending-updates">0</span>)</button>
+          <button type="button" class="btn-secondary" id="btn-close-mod-updates-bottom">Закрыть</button>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDebugLogsControls();
   setupCrashReportsControls();
   setupAdminsControls();
+  setupModUpdatesControls();
   setupLogViewerModal();
   setupChangePasswordModal();
   startClock();
@@ -2000,5 +2001,288 @@ async function loadAdmins() {
     });
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Ошибка загрузки списка администраторов</td></tr>';
+  }
+}
+
+// ----------------------------------------------------
+// 14. ПРОВЕРКА И ОБНОВЛЕНИЕ ВСЕХ МОДОВ ЧЕРЕЗ MODRINTH
+// ----------------------------------------------------
+let currentModUpdates = [];
+
+function setupModUpdatesControls() {
+  const btnCheckUpdates = document.getElementById('btn-check-all-updates');
+  const modal = document.getElementById('modal-mod-updates');
+  const btnClose = document.getElementById('btn-close-mod-updates');
+  const btnCloseBottom = document.getElementById('btn-close-mod-updates-bottom');
+  const btnRecheck = document.getElementById('btn-recheck-mod-updates');
+  const btnUpdateAll = document.getElementById('btn-update-all-mods');
+
+  const closeModal = () => {
+    if (modal) modal.classList.add('hidden');
+  };
+
+  if (btnCheckUpdates) {
+    btnCheckUpdates.addEventListener('click', () => {
+      openModUpdatesModal();
+    });
+  }
+
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  if (btnCloseBottom) btnCloseBottom.addEventListener('click', closeModal);
+
+  if (btnRecheck) {
+    btnRecheck.addEventListener('click', () => {
+      runCheckModUpdates();
+    });
+  }
+
+  if (btnUpdateAll) {
+    btnUpdateAll.addEventListener('click', async () => {
+      await updateAllPendingMods();
+    });
+  }
+}
+
+function openModUpdatesModal() {
+  const modal = document.getElementById('modal-mod-updates');
+  if (modal) modal.classList.remove('hidden');
+  runCheckModUpdates();
+}
+
+async function runCheckModUpdates() {
+  const loadingEl = document.getElementById('mod-updates-loading');
+  const emptyEl = document.getElementById('mod-updates-empty');
+  const listContainer = document.getElementById('mod-updates-list-container');
+  const summaryText = document.getElementById('mod-updates-summary-text');
+  const loaderBadge = document.getElementById('badge-update-server-loader');
+  const btnUpdateAll = document.getElementById('btn-update-all-mods');
+  const countPending = document.getElementById('count-pending-updates');
+
+  if (loadingEl) loadingEl.classList.remove('hidden');
+  if (emptyEl) emptyEl.classList.add('hidden');
+  if (listContainer) {
+    listContainer.classList.add('hidden');
+    listContainer.innerHTML = '';
+  }
+  if (summaryText) summaryText.textContent = 'Сверка хэшей установленных модов с Modrinth API...';
+  if (btnUpdateAll) btnUpdateAll.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/modpack/check-updates`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ serverId: state.currentServerId || 1 })
+    });
+    const data = await res.json();
+
+    if (loadingEl) loadingEl.classList.add('hidden');
+
+    if (!res.ok) {
+      alert(data.error || 'Ошибка проверки обновлений модов');
+      return;
+    }
+
+    if (loaderBadge && data.serverInfo) {
+      loaderBadge.textContent = `${(data.serverInfo.modloader || 'NeoForge').toUpperCase()} ${data.serverInfo.minecraftVersion || '1.21.1'}`;
+    }
+
+    currentModUpdates = data.updates || [];
+
+    if (currentModUpdates.length === 0) {
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      if (summaryText) summaryText.textContent = `Проверено ${data.totalChecked} модов — все актуальны!`;
+      if (countPending) countPending.textContent = '0';
+      if (btnUpdateAll) btnUpdateAll.disabled = true;
+      return;
+    }
+
+    if (summaryText) {
+      summaryText.textContent = `Найдено ${currentModUpdates.length} обновлений из ${data.totalChecked} проверенных модов`;
+    }
+    if (countPending) countPending.textContent = currentModUpdates.length;
+    if (btnUpdateAll) btnUpdateAll.disabled = false;
+
+    renderModUpdatesList(currentModUpdates);
+  } catch (err) {
+    if (loadingEl) loadingEl.classList.add('hidden');
+    alert('Ошибка соединения с сервером: ' + err.message);
+  }
+}
+
+function renderModUpdatesList(updates) {
+  const listContainer = document.getElementById('mod-updates-list-container');
+  if (!listContainer) return;
+
+  listContainer.classList.remove('hidden');
+  listContainer.innerHTML = '';
+
+  updates.forEach((item, index) => {
+    const card = document.createElement('div');
+    card.className = 'mod-update-card';
+    card.id = `mod-update-card-${index}`;
+
+    const sizeMb = (item.newFileSize / (1024 * 1024)).toFixed(2);
+    const dateStr = item.datePublished ? new Date(item.datePublished).toLocaleDateString('ru-RU') : '';
+
+    const iconHtml = item.projectIcon 
+      ? `<img src="${item.projectIcon}" alt="${escapeHtml(item.projectTitle)}" class="mod-logo-img" onerror="this.outerHTML='<span class=\\'mod-logo-fallback\\'>📦</span>'">`
+      : `<span class="mod-logo-fallback">📦</span>`;
+
+    card.innerHTML = `
+      <div class="mod-info-left">
+        <div class="mod-logo-box">
+          ${iconHtml}
+        </div>
+        <div class="mod-details-text">
+          <div class="mod-title-row">
+            <a href="${item.modrinthUrl}" target="_blank" rel="noopener noreferrer" class="mod-title-link" title="Открыть страницу мода на Modrinth">
+              ${escapeHtml(item.projectTitle || item.currentModName)}
+              <span class="mod-link-icon">↗</span>
+            </a>
+            ${item.newVersionNumber ? `<span class="badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">v${escapeHtml(item.newVersionNumber)}</span>` : ''}
+          </div>
+          <div class="version-comparison-row">
+            <span class="version-pill-old" title="Текущий файл">${escapeHtml(item.currentFilename)}</span>
+            <span class="version-arrow">➔</span>
+            <span class="version-pill-new" title="Новый файл">${escapeHtml(item.newFilename)} (${sizeMb} MB)</span>
+            ${dateStr ? `<span style="color: var(--text-muted); font-size: 11px; margin-left: 4px;">• ${dateStr}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="mod-update-actions">
+        <button type="button" class="btn-update-direct btn-apply-update" data-index="${index}">⚡ Обновить</button>
+        <button type="button" class="btn-update-download btn-apply-download-update" data-index="${index}">📥 Обновить и скачать</button>
+      </div>
+    `;
+
+    listContainer.appendChild(card);
+  });
+
+  // Привязка действий к кнопкам
+  listContainer.querySelectorAll('.btn-apply-update').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.index, 10);
+      await performModUpdate(idx, false);
+    });
+  });
+
+  listContainer.querySelectorAll('.btn-apply-download-update').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.index, 10);
+      await performModUpdate(idx, true);
+    });
+  });
+}
+
+async function performModUpdate(index, downloadToBrowser) {
+  const item = currentModUpdates[index];
+  if (!item) return;
+
+  const card = document.getElementById(`mod-update-card-${index}`);
+  if (card) {
+    card.classList.add('updating');
+    const actions = card.querySelector('.mod-update-actions');
+    if (actions) actions.innerHTML = '<span style="color: #38bdf8; font-size: 12px;">⏳ Скачивание и установка...</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/modpack/apply-update`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        serverId: state.currentServerId || 1,
+        oldFilepath: item.currentFilepath,
+        newFileUrl: item.newFileUrl,
+        newFilename: item.newFilename,
+        modName: item.projectTitle || item.currentModName,
+        modDescription: item.changelog || 'Обновлено через Modrinth'
+      })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      if (downloadToBrowser) {
+        triggerBrowserDownload(data.downloadUrl || data.directCdnUrl, item.newFilename);
+      }
+
+      if (card) {
+        card.classList.remove('updating');
+        card.classList.add('updated');
+        const actions = card.querySelector('.mod-update-actions');
+        if (actions) {
+          actions.innerHTML = `
+            <span style="color: #4ade80; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">
+              ✅ Обновлено ${downloadToBrowser ? '+ Скачано' : ''}
+            </span>
+          `;
+        }
+      }
+
+      // Обновляем счетчик
+      item._updated = true;
+      const remaining = currentModUpdates.filter(u => !u._updated).length;
+      const countPending = document.getElementById('count-pending-updates');
+      if (countPending) countPending.textContent = remaining;
+
+      // Обновляем список в основном интерфейсе
+      await loadModpack();
+    } else {
+      alert(data.error || 'Ошибка обновления мода');
+      if (card) {
+        card.classList.remove('updating');
+        const actions = card.querySelector('.mod-update-actions');
+        if (actions) {
+          actions.innerHTML = `
+            <button type="button" class="btn-update-direct btn-apply-update" data-index="${index}">⚡ Повторить</button>
+            <button type="button" class="btn-update-download btn-apply-download-update" data-index="${index}">📥 Скачать</button>
+          `;
+          actions.querySelector('.btn-apply-update')?.addEventListener('click', () => performModUpdate(index, false));
+          actions.querySelector('.btn-apply-download-update')?.addEventListener('click', () => performModUpdate(index, true));
+        }
+      }
+    }
+  } catch (err) {
+    alert('Ошибка соединения: ' + err.message);
+    if (card) card.classList.remove('updating');
+  }
+}
+
+function triggerBrowserDownload(url, filename) {
+  let fullUrl = url;
+  if (url.startsWith('/')) {
+    const origin = API_BASE.replace('/api/v1', '');
+    fullUrl = `${origin}${url}`;
+  }
+  const a = document.createElement('a');
+  a.href = fullUrl;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function updateAllPendingMods() {
+  const pendingIndices = currentModUpdates
+    .map((item, idx) => ({ item, idx }))
+    .filter(({ item }) => !item._updated);
+
+  if (pendingIndices.length === 0) {
+    alert('Все доступные обновления уже установлены!');
+    return;
+  }
+
+  const btnUpdateAll = document.getElementById('btn-update-all-mods');
+  if (btnUpdateAll) btnUpdateAll.disabled = true;
+
+  for (let i = 0; i < pendingIndices.length; i++) {
+    const { idx } = pendingIndices[i];
+    if (btnUpdateAll) btnUpdateAll.textContent = `Обновление (${i + 1}/${pendingIndices.length})...`;
+    await performModUpdate(idx, false);
+  }
+
+  if (btnUpdateAll) {
+    btnUpdateAll.textContent = '✅ Все моды обновлены!';
+    btnUpdateAll.disabled = true;
   }
 }

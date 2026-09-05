@@ -464,6 +464,276 @@ router.post('/modpack/add-modrinth', requireAdmin, async (req: Request, res: Res
   }
 });
 
+// POST /api/v1/admin/modpack/check-updates - Проверка обновлений всех модов сервера через Modrinth API
+router.post('/modpack/check-updates', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const serverId = req.body.serverId ? parseInt(req.body.serverId, 10) : 1;
+    const db = await getDb();
+    const server = await db.get("SELECT * FROM servers WHERE id = ?", [serverId]);
+    if (!server) {
+      return res.status(404).json({ error: 'Сервер не найден' });
+    }
+
+    const mcVersion = server.minecraft_version || '1.21.1';
+    let loader = (server.modloader || 'neoforge').toLowerCase().trim();
+    if (loader === 'forge') loader = 'forge';
+    else if (loader === 'fabric') loader = 'fabric';
+    else if (loader === 'quilt') loader = 'quilt';
+    else loader = 'neoforge';
+
+    const modFiles = await db.all("SELECT * FROM modpack_files WHERE server_id = ?", [serverId]);
+    if (!modFiles || modFiles.length === 0) {
+      return res.json({
+        totalChecked: 0,
+        totalUpdates: 0,
+        serverInfo: {
+          id: server.id,
+          name: server.name,
+          minecraftVersion: mcVersion,
+          modloader: loader
+        },
+        updates: []
+      });
+    }
+
+    const modsStorageDir = path.resolve(__dirname, '../../public/files/mods');
+    const filesDir = path.resolve(__dirname, '../../public/files');
+
+    const hashesMap: Record<string, any> = {};
+    const hashesList: string[] = [];
+
+    for (const mf of modFiles) {
+      const cleanName = path.basename(mf.filepath);
+      let localPath = path.join(modsStorageDir, cleanName);
+      if (!fs.existsSync(localPath)) {
+        localPath = path.join(filesDir, mf.filepath);
+      }
+
+      if (fs.existsSync(localPath)) {
+        try {
+          const buf = fs.readFileSync(localPath);
+          const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+          hashesMap[sha1] = {
+            ...mf,
+            localPath,
+            actualFilename: cleanName,
+            sha1
+          };
+          hashesList.push(sha1);
+        } catch (e) {}
+      }
+    }
+
+    if (hashesList.length === 0) {
+      return res.json({
+        totalChecked: modFiles.length,
+        totalUpdates: 0,
+        serverInfo: {
+          id: server.id,
+          name: server.name,
+          minecraftVersion: mcVersion,
+          modloader: loader
+        },
+        updates: []
+      });
+    }
+
+    // Запрос обновлений с Modrinth пачками по 100 хэшей
+    const batchSize = 100;
+    const allUpdatesMap: Record<string, any> = {};
+    const projectIdsSet = new Set<string>();
+
+    for (let i = 0; i < hashesList.length; i += batchSize) {
+      const batch = hashesList.slice(i, i + batchSize);
+      try {
+        const updateRes = await fetch("https://api.modrinth.com/v2/version_files/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "User-Agent": "VozduCraft-Admin/1.0" },
+          body: JSON.stringify({
+            hashes: batch,
+            algorithm: "sha1",
+            loaders: [loader],
+            game_versions: [mcVersion]
+          })
+        });
+        if (updateRes.ok) {
+          const batchData = await updateRes.json();
+          for (const [h, verObj] of Object.entries(batchData as Record<string, any>)) {
+            allUpdatesMap[h] = verObj;
+            if (verObj.project_id) projectIdsSet.add(verObj.project_id);
+          }
+        }
+      } catch (err) {
+        console.error('[MODRINTH CHECK ERROR]', err);
+      }
+    }
+
+    // Запрашиваем метаданные всех проектов для получения логотипов и ссылок на Modrinth
+    const projectIdsList = Array.from(projectIdsSet);
+    const projectsMap: Record<string, any> = {};
+
+    for (let i = 0; i < projectIdsList.length; i += batchSize) {
+      const pBatch = projectIdsList.slice(i, i + batchSize);
+      try {
+        const pRes = await fetch(`https://api.modrinth.com/v2/projects?ids=${encodeURIComponent(JSON.stringify(pBatch))}`, {
+          headers: { "User-Agent": "VozduCraft-Admin/1.0" }
+        });
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          for (const proj of (pData as any[])) {
+            projectsMap[proj.id] = proj;
+          }
+        }
+      } catch (pErr) {
+        console.error('[MODRINTH PROJECTS ERROR]', pErr);
+      }
+    }
+
+    // Формируем список доступных обновлений
+    const availableUpdates: any[] = [];
+
+    for (const [sha1, verObj] of Object.entries(allUpdatesMap)) {
+      const currentMod = hashesMap[sha1];
+      if (!currentMod) continue;
+
+      const primaryFile = verObj.files?.find((f: any) => f.primary) || verObj.files?.[0];
+      if (!primaryFile) continue;
+
+      const newSha1 = primaryFile.hashes?.sha1;
+      const newFilename = primaryFile.filename;
+
+      // Проверяем, отличается ли новая версия от текущего файла
+      if (newSha1 && newSha1.toLowerCase() === sha1.toLowerCase() && newFilename === currentMod.actualFilename) {
+        continue;
+      }
+
+      const proj = projectsMap[verObj.project_id] || {};
+      const modSlug = proj.slug || verObj.project_id;
+      const modTitle = proj.title || currentMod.mod_name || currentMod.actualFilename.replace(/\.jar$/i, '');
+      const iconUrl = proj.icon_url || null;
+      const modrinthUrl = `https://modrinth.com/mod/${modSlug}`;
+
+      availableUpdates.push({
+        modId: currentMod.id,
+        currentFilepath: currentMod.filepath,
+        currentFilename: currentMod.actualFilename,
+        currentModName: currentMod.mod_name || modTitle,
+        currentSha1: sha1,
+        newVersionId: verObj.id,
+        newVersionName: verObj.name || verObj.version_number,
+        newVersionNumber: verObj.version_number,
+        newFilename: primaryFile.filename,
+        newFileUrl: primaryFile.url,
+        newFileSize: primaryFile.size,
+        newSha512: primaryFile.hashes?.sha512 || null,
+        newSha1: primaryFile.hashes?.sha1 || null,
+        projectId: verObj.project_id,
+        projectSlug: modSlug,
+        projectTitle: modTitle,
+        projectIcon: iconUrl,
+        modrinthUrl: modrinthUrl,
+        datePublished: verObj.date_published,
+        changelog: verObj.changelog ? verObj.changelog.substring(0, 300) : ''
+      });
+    }
+
+    return res.json({
+      totalChecked: hashesList.length,
+      totalUpdates: availableUpdates.length,
+      serverInfo: {
+        id: server.id,
+        name: server.name,
+        minecraftVersion: mcVersion,
+        modloader: loader
+      },
+      updates: availableUpdates
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка проверки обновлений: ' + (error as Error).message });
+  }
+});
+
+// POST /api/v1/admin/modpack/apply-update - Применение обновления мода из Modrinth
+router.post('/modpack/apply-update', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { serverId, oldFilepath, newFileUrl, newFilename, modName, modDescription } = req.body;
+    if (!newFileUrl || !newFilename) {
+      return res.status(400).json({ error: 'newFileUrl и newFilename обязательны' });
+    }
+
+    const targetServerId = serverId ? parseInt(serverId, 10) : 1;
+    const cleanFilename = path.basename(newFilename);
+    const modsStorageDir = path.resolve(__dirname, '../../public/files/mods');
+
+    if (!fs.existsSync(modsStorageDir)) {
+      fs.mkdirSync(modsStorageDir, { recursive: true });
+    }
+
+    // Скачиваем обновленный .jar файл с CDN Modrinth
+    const response = await fetch(newFileUrl);
+    if (!response.ok) {
+      return res.status(502).json({ error: `Не удалось скачать файл мода с Modrinth (${response.status})` });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+    const targetFilePath = path.join(modsStorageDir, cleanFilename);
+
+    fs.writeFileSync(targetFilePath, buffer);
+
+    const relativePath = `mods/${cleanFilename}`;
+    const name = modName || cleanFilename.replace(/\.jar$/i, '');
+    const desc = modDescription || 'Обновлено через Modrinth';
+    const downloadUrl = `http://localhost:3000/files/mods/${cleanFilename}`;
+
+    const db = await getDb();
+
+    // Удаляем старый файл с диска, если имя файла изменилось
+    if (oldFilepath) {
+      const oldCleanName = path.basename(oldFilepath);
+      if (oldCleanName !== cleanFilename) {
+        const oldDiskPath = path.join(modsStorageDir, oldCleanName);
+        if (fs.existsSync(oldDiskPath)) {
+          try { fs.unlinkSync(oldDiskPath); } catch (e) {}
+        }
+      }
+      await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, oldFilepath]);
+    }
+
+    // Удаляем дублирующую запись с таким же целевым filepath
+    await db.run("DELETE FROM modpack_files WHERE server_id = ? AND filepath = ?", [targetServerId, relativePath]);
+
+    await db.run(`
+      INSERT INTO modpack_files (server_id, filepath, sha256, size_bytes, is_optional, mod_name, mod_description, download_url)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+    `, [
+      targetServerId,
+      relativePath,
+      sha256,
+      buffer.length,
+      name,
+      desc,
+      downloadUrl
+    ]);
+
+    const adminUser = (req as any).user?.username || 'Admin';
+    await logAudit(adminUser, 'ADMIN', 'MOD_UPDATE', name, `Обновлен мод ${name} (файл ${cleanFilename}, ${buffer.length} B) для сервера ${targetServerId}`, req.ip || '');
+
+    return res.json({
+      success: true,
+      filename: cleanFilename,
+      filepath: relativePath,
+      sha256,
+      sizeBytes: buffer.length,
+      downloadUrl: `/files/mods/${cleanFilename}`,
+      directCdnUrl: newFileUrl
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка применения обновления мода: ' + (error as Error).message });
+  }
+});
+
 // POST /api/v1/admin/modpack/upload - Загрузка локального файла мода (.jar / .zip)
 router.post('/modpack/upload', requireAdmin, async (req: Request, res: Response) => {
   try {
