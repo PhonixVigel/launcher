@@ -126,11 +126,39 @@ function startClock() {
 }
 
 function setupNavigation() {
+  const sidebar = document.querySelector('aside.sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const btnMobileMenu = document.getElementById('btn-mobile-menu');
+
+  if (btnMobileMenu && sidebar && backdrop) {
+    btnMobileMenu.addEventListener('click', () => {
+      const isOpen = sidebar.classList.contains('mobile-open');
+      if (isOpen) {
+        sidebar.classList.remove('mobile-open');
+        backdrop.classList.remove('active');
+      } else {
+        sidebar.classList.add('mobile-open');
+        backdrop.classList.add('active');
+      }
+    });
+
+    backdrop.addEventListener('click', () => {
+      sidebar.classList.remove('mobile-open');
+      backdrop.classList.remove('active');
+    });
+  }
+
   const navButtons = document.querySelectorAll('.nav-item');
   navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       navButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+
+      // Закрываем мобильное меню при выборе вкладки
+      if (sidebar && backdrop && window.innerWidth <= 900) {
+        sidebar.classList.remove('mobile-open');
+        backdrop.classList.remove('active');
+      }
 
       const targetTabId = `tab-${btn.dataset.tab}`;
       document.querySelectorAll('.tab-content, .dashboard-tab').forEach(t => t.classList.remove('active'));

@@ -1081,23 +1081,237 @@ body {
   transform: translateY(-1px);
 }
 
-/* RESPONSIVE */
-@media (max-width: 1024px) {
+/* MOBILE & RESPONSIVE DESIGN */
+.mobile-menu-toggle {
+  display: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.mobile-menu-toggle:hover, .mobile-menu-toggle:active {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--accent-cyan);
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9998;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.active {
+  display: block;
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .mobile-menu-toggle {
+    display: flex;
+  }
+
+  .topbar {
+    margin: 8px 10px 0 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+
+  .brand-badge.admin {
+    display: none;
+  }
+
+  .brand-name {
+    font-size: 16px;
+  }
+
+  .brand-logo {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+
+  .server-time {
+    display: none;
+  }
+
+  .admin-nick {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-logout {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  #btn-open-change-pwd {
+    display: none;
+  }
+
+  /* Sliding Drawer Sidebar */
+  aside.sidebar {
+    position: fixed;
+    top: 0;
+    left: -320px;
+    width: 280px;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 9999;
+    border-radius: 0 18px 18px 0;
+    box-shadow: 10px 0 35px rgba(0, 0, 0, 0.8);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    padding: 20px 16px;
+    background: rgba(14, 18, 32, 0.98);
+  }
+
+  aside.sidebar.mobile-open {
+    left: 0;
+  }
+
   .dashboard-layout {
     flex-direction: column;
+    padding: 10px;
+    gap: 12px;
   }
-  .sidebar {
+
+  .content-area {
+    padding: 0;
     width: 100%;
-    height: auto;
-    position: static;
+    overflow-x: hidden;
   }
-  .grid-2col {
-    grid-template-columns: 1fr;
+
+  .tab-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+
+  .tab-header-row > div:last-child {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tab-heading {
+    font-size: 20px;
+  }
+
+  .tab-subheading {
+    font-size: 13px;
+  }
+
+  /* Grids */
+  .grid-2col, .grid-3col, .stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  .servers-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tables Touch Scroll */
+  .table-container {
+    margin: 10px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+
+  .data-table {
+    min-width: 620px;
+  }
+
+  .data-table th, .data-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  /* Form controls without iOS auto-zoom */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Modals on Mobile */
+  .modal-overlay {
+    padding: 0 !important;
+  }
+
+  .modal-card {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-header {
+    margin-bottom: 14px;
+  }
+
+  /* Two column modals stack on mobile */
+  .groups-hub-body {
+    flex-direction: column !important;
+    overflow-y: auto !important;
+  }
+
+  .groups-sidebar {
+    width: 100% !important;
+    height: 160px !important;
+    min-height: 160px !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .group-workspace {
+    padding: 14px 10px !important;
+  }
+
+  .mods-bulk-bar {
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 12px !important;
+    transform: none !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .bulk-actions-group {
+    flex-wrap: wrap !important;
   }
 }
+
 
 /* GROUPS HUB & USER CHIPS */
 .group-nav-item {
