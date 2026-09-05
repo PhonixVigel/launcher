@@ -251,8 +251,8 @@ app.get('/', (req, res) => {
         service: 'VozduCraft Launcher Backend API',
         version: '3.4.0',
         downloads: {
-            windows: 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe',
-            macos: 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg'
+            windows: `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}/files/launchers/VozduCraft-Windows-Setup.exe`,
+            macos: `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}/files/launchers/VozduCraft-macOS-Setup.dmg`
         }
     });
 });
