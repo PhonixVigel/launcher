@@ -233,6 +233,10 @@ app.get('/', (req, res) => {
       <a href="/files/launchers/VozduCraft-macOS-Setup.dmg" class="btn btn-mac">
         🍏 Скачать для macOS (.dmg)
       </a>
+      <div style="font-size: 12px; color: #94a3b8; margin-top: -4px; line-height: 1.4;">
+        ℹ️ Если macOS пишет <i>«повреждено»</i>: откройте через <b>Правый клик ➔ «Открыть»</b> или выполните в Терминале: <br>
+        <code style="color: #38bdf8; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-size: 11px; display: inline-block; margin-top: 4px;">xattr -cr /Applications/VozduCraft.app</code>
+      </div>
     </div>
 
     <div class="footer-links">

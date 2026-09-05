@@ -44,7 +44,9 @@ app: $(TARGET)
 	@echo '  </dict>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '</dict></plist>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@chmod +x $(APP_BUNDLE)/Contents/MacOS/VozduCraft-Launcher
-	@echo "macOS App Bundle successfully built with UI resources and assets: $(APP_BUNDLE)"
+	@xattr -cr $(APP_BUNDLE)
+	@codesign --force --deep --sign - $(APP_BUNDLE)
+	@echo "macOS App Bundle successfully built, signed (ad-hoc) with UI resources and assets: $(APP_BUNDLE)"
 
 clean:
 	rm -rf src/*.o build
