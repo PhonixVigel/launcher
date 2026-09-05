@@ -54,39 +54,58 @@ function startAuthHeartbeat() {
 // ----------------------------------------------------
 // 1. ИНИЦИАЛИЗАЦИЯ И НАВИГАЦИЯ
 // ----------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-  setupNavigation();
-  setupAuth();
-  setupServerControls();
-  setupModpackControls();
-  setupCopyModsModal();
-  setupModrinthControls();
-  setupReleasesControls();
-  setupBansControls();
-  setupMirrorsControls();
-  setupDiscordBotTab();
-  setupBypassesControls();
-  setupDebugLogsControls();
-  setupCrashReportsControls();
-  setupAdminsControls();
-  setupModUpdatesControls();
-  setupSftpSyncControls();
-  setupLogViewerModal();
-  setupChangePasswordModal();
-  setupEditModModal();
-  setupBulkEditGroupModal();
-  setupResourcePacksControls();
-  setupClientServersControls();
-  startClock();
-  startAuthHeartbeat();
+function initApp() {
+  console.log('[VOZDUCRAFT ADMIN] 🚀 Initializing App v9.4 at', new Date().toISOString());
+
+  const safeRun = (name, fn) => {
+    try {
+      fn();
+    } catch (e) {
+      console.error(`[VOZDUCRAFT ADMIN] ❌ Error in ${name}:`, e);
+      if (typeof showDebugBanner === 'function') {
+        showDebugBanner(`Ошибка в модуле ${name}: ${e.message}`);
+      }
+    }
+  };
+
+  safeRun('startClock', startClock);
+  safeRun('setupNavigation', setupNavigation);
+  safeRun('setupAuth', setupAuth);
+  safeRun('setupServerControls', setupServerControls);
+  safeRun('setupModpackControls', setupModpackControls);
+  safeRun('setupCopyModsModal', setupCopyModsModal);
+  safeRun('setupModrinthControls', setupModrinthControls);
+  safeRun('setupReleasesControls', setupReleasesControls);
+  safeRun('setupBansControls', setupBansControls);
+  safeRun('setupMirrorsControls', setupMirrorsControls);
+  safeRun('setupDiscordBotTab', setupDiscordBotTab);
+  safeRun('setupBypassesControls', setupBypassesControls);
+  safeRun('setupDebugLogsControls', setupDebugLogsControls);
+  safeRun('setupCrashReportsControls', setupCrashReportsControls);
+  safeRun('setupAdminsControls', setupAdminsControls);
+  safeRun('setupModUpdatesControls', setupModUpdatesControls);
+  safeRun('setupSftpSyncControls', setupSftpSyncControls);
+  safeRun('setupLogViewerModal', setupLogViewerModal);
+  safeRun('setupChangePasswordModal', setupChangePasswordModal);
+  safeRun('setupEditModModal', setupEditModModal);
+  safeRun('setupBulkEditGroupModal', setupBulkEditGroupModal);
+  safeRun('setupResourcePacksControls', setupResourcePacksControls);
+  safeRun('setupClientServersControls', setupClientServersControls);
+  safeRun('startAuthHeartbeat', startAuthHeartbeat);
 
   if (state.token) {
     showScreen('screen-admin');
-    loadDashboardData();
+    loadDashboardData().catch(err => console.error('[DASHBOARD DATA ERROR]', err));
   } else {
     showScreen('screen-auth');
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 
 function showScreen(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -95,13 +114,14 @@ function showScreen(screenId) {
 }
 
 function startClock() {
-  const clockEl = document.getElementById('server-time-display');
-  setInterval(() => {
+  const update = () => {
+    const clockEl = document.getElementById('server-time-display');
     if (clockEl) {
-      const now = new Date();
-      clockEl.textContent = now.toLocaleTimeString('ru-RU');
+      clockEl.textContent = new Date().toLocaleTimeString('ru-RU');
     }
-  }, 1000);
+  };
+  update();
+  setInterval(update, 1000);
 }
 
 function setupNavigation() {

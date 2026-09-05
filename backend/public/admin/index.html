@@ -8,6 +8,49 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=4.0">
+  <script>
+    window.__VOZDUCRAFT_DEBUG__ = [];
+    window.onerror = function(msg, url, line, col, error) {
+      var errText = 'JS ERROR: ' + msg + ' at ' + (url ? url.split('/').pop() : '') + ':' + line + ':' + col;
+      console.error('[GLOBAL ERROR]', errText, error);
+      window.__VOZDUCRAFT_DEBUG__.push(errText);
+      showDebugBanner(errText);
+    };
+    window.addEventListener('unhandledrejection', function(event) {
+      var errText = 'PROMISE REJECTION: ' + (event.reason ? (event.reason.message || event.reason) : 'Unknown');
+      console.error('[GLOBAL REJECTION]', errText);
+      window.__VOZDUCRAFT_DEBUG__.push(errText);
+      showDebugBanner(errText);
+    });
+
+    function showDebugBanner(text) {
+      var b = document.getElementById('vozducraft-debug-banner');
+      if (!b) {
+        b = document.createElement('div');
+        b.id = 'vozducraft-debug-banner';
+        b.style.position = 'fixed';
+        b.style.bottom = '16px';
+        b.style.left = '16px';
+        b.style.right = '16px';
+        b.style.zIndex = '999999';
+        b.style.background = 'rgba(239, 68, 68, 0.95)';
+        b.style.color = '#fff';
+        b.style.padding = '14px 20px';
+        b.style.borderRadius = '10px';
+        b.style.fontSize = '13px';
+        b.style.fontFamily = 'monospace';
+        b.style.boxShadow = '0 10px 30px rgba(0,0,0,0.7)';
+        b.style.border = '1px solid rgba(255,255,255,0.3)';
+        b.style.whiteSpace = 'pre-wrap';
+        if (document.body) {
+          document.body.appendChild(b);
+        } else {
+          document.addEventListener('DOMContentLoaded', function() { document.body.appendChild(b); });
+        }
+      }
+      b.innerHTML = '⚠️ <b>ОШИБКА В БРАУЗЕРЕ:</b><br>' + text + '<br><small style="color:#fef08a">Скопируйте этот текст и отправьте разработчику</small>';
+    }
+  </script>
 </head>
 <body>
   <div class="app-container">
@@ -1420,6 +1463,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=9.3"></script>
+  <script src="app.js?v=9.4"></script>
 </body>
 </html>
