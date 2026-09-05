@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4.0">
+  <link rel="stylesheet" href="styles.css?v=4.2">
   <script>
     window.__VOZDUCRAFT_DEBUG__ = [];
     window.onerror = function(msg, url, line, col, error) {
@@ -1234,9 +1234,8 @@
   </div>
 
   <!-- Модальное окно: Массовая настройка группы и доступа для выбранных модов -->
-  <div class="modal hidden" id="modal-bulk-edit-group">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content glass-panel" style="max-width: 540px;">
+  <div class="modal-overlay hidden" id="modal-bulk-edit-group">
+    <div class="modal-card glass-panel" style="max-width: 540px;">
       <div class="modal-header">
         <h3 class="modal-title">📂 Массовая настройка модов (<span id="bulk-mods-count-label">0</span>)</h3>
         <button class="modal-close" id="btn-close-bulk-edit-group">✕</button>
@@ -1277,9 +1276,8 @@
   </div>
 
   <!-- Модальное окно: Редактирование параметров мода (Группа, доступ, иконка) -->
-  <div class="modal hidden" id="modal-edit-mod">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content glass-panel" style="max-width: 540px;">
+  <div class="modal-overlay hidden" id="modal-edit-mod">
+    <div class="modal-card glass-panel" style="max-width: 540px;">
       <div class="modal-header">
         <h3 class="modal-title">⚙️ Параметры и доступ мода</h3>
         <button class="modal-close" id="btn-close-edit-mod">✕</button>
@@ -1329,9 +1327,8 @@
   </div>
 
   <!-- Модальное окно: Загрузка локального .ZIP Ресурспака -->
-  <div class="modal hidden" id="modal-upload-rp">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content glass-panel" style="max-width: 540px;">
+  <div class="modal-overlay hidden" id="modal-upload-rp">
+    <div class="modal-card glass-panel" style="max-width: 540px;">
       <div class="modal-header">
         <h3 class="modal-title">➕ Загрузить .ZIP Ресурспак</h3>
         <button class="modal-close" id="btn-close-upload-rp">✕</button>
@@ -1374,9 +1371,8 @@
   </div>
 
   <!-- Модальное окно: Каталог Modrinth Ресурспаков -->
-  <div class="modal hidden" id="modal-modrinth-rp">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content glass-panel" style="max-width: 750px;">
+  <div class="modal-overlay hidden" id="modal-modrinth-rp">
+    <div class="modal-card glass-panel" style="max-width: 750px;">
       <div class="modal-header">
         <h3 class="modal-title">🔍 Каталог Ресурспаков (Modrinth)</h3>
         <button class="modal-close" id="btn-close-modrinth-rp">✕</button>
@@ -1392,9 +1388,8 @@
   </div>
 
   <!-- Модальное окно: Редактирование параметров Ресурспака -->
-  <div class="modal hidden" id="modal-edit-rp">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content glass-panel" style="max-width: 540px;">
+  <div class="modal-overlay hidden" id="modal-edit-rp">
+    <div class="modal-card glass-panel" style="max-width: 540px;">
       <div class="modal-header">
         <h3 class="modal-title">⚙️ Параметры ресурспака</h3>
         <button class="modal-close" id="btn-close-edit-rp">✕</button>
@@ -1434,9 +1429,8 @@
   </div>
 
   <!-- Модальное окно: Добавление/Редактирование Клиентского Сервера (servers.dat) -->
-  <div class="modal hidden" id="modal-client-server">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content glass-panel" style="max-width: 500px;">
+  <div class="modal-overlay hidden" id="modal-client-server">
+    <div class="modal-card glass-panel" style="max-width: 500px;">
       <div class="modal-header">
         <h3 class="modal-title" id="client-server-modal-title">➕ Сервер для servers.dat</h3>
         <button class="modal-close" id="btn-close-client-server">✕</button>
@@ -1463,6 +1457,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=9.4"></script>
+  <script src="app.js?v=9.5"></script>
 </body>
 </html>
