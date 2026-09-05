@@ -15,6 +15,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Доверие reverse-proxy (Nginx / Cloudflare) для корректного протокола HTTPS и IP
+app.set('trust proxy', 1);
+
 // Глобальный подробный логгер всех входящих запросов
 app.use((req, res, next) => {
   const start = Date.now();
