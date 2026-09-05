@@ -1,4 +1,5 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
+const LAUNCHER_CURRENT_VERSION = '3.4.0';
 const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
 
 let KNOWN_MIRRORS = [DEFAULT_PRIMARY_MIRROR];
@@ -244,7 +245,6 @@ function showToast(msg) {
 // ----------------------------------------------------
 // 2. ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ----------------------------------------------------
-const LAUNCHER_CURRENT_VERSION = '3.4.0';
 
 document.addEventListener('DOMContentLoaded', () => {
   initCustomBackground();

@@ -347,7 +347,7 @@ int main(int argc, char** argv) {
                         json successPayload;
                         successPayload["username"] = username;
                         successPayload["os"] = "macOS";
-                        successPayload["launcher_version"] = "3.0.2";
+                        successPayload["launcher_version"] = "3.4.0";
                         successPayload["event_type"] = "UPDATE_SUCCESS";
                         successPayload["log_content"] = "[C++ AutoUpdater] Загрузка 100% завершена! Запуск установщика: " + destFile;
                         dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", successPayload.dump());
@@ -393,7 +393,7 @@ int main(int argc, char** argv) {
                         json errPayload;
                         errPayload["username"] = username;
                         errPayload["os"] = "macOS";
-                        errPayload["launcher_version"] = "3.0.2";
+                        errPayload["launcher_version"] = "3.4.0";
                         errPayload["event_type"] = "UPDATE_ERROR";
                         errPayload["log_content"] = "[C++ AutoUpdater] Ошибка скачивания по URL: " + downloadUrl;
                         dl.postJson("http://185.221.213.43:3000/api/v1/launcher/debug-log", errPayload.dump());

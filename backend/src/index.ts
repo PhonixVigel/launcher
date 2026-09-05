@@ -56,11 +56,13 @@ app.use('/files', (req, res, next) => {
   next();
 }, express.static(filesDir));
 
-// Статическая раздача релизных веб-интерфейсов лаунчеров
+// Статическая раздача релизных веб-интерфейсов лаунчеров и ассетов
 const playerDir = path.join(__dirname, '../public/player');
 const adminDir = path.join(__dirname, '../public/admin');
+const assetsDir = path.join(__dirname, '../public/assets');
 app.use('/player', express.static(playerDir));
 app.use('/admin', express.static(adminDir));
+app.use('/assets', express.static(assetsDir));
 
 // Подключение API маршрутов
 app.use('/api/v1/auth', authRoutes);
@@ -127,6 +129,15 @@ app.get('/', (req, res) => {
       width: 100%;
       text-align: center;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .logo-img {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      object-fit: cover;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 30px rgba(56, 189, 248, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.2);
     }
     .logo {
       font-size: 38px;
@@ -207,7 +218,8 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <div class="card">
-    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1</div>
+    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.4.0</div>
+    <div><img src="/assets/logo.jpg" alt="VozduCraft Logo" class="logo-img" onerror="this.style.display='none'"></div>
     <div class="logo">VOZDUCRAFT</div>
     <div class="subtitle">Официальный игровой лаунчер с автоматической синхронизацией модов и Java</div>
     
@@ -234,7 +246,7 @@ app.get('/', (req, res) => {
   res.json({
     status: 'ONLINE',
     service: 'VozduCraft Launcher Backend API',
-    version: '3.3.0',
+    version: '3.4.0',
     downloads: {
       windows: 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe',
       macos: 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg'
