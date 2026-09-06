@@ -75,14 +75,14 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
       };
 
       let timer = null;
-      const resetInactivityTimer = (timeoutMs = 30000) => {
+      const resetInactivityTimer = (timeoutMs = 12000) => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
           req.destroy(new Error(`Download stalled (no data for ${Math.round(timeoutMs/1000)}s): ${url}`));
         }, timeoutMs);
       };
 
-      resetInactivityTimer(30000);
+      resetInactivityTimer(12000);
 
       const req = client.get(reqOptions, (response) => {
         resetInactivityTimer(30000);
@@ -744,10 +744,8 @@ function createWindow() {
             logToDisk(`[Lib Warning] ${lib.url}: ${err.message}`);
           }
           downloaded++;
-          if (downloaded % 5 === 0 || downloaded === allLibsToDownload.length) {
-            const pct = 30 + Math.floor((downloaded / allLibsToDownload.length) * 45);
-            sendStatus(pct, `[Библиотеки] ${downloaded}/${allLibsToDownload.length}`);
-          }
+          const pct = 30 + Math.floor((downloaded / allLibsToDownload.length) * 45);
+          sendStatus(pct, `[Библиотеки] ${downloaded}/${allLibsToDownload.length}`);
         }
       }
 
