@@ -141,6 +141,96 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
   });
 }
 
+function calculateFileHash(filePath, algorithm = 'sha1') {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(filePath)) return resolve(null);
+    try {
+      const hash = crypto.createHash(algorithm);
+      const stream = fs.createReadStream(filePath);
+      stream.on('data', chunk => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex').toLowerCase()));
+      stream.on('error', () => resolve(null));
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+async function downloadAndVerifyFile(url, dest, expectedHash, hashType = 'sha1', onProgress, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+        if (!expectedHash) return true;
+        const currentHash = await calculateFileHash(dest, hashType);
+        if (currentHash && currentHash === expectedHash.toLowerCase()) {
+          return true;
+        }
+      }
+      await downloadFile(url, dest, onProgress);
+      if (!expectedHash) return true;
+      const downloadedHash = await calculateFileHash(dest, hashType);
+      if (downloadedHash && downloadedHash === expectedHash.toLowerCase()) {
+        return true;
+      } else {
+        logToDisk(`[Checksum Mismatch] ${path.basename(dest)}: получено ${downloadedHash}, ожидалось ${expectedHash}. Попытка ${attempt}/${maxRetries}`);
+        try { fs.unlinkSync(dest); } catch (_) {}
+      }
+    } catch (err) {
+      logToDisk(`[Download Error] ${url} (попытка ${attempt}/${maxRetries}): ${err.message}`);
+      if (attempt === maxRetries) throw err;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  return false;
+}
+
+function resolveTemplate(str, vars) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/\$\{([a-zA-Z0-9_]+)\}/g, (match, p1) => {
+    return vars[p1] !== undefined ? vars[p1] : match;
+  });
+}
+
+function resolveArgumentList(rawArgs, vars, isMac, isArm64) {
+  const result = [];
+  if (!Array.isArray(rawArgs)) return result;
+
+  for (const item of rawArgs) {
+    if (typeof item === 'string') {
+      result.push(resolveTemplate(item, vars));
+    } else if (item && typeof item === 'object') {
+      let allowed = true;
+      if (Array.isArray(item.rules)) {
+        for (const rule of item.rules) {
+          if (rule.action === 'allow') {
+            if (rule.os) {
+              if (rule.os.name === 'osx' && !isMac) allowed = false;
+              if (rule.os.name === 'windows' && !isWin) allowed = false;
+              if (rule.os.name === 'linux' && (isWin || isMac)) allowed = false;
+              if (rule.os.arch === 'arm64' && !isArm64) allowed = false;
+            }
+          } else if (rule.action === 'disallow') {
+            if (rule.os) {
+              if (rule.os.name === 'osx' && isMac) allowed = false;
+              if (rule.os.name === 'windows' && isWin) allowed = false;
+            }
+          }
+        }
+      }
+      if (allowed && item.value) {
+        if (Array.isArray(item.value)) {
+          for (const val of item.value) {
+            result.push(resolveTemplate(val, vars));
+          }
+        } else if (typeof item.value === 'string') {
+          result.push(resolveTemplate(item.value, vars));
+        }
+      }
+    }
+  }
+  return result;
+}
+
 function ensureDesktopShortcut() {
   if (!isWin) return;
   try {
@@ -473,47 +563,67 @@ function createWindow() {
         return null;
       }
 
-      const foundJava = findAdoptiumJava21();
-      if (foundJava) {
-        javaBinaryPath = foundJava;
-        logToDisk(`✅ Обнаружена среда исполнения Eclipse Adoptium 21: ${javaBinaryPath}`);
-      } else {
-        logToDisk('Среда Java 21 не найдена на устройстве. Загрузка официального пакета Temurin 21 JDK...');
-        const javaUrl = isMac
-          ? 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.2_13.tar.gz'
-          : 'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jdk_x64_windows_hotspot_21.0.2_13.zip';
-        const tempDest = path.join(os.tmpdir(), isMac ? 'temurin21.tar.gz' : 'temurin21.zip');
-        
-        sendStatus(10, 'Загрузка Eclipse Adoptium Temurin 21 JDK (~190 МБ)...');
-        await downloadFile(javaUrl, tempDest, (loaded, total) => {
-          sendStatus(Math.floor((loaded / total) * 10) + 10, `[Загрузка Java 21] ${(loaded / 1024 / 1024).toFixed(1)} МБ`);
+      // 1. Поиск или автоматическая загрузка изолированной среды Java 21 (Adoptium Temurin)
+      async function ensureAdoptiumJava21() {
+        const runtimeDir = path.join(gamePath, 'runtime', 'java-21');
+        const localJavaw = path.join(runtimeDir, 'bin', isWin ? 'javaw.exe' : 'java');
+        const localJava = path.join(runtimeDir, 'bin', isWin ? 'java.exe' : 'java');
+
+        if (fs.existsSync(localJavaw)) return localJavaw;
+        if (fs.existsSync(localJava)) return localJava;
+
+        if (fs.existsSync(runtimeDir)) {
+          const found = findExecutableRecursively(runtimeDir, isWin ? ['javaw.exe', 'java.exe'] : ['java']);
+          if (found) return found;
+        }
+
+        const systemJava = findAdoptiumJava21();
+        if (systemJava) {
+          logToDisk(`✅ Обнаружена системная Java 21: ${systemJava}`);
+          return systemJava;
+        }
+
+        logToDisk('📥 Среда Java 21 не найдена. Автоматическая загрузка проверенной Eclipse Adoptium 21 JRE...');
+        sendStatus(10, 'Загрузка изолированной Java 21 JRE (~50 МБ)...');
+
+        const javaUrl = isWin
+          ? 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse'
+          : (isMac && isArm64
+            ? 'https://api.adoptium.net/v3/binary/latest/21/ga/mac/aarch64/jre/hotspot/normal/eclipse'
+            : 'https://api.adoptium.net/v3/binary/latest/21/ga/mac/x64/jre/hotspot/normal/eclipse');
+
+        const archiveDest = path.join(os.tmpdir(), isWin ? 'adoptium_jre21.zip' : 'adoptium_jre21.tar.gz');
+        await downloadFile(javaUrl, archiveDest, (loaded, total) => {
+          if (total > 0) {
+            const pct = Math.floor((loaded / total) * 10) + 10;
+            sendStatus(pct, `[Загрузка Java 21] ${(loaded / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} МБ`);
+          }
         });
 
-        sendStatus(20, 'Распаковка Java 21 JDK...');
-        fs.mkdirSync(javaDir, { recursive: true });
+        sendStatus(20, 'Распаковка Java 21 JRE...');
+        fs.mkdirSync(runtimeDir, { recursive: true });
+
         const { execSync } = require('child_process');
         if (isMac) {
-          execSync(`tar -xzf "${tempDest}" -C "${javaDir}"`);
-          try { fs.unlinkSync(tempDest); } catch (_) {}
+          execSync(`tar -xzf "${archiveDest}" -C "${runtimeDir}" --strip-components=1 2>/dev/null || tar -xzf "${archiveDest}" -C "${runtimeDir}"`);
         } else if (isWin) {
           try {
-            const psCmd = `Expand-Archive -Force -Path '${tempDest.replace(/'/g, "''")}' -DestinationPath '${javaDir.replace(/'/g, "''")}'`;
+            const psCmd = `Expand-Archive -Force -Path '${archiveDest.replace(/'/g, "''")}' -DestinationPath '${runtimeDir.replace(/'/g, "''")}'`;
             const b64 = Buffer.from(psCmd, 'utf16le').toString('base64');
             execSync(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${b64}`);
           } catch (_) {
-            execSync(`tar -xf "${tempDest}" -C "${javaDir}"`);
+            execSync(`tar -xf "${archiveDest}" -C "${runtimeDir}"`);
           }
-          try { fs.unlinkSync(tempDest); } catch (_) {}
         }
 
-        const freshJava = findAdoptiumJava21() || findExecutableRecursively(javaDir, isWin ? ['javaw.exe', 'java.exe'] : ['java']);
-        if (freshJava) {
-          javaBinaryPath = freshJava;
-          logToDisk(`✅ Установлена и готова к работе Eclipse Adoptium 21: ${javaBinaryPath}`);
-        } else {
-          javaBinaryPath = isWin ? 'javaw.exe' : 'java';
-        }
+        try { fs.unlinkSync(archiveDest); } catch (_) {}
+
+        const finalJava = findExecutableRecursively(runtimeDir, isWin ? ['javaw.exe', 'java.exe'] : ['java']) || (isWin ? 'javaw.exe' : 'java');
+        logToDisk(`✅ Изолированная Java 21 установлена и готова: ${finalJava}`);
+        return finalJava;
       }
+
+      javaBinaryPath = await ensureAdoptiumJava21();
 
       // 2. Чтение метаданных
       sendStatus(25, 'Анализ библиотек NeoForge и Minecraft...');
@@ -536,6 +646,8 @@ function createWindow() {
         }
 
         const url = lib.downloads.artifact.url;
+        const sha1 = lib.downloads.artifact.sha1;
+        const size = lib.downloads.artifact.size;
         let relativePath = lib.downloads.artifact.path;
         if (!relativePath) {
             const parts = lib.name.split(':');
@@ -550,7 +662,7 @@ function createWindow() {
             relativePath = `${group}/${artifact}/${version}/${artifact}-${version}${classifier}.jar`;
         }
 
-        allLibsToDownload.push({ url, dest: path.join(libsDir, relativePath) });
+        allLibsToDownload.push({ url, dest: path.join(libsDir, relativePath), sha1, size });
       };
 
       if (mcMeta.libraries) mcMeta.libraries.forEach(processLib);
@@ -558,7 +670,7 @@ function createWindow() {
       if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
       if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
 
-      // 3. Быстрая параллельная загрузка библиотек с пулом воркеров
+      // 3. Быстрая параллельная загрузка библиотек с проверкой SHA-1 контрольных сумм
       sendStatus(30, 'Синхронизация библиотек...');
       let downloaded = 0;
       const concurrency = 16;
@@ -569,12 +681,10 @@ function createWindow() {
           const lib = queue.shift();
           if (!lib) break;
           try {
-            if (!fs.existsSync(lib.dest) || fs.statSync(lib.dest).size < 100) {
-              fs.mkdirSync(path.dirname(lib.dest), { recursive: true });
-              await downloadFile(lib.url, lib.dest, null).catch(e => {
-                logToDisk(`[Lib Warning] ${lib.url}: ${e.message}`);
-              });
-            }
+            fs.mkdirSync(path.dirname(lib.dest), { recursive: true });
+            await downloadAndVerifyFile(lib.url, lib.dest, lib.sha1, 'sha1').catch(e => {
+              logToDisk(`[Lib Warning] ${lib.url}: ${e.message}`);
+            });
           } catch (err) {
             logToDisk(`[Lib Warning] ${lib.url}: ${err.message}`);
           }
@@ -795,24 +905,10 @@ function createWindow() {
 
               if (downloadUrl) {
                 try {
-                  let needDownload = true;
-                  if (fs.existsSync(targetPath)) {
-                    const localSize = fs.statSync(targetPath).size;
-                    if (fileItem.size_bytes && localSize === fileItem.size_bytes && localSize > 0) {
-                      needDownload = false;
-                    }
-                  }
-
-                  if (needDownload) {
-                    logToDisk(`[Скачивание мода] ${relPath} (${fileItem.size_bytes || 0} B) с ${downloadUrl}...`);
-                    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-                    await downloadFile(downloadUrl, targetPath, null).catch(e => {
-                      logToDisk(`[Mod Sync Error] ${fileItem.filepath}: ${e.message}`);
-                    });
-                    if (fs.existsSync(targetPath)) {
-                      logToDisk(`[Мод успешно скачан] ${relPath} (${fs.statSync(targetPath).size} B)`);
-                    }
-                  }
+                  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+                  await downloadAndVerifyFile(downloadUrl, targetPath, fileItem.sha256, 'sha256').catch(e => {
+                    logToDisk(`[Mod Sync Error] ${fileItem.filepath}: ${e.message}`);
+                  });
                 } catch (e) {
                   logToDisk(`[Mod Sync Warning] ${fileItem.filepath}: ${e.message}`);
                 }
@@ -884,20 +980,10 @@ function createWindow() {
 
             if (downloadUrl) {
               try {
-                let needDownload = true;
-                if (fs.existsSync(targetRpPath)) {
-                  const localSize = fs.statSync(targetRpPath).size;
-                  if (rp.size_bytes && localSize === rp.size_bytes && localSize > 0) {
-                    needDownload = false;
-                  }
-                }
-                if (needDownload) {
-                  logToDisk(`[Скачивание ресурспака] ${relPath} с ${downloadUrl}...`);
-                  fs.mkdirSync(path.dirname(targetRpPath), { recursive: true });
-                  await downloadFile(downloadUrl, targetRpPath, null).catch(e => {
-                    logToDisk(`[RP Sync Error] ${relPath}: ${e.message}`);
-                  });
-                }
+                fs.mkdirSync(path.dirname(targetRpPath), { recursive: true });
+                await downloadAndVerifyFile(downloadUrl, targetRpPath, rp.sha256, 'sha256').catch(e => {
+                  logToDisk(`[RP Sync Error] ${relPath}: ${e.message}`);
+                });
               } catch (rpErr) {
                 logToDisk(`[RP Warning] ${rpErr.message}`);
               }
