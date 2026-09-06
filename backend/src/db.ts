@@ -361,12 +361,12 @@ async function initDbSchema(db: Database) {
   // Удаляем устаревшие тестовые дубликаты версий
   await db.run("DELETE FROM launcher_releases WHERE version IN ('3.3.0')");
 
-  await db.run("UPDATE project_config SET value = '3.5.4' WHERE key = 'launcher_version'");
-  const rel354 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.4'");
-  if (!rel354) {
+  await db.run("UPDATE project_config SET value = '3.5.5' WHERE key = 'launcher_version'");
+  const rel355 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.5'");
+  if (!rel355) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
-      VALUES ('3.5.4', 'Релиз v3.5.4: Стабильный запуск Minecraft NeoForge 1.21.1, изолированный чистый Classpath, полная кроссплатформенность Windows и macOS', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
+      VALUES ('3.5.5', 'Релиз v3.5.5: Стабильный запуск Minecraft NeoForge 1.21.1, изолированный чистый Classpath, полная кроссплатформенность Windows и macOS', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
     `);
   }
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
@@ -374,7 +374,7 @@ async function initDbSchema(db: Database) {
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.5.4',
+    'launcher_version': '3.5.5',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',
