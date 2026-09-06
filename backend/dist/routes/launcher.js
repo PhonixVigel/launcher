@@ -132,8 +132,8 @@ router.get('/check-update', async (req, res) => {
             macUrl = `${baseHost}${macUrl}`;
         }
         return res.json({
-            latestVersion: latestRelease?.version || config?.value || '3.4.0',
-            releaseNotes: latestRelease?.release_notes || 'Релиз v3.4.0: Группировка опциональных модов с превью логотипов, разграничение прав доступа, генератор servers.dat и вкладка Ресурспаков',
+            latestVersion: latestRelease?.version || config?.value || '3.5.0',
+            releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.0: Исправление запуска игры на Java 21 / NeoForge (module-path для night-config/fml), стабильное автообновление',
             downloadUrl: winUrl,
             macDownloadUrl: macUrl,
             patchUrl: `${baseHost}/files/launchers/app.asar`,

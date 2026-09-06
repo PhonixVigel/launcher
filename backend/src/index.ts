@@ -18,8 +18,16 @@ const PORT = process.env.PORT || 3000;
 // Доверие reverse-proxy (Nginx / Cloudflare) для корректного протокола HTTPS и IP
 app.set('trust proxy', 1);
 
-// Глобальный подробный логгер всех входящих запросов
+// Глобальный логгер входящих запросов (с фильтрацией фоновых пингов)
 app.use((req, res, next) => {
+  if (
+    req.originalUrl.includes('/auth/discord/queue') ||
+    req.originalUrl.includes('/admin/servers/') ||
+    req.originalUrl.includes('/favicon.ico')
+  ) {
+    return next();
+  }
+
   const start = Date.now();
   const timestamp = new Date().toLocaleTimeString();
   console.log(`\n[${timestamp}] 📥 HTTP ${req.method} ${req.originalUrl}`);
@@ -221,7 +229,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <div class="card">
-    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.4.0</div>
+    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.5.0</div>
     <div><img src="/assets/logo.jpg" alt="VozduCraft Logo" class="logo-img" onerror="this.style.display='none'"></div>
     <div class="logo">VOZDUCRAFT</div>
     <div class="subtitle">Официальный игровой лаунчер с автоматической синхронизацией модов и Java</div>
