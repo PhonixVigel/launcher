@@ -933,6 +933,11 @@ function createWindow() {
 
           logToDisk(`К синхронизации: ${filesToSync.length} файлов сборки`);
           const allowedModFiles = new Set();
+          for (const f of filesToSync) {
+            if (f.filepath) {
+              allowedModFiles.add(path.basename(f.filepath).toLowerCase());
+            }
+          }
           let syncedCount = 0;
           const modQueue = [...filesToSync];
           const modConcurrency = 12;
@@ -946,7 +951,6 @@ function createWindow() {
               
               const relPath = fileItem.filepath;
               const targetPath = path.join(gamePath, relPath);
-              allowedModFiles.add(path.basename(relPath).toLowerCase());
 
               let downloadUrl = fileItem.download_url || '';
               if (!downloadUrl) {
