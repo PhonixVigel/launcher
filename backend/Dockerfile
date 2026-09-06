@@ -9,7 +9,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 COPY package*.json tsconfig.json ./
-RUN npm ci
+RUN npm install
 
 COPY src/ ./src/
 RUN npm run build
@@ -25,7 +25,7 @@ ENV DATABASE_PATH=/app/data/vozducraft.db
 RUN apk add --no-cache sqlite-libs
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Копируем скомпилированный код бэкенда
 COPY --from=builder /app/dist ./dist
