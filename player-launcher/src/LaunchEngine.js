@@ -26,11 +26,12 @@ class LaunchEngine {
     
     const spawnArgs = [
       ...finalJvmArgs,
+      ...(process.platform === 'darwin' ? ['-XstartOnFirstThread'] : []),
       profile.mainClass,
       ...finalGameArgs
     ];
 
-    logger('[Launch] Формирование команды завершено. Запускаем JVM...');
+    logger('[Launch] Формирование команды завершено. Запускаем JVM...\\nARGS: ' + JSON.stringify(spawnArgs, null, 2));
 
     if (!fs.existsSync(context.game_directory)) {
       fs.mkdirSync(context.game_directory, { recursive: true });
