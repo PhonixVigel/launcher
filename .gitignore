@@ -1,36 +1,44 @@
-# Node dependencies
+# Зависимости Node.js
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+package-lock.json
 
-# Build artifacts
-build/
-*.o
-*.app
-
-# Databases and Local Data
-*.db
-*.db-journal
-/data/
-
-# OS specific
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Environment variables
-.env
-.env.local
-
-# Large Archives (>100MB)
-*.zip
-backend/public/files/launchers/*.zip
+# Сборки и кэши Electron
+dist/
 dist_win/
 dist_mac/
 dist_mac_admin/
+out/
+build/
+release/
+*.asar
+*.asar.unpacked
 
+# Бинарные релизы и архивы
+*.exe
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.zip
+*.tar.gz
+*.lzma
+
+# Сборки Java / Моды (если случайно попали)
+*.jar
+*.class
+
+# Логи и сессии
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+session-tickets.json
+debug-logs/
+crash-reports/
+
+# Системные файлы macOS и Windows
+.DS_Store
+Thumbs.db
+*.db
+*.sqlite

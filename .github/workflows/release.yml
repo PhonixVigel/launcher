@@ -1,0 +1,45 @@
+name: Build and Release VozduCraft Launcher
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: player-launcher/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./player-launcher
+        run: npm ci
+
+      - name: Prepare Binaries (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: ./player-launcher
+        run: |
+          mkdir -p bin
+          chmod +x bin/xray-mac || true
+
+      - name: Build and Publish with Electron Builder
+        working-directory: ./player-launcher
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --publish always

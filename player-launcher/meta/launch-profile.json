@@ -1,0 +1,31 @@
+{
+  "mainClass": "io.github.zekerzhayard.forgewrapper.installer.Main",
+  "jvmArgs": [
+    "-Xms1G",
+    "-Xmx${max_memory}M",
+    "-Djava.net.preferIPv4Stack=true",
+    "--module-path",
+    "${game_directory}/libraries/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar${cp_separator}${game_directory}/libraries/cpw/mods/securejarhandler/2.9.8/securejarhandler-2.9.8.jar${cp_separator}${game_directory}/libraries/org/ow2/asm/asm-commons/9.7/asm-commons-9.7.jar${cp_separator}${game_directory}/libraries/org/ow2/asm/asm-util/9.7/asm-util-9.7.jar${cp_separator}${game_directory}/libraries/org/ow2/asm/asm-analysis/9.7/asm-analysis-9.7.jar${cp_separator}${game_directory}/libraries/org/ow2/asm/asm-tree/9.7/asm-tree-9.7.jar${cp_separator}${game_directory}/libraries/org/ow2/asm/asm/9.7/asm-9.7.jar${cp_separator}${game_directory}/libraries/net/neoforged/jarjarfilesystems/0.3.19/jarjarfilesystems-0.3.19.jar",
+    "--add-modules", "ALL-MODULE-PATH",
+    "--add-opens", "java.base/java.util.jar=cpw.mods.securejarhandler",
+    "--add-opens", "java.base/java.lang.invoke=cpw.mods.securejarhandler",
+    "--add-opens", "java.base/java.lang=cpw.mods.securejarhandler,ALL-UNNAMED",
+    "--add-exports", "java.base/sun.security.util=cpw.mods.securejarhandler",
+    "-DignoreList=bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,jarjar",
+    "-Dneoforge.name=NeoForge",
+    "-Dneoforge.version=21.1.248",
+    "-Djava.library.path=${natives_directory}",
+    "-DlegacyClassPath=${game_directory}/libraries/...",
+    "-cp", "${game_directory}/libraries/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar"
+  ],
+  "gameArgs": [
+    "--launchTarget", "forgeclient",
+    "--version", "1.21.1",
+    "--assetIndex", "1.21",
+    "--assetsDir", "${assets_root}",
+    "--gameDir", "${game_directory}",
+    "--username", "${auth_player_name}",
+    "--uuid", "${auth_uuid}",
+    "--accessToken", "${auth_access_token}"
+  ]
+}

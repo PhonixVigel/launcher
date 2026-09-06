@@ -26,9 +26,13 @@
     },
     "publish": [
       {
-        "provider": "generic",
-        "url": "http://185.221.213.43:3000/files/launchers/"
+        "provider": "github",
+        "owner": "PhonixVigel",
+        "repo": "launcher"
       }
+    ],
+    "extraResources": [
+      "bin/**/*"
     ],
     "nsis": {
       "oneClick": true,

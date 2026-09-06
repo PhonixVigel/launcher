@@ -7,7 +7,8 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const os = require('os');
-
+const SystemManager = require('./src/SystemManager');
+const LaunchEngine = require('./src/LaunchEngine');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const isArm64 = process.arch === 'arm64' || process.arch === 'aarch64';
@@ -1143,108 +1144,27 @@ function createWindow() {
       const mainClass = 'io.github.zekerzhayard.forgewrapper.installer.Main';
       const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;minecraft-1.21.1-client.jar,neoforge-${targetNeoForgeVer}-client.jar`;
 
-      const jvmArgs = [
-        `-Dforgewrapper.minecraft=${mcJarPath}`,
-        `-Dforgewrapper.librariesDir=${libsDir}`,
-        `-DlegacyClassPath=${finalLegacyCpString}`,
-        `-DlibraryDirectory=${libsDir}`,
-        `-Dforgewrapper.installer=${forgewrapperInstallerJar}`,
-        `-DmergeModules=${mergeString}`,
-        ...macFlags,
-        `-Xms4G`,
-        `-Xmx${ram}G`,
-        `-Djava.net.preferIPv6Addresses=system`,
-        `-DignoreList=client-extra,neoforge-${targetNeoForgeVer}.jar,bootstraplauncher,securejarhandler`,
-        `--module-path`, modulePath,
-        `--add-modules`, `ALL-MODULE-PATH`,
-        `--add-opens`, `java.base/java.util.jar=cpw.mods.securejarhandler`,
-        `--add-opens`, `java.base/java.lang.invoke=cpw.mods.securejarhandler`,
-        `--add-opens`, `java.base/java.lang=cpw.mods.securejarhandler,ALL-UNNAMED`,
-        `--add-opens`, `java.base/java.util=ALL-UNNAMED`,
-        `--add-opens`, `java.base/java.io=ALL-UNNAMED`,
-        `--add-opens`, `java.base/java.nio.channels=ALL-UNNAMED`,
-        `--add-opens`, `java.base/sun.net.www.protocol.jar=ALL-UNNAMED`,
-        `--add-exports`, `java.base/sun.security.util=cpw.mods.securejarhandler`,
-        `--add-exports`, `jdk.naming.dns/com.sun.jndi.dns=java.naming`,
-        `-Dnet.neoforged.mappedNaming=official`,
-        `-Dneoforge.stage=client`,
-        `-Dneoforge.version=${targetNeoForgeVer}`,
-        `-Dneoforge.modsDir=${modsPath}`,
-        `-Dneoforge.earlyWindow=false`,
-        `-Dfml.earlyWindow=false`,
-        `-Dneoforge.earlydisplay=false`,
-        `-Dfml.earlydisplay=false`,
-        `-Dneoforge.earlyWindow.enabled=false`,
-        `-Dfml.earlyWindow.enabled=false`,
-        `-Dneoforge.display.enabled=false`,
-        `-cp`,
-        classpath
-      ];
-
-      const gameArgs = [
-        `--username`, username,
-        `--version`, `1.21.1`,
-        `--gameDir`, gamePath,
-        `--assetsDir`, path.join(gamePath, 'assets'),
-        `--assetIndex`, `17`,
-        `--uuid`, validUuid,
-        `--accessToken`, `VOZDUCRAFT-TOKEN-${Date.now()}`,
-        `--userType`, `offline`,
-        `--versionType`, `release`,
-        `--neoForgeVersion`, targetNeoForgeVer,
-        `--fml.neoForgeVersion`, targetNeoForgeVer,
-        `--fmlVersion`, `4.0.43`,
-        `--fml.fmlVersion`, `4.0.43`,
-        `--mcVersion`, `1.21.1`,
-        `--fml.mcVersion`, `1.21.1`,
-        `--neoFormVersion`, `20240808.144430`,
-        `--fml.neoFormVersion`, `20240808.144430`,
-        `--fml.earlyWindow=false`,
-        `--launchTarget`, `forgeclient`
-      ];
-
-      // Формирование файла аргументов JVM для обхода лимита длины строки Windows (ENAMETOOLONG)
-      function formatArgForJava(arg) {
-        if (!arg) return '';
-        if (arg.includes(' ')) {
-          return `"${arg.replace(/\\/g, '\\\\')}"`;
-        }
-        return arg;
+      // Загрузка готового профиля NeoForge
+      const profilePath = path.join(__dirname, 'meta', 'launch-profile.json');
+      let profile;
+      try {
+        profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+      } catch (err) {
+        logToDisk('[LAUNCH ERROR] Не удалось прочитать launch-profile.json: ' + err.message);
+        throw err;
       }
 
-      const jvmArgsFormatted = [];
-      for (let i = 0; i < jvmArgs.length; i++) {
-        const item = jvmArgs[i];
-        if (item === '-cp' || item === '--module-path' || item === '--add-modules' || item === '--add-opens') {
-          jvmArgsFormatted.push(item);
-          i++;
-          if (i < jvmArgs.length) {
-            jvmArgsFormatted.push(formatArgForJava(jvmArgs[i]));
-          }
-        } else if (item.startsWith('-D') && item.includes('=')) {
-          const eqIndex = item.indexOf('=');
-          const k = item.slice(0, eqIndex + 1);
-          const v = item.slice(eqIndex + 1);
-          jvmArgsFormatted.push(v.includes(' ') ? `${k}"${v.replace(/\\/g, '\\\\')}"` : item);
-        } else {
-          jvmArgsFormatted.push(formatArgForJava(item));
-        }
-      }
+      // Подготовка контекста переменных
+      const launchContext = {
+        auth_player_name: username,
+        auth_uuid: validUuid,
+        auth_access_token: `VOZDUCRAFT-TOKEN-${Date.now()}`,
+        game_directory: gamePath,
+        assets_root: path.join(gamePath, 'assets'),
+        natives_directory: path.join(gamePath, 'natives'),
+        max_memory: String(ram * 1024)
+      };
 
-      const argFilePath = path.join(gamePath, 'jvm_args.txt');
-      try {
-        fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
-      } catch (_) {}
-
-      const finalArgs = isWin 
-        ? [`@${argFilePath}`, mainClass, ...gameArgs]
-        : [...jvmArgs, mainClass, ...gameArgs];
-
-      logToDisk(`ЗАПУСК ИГРЫ (${isWin ? 'Windows ArgFile' : 'Unix Direct'}): ${javaBinaryPath} ${finalArgs.join(' ')}`);
-
-      try {
-        fs.writeFileSync(path.join(gamePath, 'java_cmd.log'), `=== JVM ARGS ===\n${jvmArgsFormatted.join('\n')}\n\n=== MAIN CLASS ===\n${mainClass}\n\n=== GAME ARGS ===\n${gameArgs.join('\n')}`);
-      } catch (_) {}
       try {
         fs.writeFileSync(gameLogFile, `=== СТАРТ ИГРОВОГО ЛОГА [${new Date().toISOString()}] ===\n`);
       } catch (_) {}
@@ -1371,7 +1291,8 @@ function createWindow() {
         logToDisk(`[SECURITY TICKET] Исключение: ${err.message}`);
       }
 
-      const mcProcess = require('child_process').spawn(javaBinaryPath, finalArgs, { cwd: gamePath, shell: false, env: process.env });
+      // Запуск игры через новый движок LaunchEngine
+      const mcProcess = LaunchEngine.launch(profile, launchContext, javaBinaryPath, logToDisk);
       mcProcess.stdout?.on('data', (data) => {
         const str = data.toString();
         logToDisk(`[GAME OUT] ${str.trim()}`);
@@ -1513,8 +1434,13 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+let xrayProcess = null;
+app.whenReady().then(async () => {
+  xrayProcess = await SystemManager.startXrayProxy(process.resourcesPath);
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
+  if (xrayProcess) xrayProcess.kill();
   if (process.platform !== 'darwin') app.quit();
 });
