@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, shell, clipboard, nativeImage } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -267,136 +268,90 @@ function createWindow() {
   ipcMain.on('window-close', () => { app.quit(); });
   ipcMain.on('window-minimize', () => { if (mainWindow) mainWindow.minimize(); });
 
-  // Автономный микро-агент обновления (ASAR Hot-Patching)
-  ipcMain.handle('apply-micro-update', async (event, { asarUrl }) => {
-    logToDisk(`⚡ Запуск микро-обновления app.asar: ${asarUrl}`);
-    try {
-      const resourcesDir = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
-      const currentAsar = path.join(resourcesDir, 'app.asar');
-      const tempAsar = path.join(os.tmpdir(), 'vozducraft_app.asar.update');
-      const gamePath = path.join(app.getPath('home'), '.vozducraft');
-      if (!fs.existsSync(gamePath)) fs.mkdirSync(gamePath, { recursive: true });
+  // Интеграция официального electron-updater (Generic HTTP Provider)
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowDowngrade = false;
 
-      if (!fs.existsSync(resourcesDir)) {
-        throw new Error(`Директория resources не найдена: ${resourcesDir}`);
-      }
-
-      // 1. Скачивание пакета обновления (~4.4 МБ) в безопасный временный каталог
-      await downloadFile(asarUrl, tempAsar, (downloaded, total) => {
-        const pct = total > 0 ? Math.round((downloaded / total) * 100) : 50;
-        if (mainWindow) mainWindow.webContents.send('update-progress', { percent: pct, downloaded, total });
-      });
-
-      const asarStats = fs.statSync(tempAsar);
-      if (asarStats.size < 500000) {
-        throw new Error(`Файл обновления поврежден или пуст (${asarStats.size} байт)`);
-      }
-
-      logToDisk(`Пакет app.asar скачан (${asarStats.size} байт). Запуск автономного агента обновления...`);
-
-      // 2. Генерация и запуск выделенного агента обновления
-      if (isWin) {
-        const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.ps1');
-        const updateLog = path.join(gamePath, 'update.log');
-        
-        // Надежный PowerShell скрипт с поддержкой UTF-8, кириллических путей и цикла замены
-        const psScript = `
-Start-Sleep -Milliseconds 600
-
-# 1. Завершаем работу старого процесса лаунчера
-try {
-    Stop-Process -Id ${process.pid} -Force -ErrorAction SilentlyContinue
-} catch {}
-
-$source = '${tempAsar.replace(/'/g, "''")}'
-$dest = '${currentAsar.replace(/'/g, "''")}'
-$exe = '${process.execPath.replace(/'/g, "''")}'
-$log = '${updateLog.replace(/'/g, "''")}'
-
-Add-Content -Path $log -Value "=== VOZDUCRAFT AUTO-UPDATER START ===" -Encoding UTF8 -ErrorAction SilentlyContinue
-$retries = 0
-$success = $false
-
-while ($retries -lt 40) {
-    $retries++
-    Start-Sleep -Milliseconds 500
-    try {
-        Copy-Item -Path $source -Destination $dest -Force -ErrorAction Stop
-        $success = $true
-        Add-Content -Path $log -Value "[Попытка $retries] Успешно перезаписан app.asar" -Encoding UTF8 -ErrorAction SilentlyContinue
-        break
-    } catch {
-        Add-Content -Path $log -Value "[Попытка $retries] Ожидание освобождения файла: $_" -Encoding UTF8 -ErrorAction SilentlyContinue
-    }
-}
-
-if ($success) {
-    Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
-    Add-Content -Path $log -Value "[СТАРТ] Запуск обновленного лаунчера: $exe" -Encoding UTF8 -ErrorAction SilentlyContinue
-    Start-Process -FilePath $exe
-} else {
-    Add-Content -Path $log -Value "[ОШИБКА] Превышено количество попыток замены app.asar" -Encoding UTF8 -ErrorAction SilentlyContinue
-}
-
-# Самоудаление скрипта обновления
-Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
-`;
-        // Записываем с UTF-8 BOM для безупречной работы PowerShell со всеми языками
-        fs.writeFileSync(agentScript, '\uFEFF' + psScript, 'utf8');
-
-        // Запуск PowerShell скрипта в скрытом режиме без мерцания окон
-        const child = spawn('powershell.exe', [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy', 'Bypass',
-          '-WindowStyle', 'Hidden',
-          '-File', agentScript
-        ], {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true
-        });
-        child.unref();
-
-        setTimeout(() => {
-          app.exit(0);
-        }, 300);
-
-        return { success: true };
-      } else {
-        const agentScript = path.join(os.tmpdir(), 'vozducraft_update_agent.sh');
-        const scriptContent = `#!/bin/bash
-sleep 1
-kill -9 ${process.pid} 2>/dev/null
-for i in {1..20}; do
-  if cp -f "${newAsar}" "${currentAsar}"; then
-    break
-  fi
-  sleep 0.5
-done
-rm -f "${newAsar}"
-open "${process.execPath.split('/Contents/MacOS')[0]}"
-rm -f "$0"
-`;
-        fs.writeFileSync(agentScript, scriptContent, { mode: 0o755 });
-
-        const child = spawn('/bin/bash', [agentScript], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        child.unref();
-
-        setTimeout(() => {
-          app.exit(0);
-        }, 300);
-
-        return { success: true };
-      }
-    } catch (err) {
-      logToDisk(`[Ошибка микро-обновления] ${err.message}`);
-      throw err;
+  autoUpdater.on('checking-for-update', () => {
+    logToDisk('🔍 [autoUpdater] Проверка обновлений на сервере...');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater-checking');
     }
   });
+
+  autoUpdater.on('update-available', (info) => {
+    logToDisk(`🎉 [autoUpdater] Найдено обновление: v${info.version}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater-available', info);
+    }
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    logToDisk(`✅ [autoUpdater] Установлена актуальная версия: v${info.version}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater-not-available', info);
+    }
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    const pct = Math.round(progressObj.percent || 0);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater-progress', {
+        percent: pct,
+        transferred: progressObj.transferred || 0,
+        total: progressObj.total || 0,
+        bytesPerSecond: progressObj.bytesPerSecond || 0
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    logToDisk(`✨ [autoUpdater] Обновление v${info.version} успешно скачано и проверено!`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater-downloaded', info);
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    logToDisk(`❌ [autoUpdater:ERROR] ${err ? (err.stack || err.message) : err}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater-error', err ? err.message : 'Unknown updater error');
+    }
+  });
+
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      logToDisk('🔍 Ручной запуск проверки обновлений через autoUpdater...');
+      const res = await autoUpdater.checkForUpdates();
+      return { success: true, result: res ? res.updateInfo : null };
+    } catch (err) {
+      logToDisk(`[autoUpdater] check-for-updates error: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('quit-and-install-update', () => {
+    logToDisk('🚀 [autoUpdater] Вызов quitAndInstall (перезапуск с установкой обновления)...');
+    try {
+      autoUpdater.quitAndInstall(false, true);
+      return { success: true };
+    } catch (err) {
+      logToDisk(`[autoUpdater] quitAndInstall error: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Фоновая проверка обновлений через 2.5 секунды после запуска
+  setTimeout(() => {
+    try {
+      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        logToDisk(`[autoUpdater] Фоновая проверка: ${err.message}`);
+      });
+    } catch (e) {
+      logToDisk(`[autoUpdater] Ошибка фоновой проверки: ${e.message}`);
+    }
+  }, 2500);
 
   // 100% СТАБИЛЬНЫЙ ДВИЖОК BOOTSTRAPLAUNCHER 1.21.1
   ipcMain.on('execute-launch', async (event, launchData) => {

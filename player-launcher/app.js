@@ -301,6 +301,85 @@ function isNewerVersion(remote, local) {
   return false;
 }
 
+// Подписка на нативные события electron-updater
+if (window.require) {
+  try {
+    const electron = window.require('electron');
+
+    electron.ipcRenderer.on('updater-available', (event, info) => {
+      console.log('[autoUpdater UI] Доступно обновление:', info);
+      showUpdateModal({
+        latestVersion: info.version || '3.5.0',
+        releaseNotes: info.releaseNotes || 'Улучшена стабильность и производительность лаунчера.',
+        isElectronAutoUpdater: true
+      });
+    });
+
+    electron.ipcRenderer.on('updater-progress', (event, prog) => {
+      const modal = document.getElementById('modal-update-launcher');
+      if (modal && modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+      }
+
+      const progressBar = document.getElementById('update-progress-bar');
+      const percentText = document.getElementById('update-percent-text');
+      const statusText = document.getElementById('update-status-text');
+      const detailsText = document.getElementById('update-details-text');
+      const buttonsZone = document.getElementById('update-buttons-zone');
+      const progressZone = document.getElementById('update-progress-zone');
+
+      if (buttonsZone) buttonsZone.classList.add('hidden');
+      if (progressZone) progressZone.classList.remove('hidden');
+      if (statusText) statusText.textContent = 'Загрузка официального обновления...';
+
+      const pct = prog.percent || 0;
+      const mbTransferred = ((prog.transferred || 0) / 1048576).toFixed(1);
+      const mbTotal = ((prog.total || 0) / 1048576).toFixed(1);
+
+      if (progressBar) progressBar.style.width = `${pct}%`;
+      if (percentText) percentText.textContent = `${pct}%`;
+      if (detailsText) detailsText.textContent = `Скачано: ${mbTransferred} МБ из ${mbTotal} МБ (${pct}%)`;
+    });
+
+    electron.ipcRenderer.on('updater-downloaded', (event, info) => {
+      console.log('[autoUpdater UI] Обновление загружено и готово к установке:', info);
+      const modal = document.getElementById('modal-update-launcher');
+      if (modal && modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+      }
+
+      const progressBar = document.getElementById('update-progress-bar');
+      const percentText = document.getElementById('update-percent-text');
+      const statusText = document.getElementById('update-status-text');
+      const detailsText = document.getElementById('update-details-text');
+      const buttonsZone = document.getElementById('update-buttons-zone');
+      const progressZone = document.getElementById('update-progress-zone');
+      const btnDownload = document.getElementById('btn-download-update');
+
+      if (progressBar) progressBar.style.width = '100%';
+      if (percentText) percentText.textContent = '100%';
+      if (statusText) statusText.textContent = '✅ Обновление готово к установке!';
+      if (detailsText) detailsText.textContent = 'Нажмите кнопку ниже для перезапуска лаунчера и применения версии v' + (info.version || '');
+
+      if (progressZone) progressZone.classList.remove('hidden');
+      if (buttonsZone) buttonsZone.classList.remove('hidden');
+      if (btnDownload) {
+        btnDownload.textContent = '🔄 Перезапустить и установить';
+        btnDownload.onclick = (e) => {
+          e.preventDefault();
+          electron.ipcRenderer.invoke('quit-and-install-update');
+        };
+      }
+    });
+
+    electron.ipcRenderer.on('updater-error', (event, errMsg) => {
+      console.warn('[autoUpdater UI] Ошибка обновления:', errMsg);
+    });
+  } catch (err) {
+    console.warn('Не удалось настроить electron-updater IPC:', err);
+  }
+}
+
 function showUpdateModal(data) {
   const modal = document.getElementById('modal-update-launcher');
   const badge = document.getElementById('update-version-badge');
@@ -315,121 +394,36 @@ function showUpdateModal(data) {
   const detailsText = document.getElementById('update-details-text');
 
   if (!modal) return;
+  modal.classList.remove('hidden');
 
   if (badge) badge.textContent = `Новая версия: v${data.latestVersion} (текущая: v${LAUNCHER_CURRENT_VERSION})`;
   if (notes) notes.textContent = data.releaseNotes || 'Улучшена стабильность и добавлены обновления безопасности.';
 
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-  const downloadUrl = isMac ? (data.macDownloadUrl || data.downloadUrl) : data.downloadUrl;
+  const downloadUrl = isMac ? (data.macDownloadUrl || data.downloadUrl || 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg') : (data.downloadUrl || 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe');
 
   if (btnDownload) {
+    btnDownload.textContent = '🚀 Обновить лаунчер';
     btnDownload.onclick = (e) => {
       e.preventDefault();
-      
-      // Переключаем в режим прогресса
+
       if (buttonsZone) buttonsZone.classList.add('hidden');
       if (progressZone) progressZone.classList.remove('hidden');
-      if (statusText) statusText.textContent = 'Скачивание обновления...';
+      if (statusText) statusText.textContent = 'Запуск обновления...';
 
-      const logDebug = (msg) => {
-        console.log('[UpdaterDebug]', msg);
-        if (detailsText) detailsText.textContent = msg;
-        if (window.nativeLog) {
-          try { window.nativeLog('[UpdaterDebug] ' + (typeof msg === 'object' ? JSON.stringify(msg) : String(msg))); } catch (_) {}
-        }
-      };
-
-      logDebug(`[1/3] URL: ${downloadUrl}`);
-      sendTelemetry('UPDATE_CLICK', 'Игрок нажал кнопку обновления', {
-        downloadUrl,
-        hasNativeAutoUpdate: typeof window.nativeAutoUpdateLauncher === 'function',
-        hasNativeOpenUrl: typeof window.nativeOpenUrl === 'function'
-      });
-
-      // Обработчик живого прогресса от нативного движка
-      window.onLauncherUpdateProgress = (pct, mbNow, mbTotal) => {
-        if (progressBar) progressBar.style.width = `${pct}%`;
-        if (percentText) percentText.textContent = `${pct}%`;
-        logDebug(`[Загрузка] ${pct}% (${mbNow.toFixed(1)} / ${mbTotal.toFixed(1)} МБ)`);
-      };
-
-      // Обработчик завершения
-      window.onLauncherUpdateComplete = () => {
-        if (progressBar) progressBar.style.width = '100%';
-        if (percentText) percentText.textContent = '100%';
-        if (statusText) statusText.textContent = '✅ Запуск новой версии...';
-        logDebug('✅ Установка завершена, открываем установщик...');
-      };
-
-      // Обработчик ошибки
-      window.onLauncherUpdateError = (errMsg) => {
-        if (statusText) statusText.textContent = '❌ Ошибка загрузки';
-        logDebug(`Ошибка: ${errMsg}. Открываем системный загрузчик...`);
-        if (window.nativeOpenUrl) {
-          window.nativeOpenUrl(downloadUrl);
-        } else {
-          window.open(downloadUrl, '_blank');
-        }
-      };
-
-      const currentNick = (typeof appState !== 'undefined' && appState.username) ? appState.username : (localStorage.getItem('vozducraft_username') || 'Anonymous');
-
-      sendTelemetry('UPDATE_CLICK', 'Игрок нажал кнопку обновления', {
-        downloadUrl,
-        hasNativeAutoUpdate: typeof window.nativeAutoUpdateLauncher === 'function',
-        hasElectron: !!window.require
-      });
-
-      // 1. Для нативного C++ macOS движка
-      if (typeof window.nativeAutoUpdateLauncher === 'function') {
-        logDebug('[2/2] Запуск нативного C++ загрузчика...');
-        try {
-          window.nativeAutoUpdateLauncher(JSON.stringify({ url: downloadUrl, username: currentNick }));
-        } catch (err) {
-          logDebug(`Ошибка нативного загрузчика: ${err.message}. Открываем в браузере...`);
-          if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
-          else window.open(downloadUrl, '_blank');
-        }
-      } 
-      // 2. Для Electron на Windows / macOS (Скоростной микро-патч ASAR 4.4 МБ)
-      else if (window.require) {
-        try {
-          const electron = window.require('electron');
-          const asarUrl = data.asarDownloadUrl || data.patchUrl || 'http://185.221.213.43:3000/files/launchers/app.asar';
-
-          logDebug(`⚡ Запуск микро-обновления лаунчера (размер ~4 МБ): ${asarUrl}`);
-          if (statusText) statusText.textContent = '⚡ Скачивание микро-обновления (~4 МБ)...';
-
-          electron.ipcRenderer.on('update-progress', (evt, prog) => {
-            const pct = prog.percent || 0;
-            const mbNow = ((prog.downloaded || 0) / (1024 * 1024)).toFixed(1);
-            const mbTotal = ((prog.total || 0) / (1024 * 1024)).toFixed(1);
-            if (progressBar) progressBar.style.width = `${pct}%`;
-            if (percentText) percentText.textContent = `${pct}%`;
-            if (detailsText) detailsText.textContent = `Скачано: ${mbNow} МБ из ${mbTotal} МБ (${pct}%)`;
-          });
-
-          electron.ipcRenderer.invoke('apply-micro-update', { asarUrl }).then(() => {
-            if (progressBar) progressBar.style.width = '100%';
-            if (percentText) percentText.textContent = '100%';
-            if (statusText) statusText.textContent = '✅ Патч применен! Перезапуск...';
-            if (detailsText) detailsText.textContent = 'Лаунчер обновлен и сейчас откроется...';
-          }).catch((err) => {
-            logDebug(`Микро-обновление не удалось (${err.message}). Переход на полный установщик...`);
+      if (window.require) {
+        const electron = window.require('electron');
+        electron.ipcRenderer.invoke('check-for-updates').then((res) => {
+          if (!res || !res.success) {
+            // Если electron-updater не нашел манифест, открываем системную ссылку на установщик
             electron.shell.openExternal(downloadUrl);
-          });
-        } catch (e) {
-          logDebug('Electron micro-updater error: ' + e.message);
-          if (window.nativeOpenUrl) window.nativeOpenUrl(downloadUrl);
-          else window.open(downloadUrl, '_blank');
-        }
-      } 
-      // 3. Fallback браузер
-      else if (typeof window.nativeOpenUrl === 'function') {
-        logDebug('[2/2] Запуск загрузки через системный браузер...');
+          }
+        }).catch(() => {
+          electron.shell.openExternal(downloadUrl);
+        });
+      } else if (typeof window.nativeOpenUrl === 'function') {
         window.nativeOpenUrl(downloadUrl);
       } else {
-        logDebug('[2/2] Открытие прямой ссылки...');
         window.open(downloadUrl, '_blank');
       }
     };
