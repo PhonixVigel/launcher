@@ -10,7 +10,6 @@ dist_mac_admin/
 out/
 build/
 release/
-*.asar
 *.asar.unpacked
 
 # Бинарные релизы и архивы
@@ -23,8 +22,7 @@ release/
 *.tar.gz
 *.lzma
 
-# Сборки Java / Моды (если случайно попали)
-*.jar
+# Сборки Java
 *.class
 
 # Логи и сессии
@@ -42,3 +40,8 @@ crash-reports/
 Thumbs.db
 *.db
 *.sqlite
+
+# Исключения для файлов бэкенда (моды, библиотеки, app.asar)
+!backend/public/files/
+!backend/public/files/**
+

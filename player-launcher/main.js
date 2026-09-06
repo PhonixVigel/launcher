@@ -766,12 +766,13 @@ function createWindow() {
         });
       }
 
-      // Скачивание клиента NeoForge (для Classpath)
-      const neoForgeClientJarPath = path.join(gamePath, `neoforge-${targetNeoForgeVer}-client.jar`);
-      if (!fs.existsSync(neoForgeClientJarPath)) {
+      // Скачивание клиента NeoForge (для Classpath и ForgeWrapper)
+      const neoForgeClientJarPath = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-client.jar`);
+      if (!fs.existsSync(neoForgeClientJarPath) || fs.statSync(neoForgeClientJarPath).size < 1000000) {
+        fs.mkdirSync(path.dirname(neoForgeClientJarPath), { recursive: true });
         sendStatus(85, `Загрузка NeoForge Client...`);
-        await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(async () => {
-          await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(() => {});
+        await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(async () => {
+          await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(() => {});
         });
       }
 
