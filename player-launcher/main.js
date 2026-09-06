@@ -949,17 +949,12 @@ function createWindow() {
         if (
           pLower.includes('cpw/mods/bootstraplauncher') || 
           pLower.includes('cpw/mods/securejarhandler') || 
-          pLower.includes('org/ow2/asm') || 
-          pLower.includes('jarjarfilesystem') ||
-          pLower.includes('fancymodloader') ||
-          pLower.includes('night-config') ||
-          pLower.includes('cpw/mods/modlauncher') ||
-          pLower.includes('accesstransformers') ||
-          pLower.includes('net/neoforged/bus') ||
-          pLower.includes('net/neoforged/coremods') ||
-          pLower.includes('mergetool') ||
-          pLower.includes('jarjar') ||
-          pLower.includes('sponge-mixin')
+          pLower.includes('org/ow2/asm/asm-commons') || 
+          pLower.includes('org/ow2/asm/asm-util') || 
+          pLower.includes('org/ow2/asm/asm-analysis') || 
+          pLower.includes('org/ow2/asm/asm-tree') || 
+          pLower.includes('org/ow2/asm/asm/') || 
+          pLower.includes('net/neoforged/jarjarfilesystems')
         ) {
           modulePathEntries.push(p);
         }
@@ -1003,19 +998,20 @@ function createWindow() {
         ...macFlags,
         `-Xms4G`,
         `-Xmx${ram}G`,
+        `-Djava.net.preferIPv6Addresses=system`,
+        `-DignoreList=client-extra,neoforge-${targetNeoForgeVer}.jar,bootstraplauncher,securejarhandler`,
         `--module-path`, modulePath,
-        `--add-modules`, `ALL-SYSTEM`,
         `--add-modules`, `ALL-MODULE-PATH`,
-        `--add-modules`, `jdk.naming.dns`,
+        `--add-opens`, `java.base/java.util.jar=cpw.mods.securejarhandler`,
+        `--add-opens`, `java.base/java.lang.invoke=cpw.mods.securejarhandler`,
         `--add-opens`, `java.base/java.lang=cpw.mods.securejarhandler,ALL-UNNAMED`,
-        `--add-opens`, `java.base/java.lang.invoke=cpw.mods.securejarhandler,ALL-UNNAMED`,
         `--add-opens`, `java.base/java.util=ALL-UNNAMED`,
-        `--add-opens`, `java.base/java.util.jar=ALL-UNNAMED`,
         `--add-opens`, `java.base/java.io=ALL-UNNAMED`,
         `--add-opens`, `java.base/java.nio.channels=ALL-UNNAMED`,
         `--add-opens`, `java.base/sun.net.www.protocol.jar=ALL-UNNAMED`,
+        `--add-exports`, `java.base/sun.security.util=cpw.mods.securejarhandler`,
+        `--add-exports`, `jdk.naming.dns/com.sun.jndi.dns=java.naming`,
         `-Dnet.neoforged.mappedNaming=official`,
-        `-DignoreList=bootstraplauncher,securejarhandler`,
         `-Dneoforge.stage=client`,
         `-Dneoforge.version=${targetNeoForgeVer}`,
         `-Dneoforge.modsDir=${modsPath}`,
