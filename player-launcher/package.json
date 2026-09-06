@@ -18,6 +18,12 @@
       "target": "nsis",
       "icon": "assets/icon.ico"
     },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/AppIcon.icns",
+      "category": "public.app-category.games",
+      "artifactName": "VozduCraft-macOS-Setup.dmg"
+    },
     "publish": [
       {
         "provider": "generic",
