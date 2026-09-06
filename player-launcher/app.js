@@ -1,5 +1,5 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
-const LAUNCHER_CURRENT_VERSION = '3.5.2';
+const LAUNCHER_CURRENT_VERSION = '3.5.3';
 const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
 
 let KNOWN_MIRRORS = [DEFAULT_PRIMARY_MIRROR];
@@ -309,7 +309,7 @@ if (window.require) {
     electron.ipcRenderer.on('updater-available', (event, info) => {
       console.log('[autoUpdater UI] Доступно обновление:', info);
       showUpdateModal({
-        latestVersion: info.version || '3.5.2',
+        latestVersion: info.version || '3.5.3',
         releaseNotes: info.releaseNotes || 'Улучшена стабильность и производительность лаунчера.',
         isElectronAutoUpdater: true
       });
@@ -409,17 +409,13 @@ function showUpdateModal(data) {
 
       if (buttonsZone) buttonsZone.classList.add('hidden');
       if (progressZone) progressZone.classList.remove('hidden');
-      if (statusText) statusText.textContent = 'Запуск обновления...';
+      if (statusText) statusText.textContent = 'Загрузка официального обновления...';
 
       if (window.require) {
         const electron = window.require('electron');
-        electron.ipcRenderer.invoke('check-for-updates').then((res) => {
-          if (!res || !res.success) {
-            // Если electron-updater не нашел манифест, открываем системную ссылку на установщик
-            electron.shell.openExternal(downloadUrl);
-          }
-        }).catch(() => {
-          electron.shell.openExternal(downloadUrl);
+        electron.ipcRenderer.invoke('download-and-apply-update', downloadUrl).catch((err) => {
+          console.error('Update invoke error:', err);
+          if (statusText) statusText.textContent = 'Ошибка загрузки обновления. Попробуйте перезапустить лаунчер.';
         });
       } else if (typeof window.nativeOpenUrl === 'function') {
         window.nativeOpenUrl(downloadUrl);
