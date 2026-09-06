@@ -1,5 +1,5 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
-const LAUNCHER_CURRENT_VERSION = '3.5.0';
+const LAUNCHER_CURRENT_VERSION = '3.5.1';
 const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
 
 let KNOWN_MIRRORS = [DEFAULT_PRIMARY_MIRROR];
@@ -309,7 +309,7 @@ if (window.require) {
     electron.ipcRenderer.on('updater-available', (event, info) => {
       console.log('[autoUpdater UI] Доступно обновление:', info);
       showUpdateModal({
-        latestVersion: info.version || '3.5.0',
+        latestVersion: info.version || '3.5.1',
         releaseNotes: info.releaseNotes || 'Улучшена стабильность и производительность лаунчера.',
         isElectronAutoUpdater: true
       });
