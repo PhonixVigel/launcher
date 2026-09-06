@@ -69,7 +69,7 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
         path: parsedUrl.pathname + parsedUrl.search,
         rejectUnauthorized: false,
         headers: {
-          'User-Agent': 'VozduCraft-Launcher/3.5.1 (Windows; x64; Adoptium Java Installer)'
+          'User-Agent': 'VozduCraft-Launcher/3.5.2 (Windows; x64; Adoptium Java Installer)'
         }
       };
 

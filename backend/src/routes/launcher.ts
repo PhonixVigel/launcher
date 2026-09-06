@@ -148,8 +148,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.5.1',
-      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.1: Движок Prism Launcher, сверка хэшей SHA-1/SHA-256, авто-менеджер Java 21 Adoptium Temurin',
+      latestVersion: latestRelease?.version || config?.value || '3.5.2',
+      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.2: Исправлен запуск процессоров инсталлятора NeoForge (installertools 2.1.2), авто-менеджер Java 21 Adoptium Temurin',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
