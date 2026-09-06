@@ -229,7 +229,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <div class="card">
-    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.5.0</div>
+    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.5.1</div>
     <div><img src="/assets/logo.jpg" alt="VozduCraft Logo" class="logo-img" onerror="this.style.display='none'"></div>
     <div class="logo">VOZDUCRAFT</div>
     <div class="subtitle">Официальный игровой лаунчер с автоматической синхронизацией модов и Java</div>

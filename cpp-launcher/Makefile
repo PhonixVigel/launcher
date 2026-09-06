@@ -35,7 +35,7 @@ app: $(TARGET)
 	@echo '  <key>CFBundleName</key><string>VozduCraft</string>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <key>CFBundleIconFile</key><string>AppIcon</string>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <key>CFBundlePackageType</key><string>APPL</string>' >> $(APP_BUNDLE)/Contents/Info.plist
-	@echo '  <key>CFBundleShortVersionString</key><string>3.5.0</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '  <key>CFBundleShortVersionString</key><string>3.5.1</string>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <key>NSHighResolutionCapable</key><true/>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <key>NSAppTransportSecurity</key>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '  <dict>' >> $(APP_BUNDLE)/Contents/Info.plist
