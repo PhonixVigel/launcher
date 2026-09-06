@@ -995,12 +995,20 @@ rm -f "$0"
           pLower.includes('cpw/mods/bootstraplauncher') || 
           pLower.includes('cpw/mods/securejarhandler') || 
           pLower.includes('org/ow2/asm') || 
-          pLower.includes('jarjarfilesystem')
+          pLower.includes('jarjarfilesystem') ||
+          pLower.includes('fancymodloader') ||
+          pLower.includes('night-config') ||
+          pLower.includes('cpw/mods/modlauncher') ||
+          pLower.includes('accesstransformers') ||
+          pLower.includes('net/neoforged/bus') ||
+          pLower.includes('net/neoforged/coremods') ||
+          pLower.includes('mergetool') ||
+          pLower.includes('jarjar') ||
+          pLower.includes('sponge-mixin')
         ) {
           modulePathEntries.push(p);
-        } else {
-          jvmCpEntries.push(p);
         }
+        jvmCpEntries.push(p);
       }
 
       if (fs.existsSync(fwJar)) {
