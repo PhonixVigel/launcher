@@ -1,5 +1,5 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
-const LAUNCHER_CURRENT_VERSION = '3.5.6';
+const LAUNCHER_CURRENT_VERSION = '3.5.7';
 const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
 
 let KNOWN_MIRRORS = [DEFAULT_PRIMARY_MIRROR];

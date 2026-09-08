@@ -142,6 +142,14 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
   });
 }
 
+function isValidHexHash(hash, type) {
+  if (!hash || typeof hash !== 'string') return false;
+  const clean = hash.trim();
+  const expectedLen = type === 'sha256' ? 64 : (type === 'sha1' ? 40 : (type === 'md5' ? 32 : 0));
+  if (expectedLen > 0 && clean.length !== expectedLen) return false;
+  return /^[0-9a-fA-F]+$/.test(clean);
+}
+
 function calculateFileHash(filePath, algorithm = 'sha1') {
   return new Promise((resolve) => {
     if (!fs.existsSync(filePath)) return resolve(null);
@@ -157,23 +165,35 @@ function calculateFileHash(filePath, algorithm = 'sha1') {
   });
 }
 
-async function downloadAndVerifyFile(url, dest, expectedHash, hashType = 'sha1', onProgress, maxRetries = 3) {
+async function downloadAndVerifyFile(url, dest, expectedHash, hashType = 'sha1', onProgress, maxRetries = 3, expectedSize = null) {
+  const isHashValid = isValidHexHash(expectedHash, hashType);
+  const targetHash = isHashValid ? expectedHash.trim().toLowerCase() : null;
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
-        if (!expectedHash) return true;
-        const currentHash = await calculateFileHash(dest, hashType);
-        if (currentHash && currentHash === expectedHash.toLowerCase()) {
-          return true;
+      if (fs.existsSync(dest)) {
+        const stat = fs.statSync(dest);
+        if (stat.size > 0) {
+          if (expectedSize && stat.size === expectedSize) {
+            if (!targetHash) return true;
+            const currentHash = await calculateFileHash(dest, hashType);
+            if (currentHash === targetHash) return true;
+          } else if (!expectedSize) {
+            if (!targetHash) return true;
+            const currentHash = await calculateFileHash(dest, hashType);
+            if (currentHash === targetHash) return true;
+          }
         }
       }
+
       await downloadFile(url, dest, onProgress);
-      if (!expectedHash) return true;
+
+      if (!targetHash) return true;
       const downloadedHash = await calculateFileHash(dest, hashType);
-      if (downloadedHash && downloadedHash === expectedHash.toLowerCase()) {
+      if (downloadedHash && downloadedHash === targetHash) {
         return true;
       } else {
-        logToDisk(`[Checksum Mismatch] ${path.basename(dest)}: получено ${downloadedHash}, ожидалось ${expectedHash}. Попытка ${attempt}/${maxRetries}`);
+        logToDisk(`[Checksum Mismatch] ${path.basename(dest)}: получено ${downloadedHash}, ожидалось ${targetHash}. Попытка ${attempt}/${maxRetries}`);
         try { fs.unlinkSync(dest); } catch (_) {}
       }
     } catch (err) {
@@ -439,12 +459,9 @@ function createWindow() {
           app.quit();
           return { success: true };
         } else if (isMac) {
-          const child = spawn('open', [global._pendingInstallerPath], {
-            detached: true,
-            stdio: 'ignore'
-          });
-          child.unref();
-          app.quit();
+          const { shell } = require('electron');
+          shell.openPath(global._pendingInstallerPath);
+          setTimeout(() => { app.quit(); }, 500);
           return { success: true };
         }
       }
@@ -738,8 +755,8 @@ function createWindow() {
       if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
       if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
 
-      // 3. Быстрая параллельная загрузка библиотек с проверкой SHA-1 контрольных сумм
-      sendStatus(30, 'Синхронизация библиотек...');
+      // 3. Быстрая параллельная проверка библиотек с SHA-1
+      sendStatus(30, 'Проверка библиотек Minecraft и NeoForge...');
       let downloaded = 0;
       const concurrency = 16;
       const queue = [...allLibsToDownload];
@@ -750,7 +767,7 @@ function createWindow() {
           if (!lib) break;
           try {
             fs.mkdirSync(path.dirname(lib.dest), { recursive: true });
-            await downloadAndVerifyFile(lib.url, lib.dest, lib.sha1, 'sha1').catch(e => {
+            await downloadAndVerifyFile(lib.url, lib.dest, lib.sha1, 'sha1', null, 3, lib.size).catch(e => {
               logToDisk(`[Lib Warning] ${lib.url}: ${e.message}`);
             });
           } catch (err) {
@@ -893,7 +910,7 @@ function createWindow() {
       }
 
       // 3.5. Синхронизация файлов модпака, серверов и ресурспаков с сервера
-      sendStatus(86, 'Синхронизация сборки, серверов и текстур...');
+      sendStatus(86, 'Проверка модов и сборки...');
       const serverId = launchData?.serverId || 1;
       const currentUsername = launchData?.username || '';
       const apiBase = launchData?.apiBaseUrl || 'http://185.221.213.43:3000/api/v1';
@@ -977,7 +994,7 @@ function createWindow() {
               if (downloadUrl) {
                 try {
                   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-                  await downloadAndVerifyFile(downloadUrl, targetPath, fileItem.sha256, 'sha256').catch(e => {
+                  await downloadAndVerifyFile(downloadUrl, targetPath, fileItem.sha256, 'sha256', null, 3, fileItem.size_bytes).catch(e => {
                     logToDisk(`[Mod Sync Error] ${fileItem.filepath}: ${e.message}`);
                   });
                 } catch (e) {
@@ -988,7 +1005,7 @@ function createWindow() {
               syncedCount++;
               if (syncedCount % 5 === 0 || syncedCount === filesToSync.length) {
                 const pct = 86 + Math.floor((syncedCount / Math.max(1, filesToSync.length)) * 3);
-                sendStatus(pct, `[Синхронизация модов] ${syncedCount}/${filesToSync.length}`);
+                sendStatus(pct, `[Проверка модов] ${syncedCount}/${filesToSync.length}`);
               }
             }
           }
@@ -1052,7 +1069,7 @@ function createWindow() {
             if (downloadUrl) {
               try {
                 fs.mkdirSync(path.dirname(targetRpPath), { recursive: true });
-                await downloadAndVerifyFile(downloadUrl, targetRpPath, rp.sha256, 'sha256').catch(e => {
+                await downloadAndVerifyFile(downloadUrl, targetRpPath, rp.sha256, 'sha256', null, 3, rp.size_bytes).catch(e => {
                   logToDisk(`[RP Sync Error] ${relPath}: ${e.message}`);
                 });
               } catch (rpErr) {
