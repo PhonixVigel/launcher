@@ -427,13 +427,26 @@ function createWindow() {
     try {
       if (global._pendingInstallerPath && fs.existsSync(global._pendingInstallerPath)) {
         const { spawn } = require('child_process');
-        const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        child.unref();
-        app.quit();
-        return { success: true };
+        const isWin = process.platform === 'win32';
+        const isMac = process.platform === 'darwin';
+
+        if (isWin) {
+          const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
+            detached: true,
+            stdio: 'ignore'
+          });
+          child.unref();
+          app.quit();
+          return { success: true };
+        } else if (isMac) {
+          const child = spawn('open', [global._pendingInstallerPath], {
+            detached: true,
+            stdio: 'ignore'
+          });
+          child.unref();
+          app.quit();
+          return { success: true };
+        }
       }
       autoUpdater.quitAndInstall(false, true);
       return { success: true };
@@ -472,7 +485,7 @@ function createWindow() {
 
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('updater-downloaded', {
-          version: '3.5.2',
+          version: '3.5.5',
           path: tempInstaller
         });
       }
