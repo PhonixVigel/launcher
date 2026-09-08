@@ -148,8 +148,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.5.5',
-      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.5: Стабильный запуск Minecraft NeoForge 1.21.1, изолированный чистый Classpath, полная кроссплатформенность Windows и macOS',
+      latestVersion: latestRelease?.version || config?.value || '3.5.6',
+      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.6: Исправление запуска на Windows (ENAMETOOLONG fix), автообновление и оптимизация',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,

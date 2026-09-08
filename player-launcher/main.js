@@ -485,7 +485,7 @@ function createWindow() {
 
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('updater-downloaded', {
-          version: '3.5.5',
+          version: app.getVersion() || '3.5.6',
           path: tempInstaller
         });
       }
