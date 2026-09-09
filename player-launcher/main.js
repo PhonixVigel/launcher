@@ -424,76 +424,10 @@ function createWindow() {
   ipcMain.handle('quit-and-install-update', () => {
     logToDisk('🚀 [autoUpdater] Вызов quitAndInstall (перезапуск с установкой обновления)...');
     try {
-      if (global._pendingInstallerPath && fs.existsSync(global._pendingInstallerPath)) {
-        if (process.platform === 'win32') {
-          const { spawn } = require('child_process');
-          const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
-            detached: true,
-            stdio: 'ignore'
-          });
-          child.unref();
-          app.quit();
-          return { success: true };
-        } else if (process.platform === 'darwin') {
-          shell.openPath(global._pendingInstallerPath);
-          setTimeout(() => {
-            app.quit();
-          }, 1000);
-          return { success: true };
-        } else {
-          shell.openPath(global._pendingInstallerPath);
-          app.quit();
-          return { success: true };
-        }
-      }
       autoUpdater.quitAndInstall(false, true);
       return { success: true };
     } catch (err) {
       logToDisk(`[autoUpdater] quitAndInstall error: ${err.message}`);
-      return { success: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('download-and-apply-update', async (event, downloadUrl) => {
-    logToDisk(`📥 [In-App Updater] Запуск прямой загрузки обновления: ${downloadUrl}`);
-    try {
-      const os = require('os');
-      const isWindows = process.platform === 'win32';
-      const targetExt = isWindows ? '.exe' : (process.platform === 'darwin' ? '.dmg' : '.bin');
-      const tempInstaller = path.join(os.tmpdir(), `VozduCraft-Update-Installer${targetExt}`);
-      
-      if (fs.existsSync(tempInstaller)) {
-        try { fs.unlinkSync(tempInstaller); } catch (_) {}
-      }
-
-      await downloadFile(downloadUrl, tempInstaller, (transferred, total) => {
-        const pct = total > 0 ? Math.round((transferred / total) * 100) : 0;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('updater-progress', {
-            percent: pct,
-            transferred,
-            total,
-            bytesPerSecond: 0
-          });
-        }
-      });
-
-      logToDisk(`✨ [In-App Updater] Инсталлятор успешно скачан: ${tempInstaller}`);
-      global._pendingInstallerPath = tempInstaller;
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('updater-downloaded', {
-          version: '3.5.2',
-          path: tempInstaller
-        });
-      }
-
-      return { success: true, path: tempInstaller };
-    } catch (err) {
-      logToDisk(`❌ [In-App Updater] Ошибка прямой загрузки обновления: ${err.message}`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('updater-error', err.message);
-      }
       return { success: false, error: err.message };
     }
   });
