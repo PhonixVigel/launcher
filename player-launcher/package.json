@@ -1,6 +1,6 @@
 {
   "name": "vozducraft-launcher",
-  "version": "3.5.7",
+  "version": "3.5.6",
   "description": "VozduCraft Native Minecraft Launcher",
   "main": "main.js",
   "author": "VozduCraft",
@@ -19,9 +19,7 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "icon": "assets/icon.ico"
@@ -30,20 +28,12 @@
       "target": [
         {
           "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "universal"
-          ]
+          "arch": ["arm64"]
         }
       ],
       "icon": "assets/AppIcon.icns",
       "category": "public.app-category.games",
-      "artifactName": "VozduCraft-macOS-Setup.${ext}"
+      "artifactName": "VozduCraft-macOS-Setup.dmg"
     },
     "publish": [
       {
