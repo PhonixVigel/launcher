@@ -425,14 +425,26 @@ function createWindow() {
     logToDisk('🚀 [autoUpdater] Вызов quitAndInstall (перезапуск с установкой обновления)...');
     try {
       if (global._pendingInstallerPath && fs.existsSync(global._pendingInstallerPath)) {
-        const { spawn } = require('child_process');
-        const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        child.unref();
-        app.quit();
-        return { success: true };
+        if (process.platform === 'win32') {
+          const { spawn } = require('child_process');
+          const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
+            detached: true,
+            stdio: 'ignore'
+          });
+          child.unref();
+          app.quit();
+          return { success: true };
+        } else if (process.platform === 'darwin') {
+          shell.openPath(global._pendingInstallerPath);
+          setTimeout(() => {
+            app.quit();
+          }, 1000);
+          return { success: true };
+        } else {
+          shell.openPath(global._pendingInstallerPath);
+          app.quit();
+          return { success: true };
+        }
       }
       autoUpdater.quitAndInstall(false, true);
       return { success: true };
