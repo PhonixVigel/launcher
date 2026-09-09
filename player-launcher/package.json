@@ -1,6 +1,6 @@
 {
   "name": "vozducraft-launcher",
-  "version": "3.5.7",
+  "version": "3.5.6",
   "description": "VozduCraft Native Minecraft Launcher",
   "main": "main.js",
   "author": "VozduCraft",
@@ -26,13 +26,9 @@
     },
     "publish": [
       {
-        "provider": "github",
-        "owner": "PhonixVigel",
-        "repo": "launcher"
+        "provider": "generic",
+        "url": "http://185.221.213.43:3000/files/launchers/"
       }
-    ],
-    "extraResources": [
-      "bin/**/*"
     ],
     "nsis": {
       "oneClick": true,
@@ -51,13 +47,11 @@
       "styles.css",
       "package.json",
       "assets/**/*",
-      "meta/**/*",
-      "src/**/*"
-    ],
-    "electronVersion": "29.1.0"
+      "meta/**/*"
+    ]
   },
   "devDependencies": {
-    "electron": "29.1.0",
+    "electron": "^29.1.0",
     "electron-builder": "^26.15.3"
   },
   "dependencies": {

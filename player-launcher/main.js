@@ -7,8 +7,7 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const os = require('os');
-const SystemManager = require('./src/SystemManager');
-const LaunchEngine = require('./src/LaunchEngine');
+
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const isArm64 = process.arch === 'arm64' || process.arch === 'aarch64';
@@ -75,14 +74,14 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
       };
 
       let timer = null;
-      const resetInactivityTimer = (timeoutMs = 12000) => {
+      const resetInactivityTimer = (timeoutMs = 30000) => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
           req.destroy(new Error(`Download stalled (no data for ${Math.round(timeoutMs/1000)}s): ${url}`));
         }, timeoutMs);
       };
 
-      resetInactivityTimer(12000);
+      resetInactivityTimer(30000);
 
       const req = client.get(reqOptions, (response) => {
         resetInactivityTimer(30000);
@@ -142,14 +141,6 @@ function downloadFile(url, dest, onProgress, maxRedirects = 5) {
   });
 }
 
-function isValidHexHash(hash, type) {
-  if (!hash || typeof hash !== 'string') return false;
-  const clean = hash.trim();
-  const expectedLen = type === 'sha256' ? 64 : (type === 'sha1' ? 40 : (type === 'md5' ? 32 : 0));
-  if (expectedLen > 0 && clean.length !== expectedLen) return false;
-  return /^[0-9a-fA-F]+$/.test(clean);
-}
-
 function calculateFileHash(filePath, algorithm = 'sha1') {
   return new Promise((resolve) => {
     if (!fs.existsSync(filePath)) return resolve(null);
@@ -165,35 +156,23 @@ function calculateFileHash(filePath, algorithm = 'sha1') {
   });
 }
 
-async function downloadAndVerifyFile(url, dest, expectedHash, hashType = 'sha1', onProgress, maxRetries = 3, expectedSize = null) {
-  const isHashValid = isValidHexHash(expectedHash, hashType);
-  const targetHash = isHashValid ? expectedHash.trim().toLowerCase() : null;
-
+async function downloadAndVerifyFile(url, dest, expectedHash, hashType = 'sha1', onProgress, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      if (fs.existsSync(dest)) {
-        const stat = fs.statSync(dest);
-        if (stat.size > 0) {
-          if (expectedSize && stat.size === expectedSize) {
-            if (!targetHash) return true;
-            const currentHash = await calculateFileHash(dest, hashType);
-            if (currentHash === targetHash) return true;
-          } else if (!expectedSize) {
-            if (!targetHash) return true;
-            const currentHash = await calculateFileHash(dest, hashType);
-            if (currentHash === targetHash) return true;
-          }
+      if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+        if (!expectedHash) return true;
+        const currentHash = await calculateFileHash(dest, hashType);
+        if (currentHash && currentHash === expectedHash.toLowerCase()) {
+          return true;
         }
       }
-
       await downloadFile(url, dest, onProgress);
-
-      if (!targetHash) return true;
+      if (!expectedHash) return true;
       const downloadedHash = await calculateFileHash(dest, hashType);
-      if (downloadedHash && downloadedHash === targetHash) {
+      if (downloadedHash && downloadedHash === expectedHash.toLowerCase()) {
         return true;
       } else {
-        logToDisk(`[Checksum Mismatch] ${path.basename(dest)}: получено ${downloadedHash}, ожидалось ${targetHash}. Попытка ${attempt}/${maxRetries}`);
+        logToDisk(`[Checksum Mismatch] ${path.basename(dest)}: получено ${downloadedHash}, ожидалось ${expectedHash}. Попытка ${attempt}/${maxRetries}`);
         try { fs.unlinkSync(dest); } catch (_) {}
       }
     } catch (err) {
@@ -447,23 +426,13 @@ function createWindow() {
     try {
       if (global._pendingInstallerPath && fs.existsSync(global._pendingInstallerPath)) {
         const { spawn } = require('child_process');
-        const isWin = process.platform === 'win32';
-        const isMac = process.platform === 'darwin';
-
-        if (isWin) {
-          const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
-            detached: true,
-            stdio: 'ignore'
-          });
-          child.unref();
-          app.quit();
-          return { success: true };
-        } else if (isMac) {
-          const { shell } = require('electron');
-          shell.openPath(global._pendingInstallerPath);
-          setTimeout(() => { app.quit(); }, 500);
-          return { success: true };
-        }
+        const child = spawn(global._pendingInstallerPath, ['/S', '--updated'], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.unref();
+        app.quit();
+        return { success: true };
       }
       autoUpdater.quitAndInstall(false, true);
       return { success: true };
@@ -502,7 +471,7 @@ function createWindow() {
 
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('updater-downloaded', {
-          version: app.getVersion() || '3.5.6',
+          version: '3.5.2',
           path: tempInstaller
         });
       }
@@ -755,8 +724,8 @@ function createWindow() {
       if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
       if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
 
-      // 3. Быстрая параллельная проверка библиотек с SHA-1
-      sendStatus(30, 'Проверка библиотек Minecraft и NeoForge...');
+      // 3. Быстрая параллельная загрузка библиотек с проверкой SHA-1 контрольных сумм
+      sendStatus(30, 'Синхронизация библиотек...');
       let downloaded = 0;
       const concurrency = 16;
       const queue = [...allLibsToDownload];
@@ -767,15 +736,17 @@ function createWindow() {
           if (!lib) break;
           try {
             fs.mkdirSync(path.dirname(lib.dest), { recursive: true });
-            await downloadAndVerifyFile(lib.url, lib.dest, lib.sha1, 'sha1', null, 3, lib.size).catch(e => {
+            await downloadAndVerifyFile(lib.url, lib.dest, lib.sha1, 'sha1').catch(e => {
               logToDisk(`[Lib Warning] ${lib.url}: ${e.message}`);
             });
           } catch (err) {
             logToDisk(`[Lib Warning] ${lib.url}: ${err.message}`);
           }
           downloaded++;
-          const pct = 30 + Math.floor((downloaded / allLibsToDownload.length) * 45);
-          sendStatus(pct, `[Библиотеки] ${downloaded}/${allLibsToDownload.length}`);
+          if (downloaded % 5 === 0 || downloaded === allLibsToDownload.length) {
+            const pct = 30 + Math.floor((downloaded / allLibsToDownload.length) * 45);
+            sendStatus(pct, `[Библиотеки] ${downloaded}/${allLibsToDownload.length}`);
+          }
         }
       }
 
@@ -796,13 +767,12 @@ function createWindow() {
         });
       }
 
-      // Скачивание клиента NeoForge (для Classpath и ForgeWrapper)
-      const neoForgeClientJarPath = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-client.jar`);
-      if (!fs.existsSync(neoForgeClientJarPath) || fs.statSync(neoForgeClientJarPath).size < 1000000) {
-        fs.mkdirSync(path.dirname(neoForgeClientJarPath), { recursive: true });
+      // Скачивание клиента NeoForge (для Classpath)
+      const neoForgeClientJarPath = path.join(gamePath, `neoforge-${targetNeoForgeVer}-client.jar`);
+      if (!fs.existsSync(neoForgeClientJarPath)) {
         sendStatus(85, `Загрузка NeoForge Client...`);
-        await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(async () => {
-          await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(() => {});
+        await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(async () => {
+          await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-client.jar`, neoForgeClientJarPath, null).catch(() => {});
         });
       }
 
@@ -910,7 +880,7 @@ function createWindow() {
       }
 
       // 3.5. Синхронизация файлов модпака, серверов и ресурспаков с сервера
-      sendStatus(86, 'Проверка модов и сборки...');
+      sendStatus(86, 'Синхронизация сборки, серверов и текстур...');
       const serverId = launchData?.serverId || 1;
       const currentUsername = launchData?.username || '';
       const apiBase = launchData?.apiBaseUrl || 'http://185.221.213.43:3000/api/v1';
@@ -963,11 +933,6 @@ function createWindow() {
 
           logToDisk(`К синхронизации: ${filesToSync.length} файлов сборки`);
           const allowedModFiles = new Set();
-          for (const f of filesToSync) {
-            if (f.filepath) {
-              allowedModFiles.add(path.basename(f.filepath).toLowerCase());
-            }
-          }
           let syncedCount = 0;
           const modQueue = [...filesToSync];
           const modConcurrency = 12;
@@ -981,6 +946,7 @@ function createWindow() {
               
               const relPath = fileItem.filepath;
               const targetPath = path.join(gamePath, relPath);
+              allowedModFiles.add(path.basename(relPath).toLowerCase());
 
               let downloadUrl = fileItem.download_url || '';
               if (!downloadUrl) {
@@ -994,7 +960,7 @@ function createWindow() {
               if (downloadUrl) {
                 try {
                   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-                  await downloadAndVerifyFile(downloadUrl, targetPath, fileItem.sha256, 'sha256', null, 3, fileItem.size_bytes).catch(e => {
+                  await downloadAndVerifyFile(downloadUrl, targetPath, fileItem.sha256, 'sha256').catch(e => {
                     logToDisk(`[Mod Sync Error] ${fileItem.filepath}: ${e.message}`);
                   });
                 } catch (e) {
@@ -1005,7 +971,7 @@ function createWindow() {
               syncedCount++;
               if (syncedCount % 5 === 0 || syncedCount === filesToSync.length) {
                 const pct = 86 + Math.floor((syncedCount / Math.max(1, filesToSync.length)) * 3);
-                sendStatus(pct, `[Проверка модов] ${syncedCount}/${filesToSync.length}`);
+                sendStatus(pct, `[Синхронизация модов] ${syncedCount}/${filesToSync.length}`);
               }
             }
           }
@@ -1069,7 +1035,7 @@ function createWindow() {
             if (downloadUrl) {
               try {
                 fs.mkdirSync(path.dirname(targetRpPath), { recursive: true });
-                await downloadAndVerifyFile(downloadUrl, targetRpPath, rp.sha256, 'sha256', null, 3, rp.size_bytes).catch(e => {
+                await downloadAndVerifyFile(downloadUrl, targetRpPath, rp.sha256, 'sha256').catch(e => {
                   logToDisk(`[RP Sync Error] ${relPath}: ${e.message}`);
                 });
               } catch (rpErr) {
@@ -1125,7 +1091,18 @@ function createWindow() {
           pLower.includes('asm-commons-9.3') ||
           pLower.includes('asm-tree-9.3') ||
           pLower.includes('asm-analysis-9.3') ||
-          pLower.includes('asm-util-9.3')
+          pLower.includes('asm-util-9.3') ||
+          pLower.includes('commons-lang3-3.8.1') ||
+          pLower.includes('commons-lang3/3.8.1') ||
+          pLower.includes('guava/20.0') ||
+          pLower.includes('guava-20.0') ||
+          pLower.includes('commons-text/1.3') ||
+          pLower.includes('commons-beanutils') ||
+          pLower.includes('commons-collections4/4.2') ||
+          pLower.includes('commons-collections/3.2.2') ||
+          pLower.includes('commons-logging/1.2') ||
+          pLower.includes('fastcsv') ||
+          pLower.includes('opencsv')
         ) continue;
         
         // 2. Ровно 8 библиотек модульного загрузчика Java 21 идут ТОЛЬКО в --module-path (НЕ в classpath)
@@ -1173,27 +1150,93 @@ function createWindow() {
       const mainClass = 'io.github.zekerzhayard.forgewrapper.installer.Main';
       const mergeString = `jna-5.14.0.jar,jna-platform-5.14.0.jar;minecraft-1.21.1-client.jar,neoforge-${targetNeoForgeVer}-client.jar`;
 
-      // Загрузка готового профиля NeoForge
-      const profilePath = path.join(__dirname, 'meta', 'launch-profile.json');
-      let profile;
-      try {
-        profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-      } catch (err) {
-        logToDisk('[LAUNCH ERROR] Не удалось прочитать launch-profile.json: ' + err.message);
-        throw err;
+      const jvmArgs = [
+        `-Dforgewrapper.minecraft=${mcJarPath}`,
+        `-Dforgewrapper.librariesDir=${libsDir}`,
+        `-DlegacyClassPath=${finalLegacyCpString}`,
+        `-DlibraryDirectory=${libsDir}`,
+        `-Dforgewrapper.installer=${forgewrapperInstallerJar}`,
+        `-DmergeModules=${mergeString}`,
+        ...macFlags,
+        `-Xms4G`,
+        `-Xmx${ram}G`,
+        `-Djava.net.preferIPv6Addresses=system`,
+        `-DignoreList=client-extra,neoforge-${targetNeoForgeVer}.jar,bootstraplauncher,securejarhandler`,
+        `--module-path`, modulePath,
+        `--add-modules`, `ALL-MODULE-PATH`,
+        `--add-opens`, `java.base/java.util.jar=cpw.mods.securejarhandler`,
+        `--add-opens`, `java.base/java.lang.invoke=cpw.mods.securejarhandler`,
+        `--add-opens`, `java.base/java.lang=cpw.mods.securejarhandler,ALL-UNNAMED`,
+        `--add-opens`, `java.base/java.util=ALL-UNNAMED`,
+        `--add-opens`, `java.base/java.io=ALL-UNNAMED`,
+        `--add-opens`, `java.base/java.nio.channels=ALL-UNNAMED`,
+        `--add-opens`, `java.base/sun.net.www.protocol.jar=ALL-UNNAMED`,
+        `--add-exports`, `java.base/sun.security.util=cpw.mods.securejarhandler`,
+        `--add-exports`, `jdk.naming.dns/com.sun.jndi.dns=java.naming`,
+        `-Dnet.neoforged.mappedNaming=official`,
+        `-Dneoforge.stage=client`,
+        `-Dneoforge.version=${targetNeoForgeVer}`,
+        `-Dneoforge.modsDir=${modsPath}`,
+        `-Dneoforge.earlyWindow=false`,
+        `-Dfml.earlyWindow=false`,
+        `-Dneoforge.earlydisplay=false`,
+        `-Dfml.earlydisplay=false`,
+        `-Dneoforge.earlyWindow.enabled=false`,
+        `-Dfml.earlyWindow.enabled=false`,
+        `-Dneoforge.display.enabled=false`,
+        `-cp`,
+        classpath
+      ];
+
+      const gameArgs = [
+        `--username`, username,
+        `--version`, `1.21.1`,
+        `--gameDir`, gamePath,
+        `--assetsDir`, path.join(gamePath, 'assets'),
+        `--assetIndex`, `17`,
+        `--uuid`, validUuid,
+        `--accessToken`, `VOZDUCRAFT-TOKEN-${Date.now()}`,
+        `--userType`, `offline`,
+        `--versionType`, `release`,
+        `--neoForgeVersion`, targetNeoForgeVer,
+        `--fml.neoForgeVersion`, targetNeoForgeVer,
+        `--fmlVersion`, `4.0.43`,
+        `--fml.fmlVersion`, `4.0.43`,
+        `--mcVersion`, `1.21.1`,
+        `--fml.mcVersion`, `1.21.1`,
+        `--neoFormVersion`, `20240808.144430`,
+        `--fml.neoFormVersion`, `20240808.144430`,
+        `--fml.earlyWindow=false`,
+        `--launchTarget`, `forgeclient`
+      ];
+
+      // Формирование файла аргументов JVM для обхода лимита длины строки Windows (ENAMETOOLONG)
+      function formatArgForJava(arg) {
+        if (!arg) return '""';
+        // В @argfile обратный слэш \ ВСЕГДА является escape-символом.
+        // Экранируем все обратные слэши как \\ и кавычки как \", и оборачиваем каждый аргумент в кавычки.
+        const escaped = String(arg).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `"${escaped}"`;
       }
 
-      // Подготовка контекста переменных
-      const launchContext = {
-        auth_player_name: username,
-        auth_uuid: validUuid,
-        auth_access_token: `VOZDUCRAFT-TOKEN-${Date.now()}`,
-        game_directory: gamePath,
-        assets_root: path.join(gamePath, 'assets'),
-        natives_directory: path.join(gamePath, 'natives'),
-        max_memory: String(ram * 1024)
-      };
+      // Все аргументы (JVM опции + MainClass + GameArgs) помещаем в @jvm_args.txt
+      const allLaunchArgs = [...jvmArgs, mainClass, ...gameArgs];
+      const jvmArgsFormatted = allLaunchArgs.map(formatArgForJava);
 
+      const argFilePath = path.join(gamePath, 'jvm_args.txt');
+      try {
+        fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
+      } catch (_) {}
+
+      const finalArgs = isWin 
+        ? [`@${argFilePath}`]
+        : [...jvmArgs, mainClass, ...gameArgs];
+
+      logToDisk(`ЗАПУСК ИГРЫ (${isWin ? 'Windows ArgFile' : 'Unix Direct'}): ${javaBinaryPath} ${finalArgs.join(' ')}`);
+
+      try {
+        fs.writeFileSync(path.join(gamePath, 'java_cmd.log'), `=== JVM ARGS ===\n${jvmArgsFormatted.join('\n')}\n\n=== MAIN CLASS ===\n${mainClass}\n\n=== GAME ARGS ===\n${gameArgs.join('\n')}`);
+      } catch (_) {}
       try {
         fs.writeFileSync(gameLogFile, `=== СТАРТ ИГРОВОГО ЛОГА [${new Date().toISOString()}] ===\n`);
       } catch (_) {}
@@ -1320,26 +1363,62 @@ function createWindow() {
         logToDisk(`[SECURITY TICKET] Исключение: ${err.message}`);
       }
 
-      // Запуск игры через новый движок LaunchEngine
-      const mcProcess = LaunchEngine.launch(profile, launchContext, javaBinaryPath, logToDisk);
-      mcProcess.stdout?.on('data', (data) => {
-        const str = data.toString();
-        logToDisk(`[GAME OUT] ${str.trim()}`);
-        try { fs.appendFileSync(gameLogFile, str); } catch (_) {}
+      // === НАДЁЖНОЕ ЛОГИРОВАНИЕ: файловые дескрипторы вместо пайпов ===
+      // stdout/stderr JVM пишутся напрямую в файлы ядром ОС.
+      // Даже после закрытия Electron логи гарантированно сохранятся,
+      // и JVM не получит SIGPIPE при попытке записи в stdout/stderr.
+      const stdoutLogPath = path.join(gamePath, 'game_stdout.log');
+      const stderrLogPath = path.join(gamePath, 'game_stderr.log');
+
+      // Перезаписываем файлы с заголовком при каждом новом запуске
+      const launchHeader = `=== VOZDUCRAFT GAME LOG [${new Date().toISOString()}] ===\n` +
+        `Java: ${javaBinaryPath}\nMain Class: ${mainClass}\n` +
+        `Args: ${finalArgs.length} total\n${'='.repeat(60)}\n`;
+      try { fs.writeFileSync(stdoutLogPath, launchHeader); } catch (_) {}
+      try { fs.writeFileSync(stderrLogPath, launchHeader); } catch (_) {}
+
+      // Открываем файловые дескрипторы для записи (append mode)
+      const stdoutFd = fs.openSync(stdoutLogPath, 'a');
+      const stderrFd = fs.openSync(stderrLogPath, 'a');
+
+      const mcProcess = require('child_process').spawn(javaBinaryPath, finalArgs, {
+        cwd: gamePath,
+        shell: false,
+        env: process.env,
+        detached: true,
+        stdio: ['ignore', stdoutFd, stderrFd]
       });
-      mcProcess.stderr?.on('data', (data) => {
-        const str = data.toString();
-        logToDisk(`[GAME ERR] ${str.trim()}`);
-        try { fs.appendFileSync(gameLogFile, str); } catch (_) {}
-      });
+
+      // Отвязываем процесс JVM от Electron — игра переживёт закрытие лончера
+      mcProcess.unref();
+
+      // Закрываем дескрипторы в Node — ОС продолжит запись через дочерний процесс
+      try { fs.closeSync(stdoutFd); } catch (_) {}
+      try { fs.closeSync(stderrFd); } catch (_) {}
+
+      logToDisk(`[GAME STARTED] PID=${mcProcess.pid}, stdout → ${stdoutLogPath}, stderr → ${stderrLogPath}`);
+
+      // Также дублируем game_output.log для совместимости с reportCrashToServer
+      // (он читает gameLogFile при формировании отчёта)
+      try { fs.writeFileSync(gameLogFile, launchHeader); } catch (_) {}
+
       mcProcess.on('error', (err) => {
         logToDisk(`[FATAL PROCESS ERROR] ${err.message}`);
         reportCrashToServer(-1, err.message);
         if (mainWindow) mainWindow.webContents.send('mc-error', { error: err.message });
         sendClosed(-1);
       });
-      mcProcess.on('close', (code) => {
+      mcProcess.on('exit', (code) => {
         logToDisk(`Игровой процесс завершился с кодом: ${code}`);
+
+        // Копируем содержимое stdout/stderr в game_output.log для отчёта
+        try {
+          let combined = '';
+          if (fs.existsSync(stdoutLogPath)) combined += fs.readFileSync(stdoutLogPath, 'utf8');
+          if (fs.existsSync(stderrLogPath)) combined += '\n=== STDERR ===\n' + fs.readFileSync(stderrLogPath, 'utf8');
+          fs.writeFileSync(gameLogFile, combined);
+        } catch (_) {}
+
         if (code !== 0) reportCrashToServer(code);
         sendClosed(code);
       });
@@ -1463,13 +1542,8 @@ function createWindow() {
   });
 }
 
-let xrayProcess = null;
-app.whenReady().then(async () => {
-  xrayProcess = await SystemManager.startXrayProxy(process.resourcesPath);
-  createWindow();
-});
+app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  if (xrayProcess) xrayProcess.kill();
   if (process.platform !== 'darwin') app.quit();
 });
