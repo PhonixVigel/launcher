@@ -359,23 +359,23 @@ async function initDbSchema(db: Database) {
   }
 
   // Удаляем устаревшие тестовые дубликаты версий
-  await db.run("DELETE FROM launcher_releases WHERE version < '3.5.8'");
+  await db.run("DELETE FROM launcher_releases WHERE version < '3.5.9'");
 
-  await db.run("UPDATE project_config SET value = '3.5.8' WHERE key = 'launcher_version'");
-  const rel358 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.8'");
-  if (!rel358) {
+  await db.run("UPDATE project_config SET value = '3.5.9' WHERE key = 'launcher_version'");
+  const rel359 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.9'");
+  if (!rel359) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
-      VALUES ('3.5.8', '⚠️ Вышла новая версия 3.5.8! Установите новую версию через браузер по ссылке vozducraft.ru', 'https://vozducraft.ru', 'https://vozducraft.ru', 1, CURRENT_TIMESTAMP)
+      VALUES ('3.5.9', '🎉 Тестовое автообновление v3.5.9: Проверка фонового обновления лаунчера', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
     `);
   } else {
     await db.run(`
       UPDATE launcher_releases 
-      SET release_notes = '⚠️ Вышла новая версия 3.5.8! Установите новую версию через браузер по ссылке vozducraft.ru',
-          win_download_url = 'https://vozducraft.ru',
-          mac_download_url = 'https://vozducraft.ru',
+      SET release_notes = '🎉 Тестовое автообновление v3.5.9: Проверка фонового обновления лаунчера',
+          win_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe',
+          mac_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg',
           is_mandatory = 1
-      WHERE version = '3.5.8'
+      WHERE version = '3.5.9'
     `);
   }
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
@@ -383,7 +383,7 @@ async function initDbSchema(db: Database) {
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.5.8',
+    'launcher_version': '3.5.9',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

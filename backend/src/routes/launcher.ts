@@ -148,10 +148,10 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.5.8',
-      releaseNotes: latestRelease?.release_notes || '⚠️ Вышла новая версия 3.5.8! Пожалуйста, скачайте и установите новую версию через браузер по ссылке vozducraft.ru',
-      downloadUrl: winUrl || 'https://vozducraft.ru',
-      macDownloadUrl: macUrl || 'https://vozducraft.ru',
+      latestVersion: latestRelease?.version || config?.value || '3.5.9',
+      releaseNotes: latestRelease?.release_notes || '🎉 Тестовое автообновление v3.5.9: Проверка фонового обновления лаунчера',
+      downloadUrl: winUrl || `${baseHost}/files/launchers/VozduCraft-Windows-Setup.exe`,
+      macDownloadUrl: macUrl || `${baseHost}/files/launchers/VozduCraft-macOS-Setup.dmg`,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
       asarDownloadUrl: `${baseHost}/files/launchers/app.asar`,
       isMandatory: true
