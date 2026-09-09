@@ -361,12 +361,12 @@ async function initDbSchema(db: Database) {
   // Удаляем устаревшие тестовые дубликаты версий
   await db.run("DELETE FROM launcher_releases WHERE version IN ('3.3.0')");
 
-  await db.run("UPDATE project_config SET value = '3.5.7' WHERE key = 'launcher_version'");
-  const rel357 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.7'");
-  if (!rel357) {
+  await db.run("UPDATE project_config SET value = '3.5.6' WHERE key = 'launcher_version'");
+  const rel356 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.6'");
+  if (!rel356) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
-      VALUES ('3.5.7', 'Релиз v3.5.7: Мгновенная проверка целостности модов (кэширование) и улучшенное автообновление macOS', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
+      VALUES ('3.5.6', 'Релиз v3.5.6: Исправление запуска на Windows (argfile экранирование) и macOS (DMG автообновление)', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
     `);
   }
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
@@ -374,7 +374,7 @@ async function initDbSchema(db: Database) {
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.5.7',
+    'launcher_version': '3.5.3',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

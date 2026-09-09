@@ -148,8 +148,8 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.5.7',
-      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.7: Мгновенная проверка целостности модов (кэширование) и улучшенное автообновление macOS',
+      latestVersion: latestRelease?.version || config?.value || '3.5.6',
+      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.6: Исправление запуска на Windows (argfile экранирование) и macOS (DMG автообновление)',
       downloadUrl: winUrl,
       macDownloadUrl: macUrl,
       patchUrl: `${baseHost}/files/launchers/app.asar`,
