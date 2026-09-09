@@ -14,12 +14,23 @@
     "directories": {
       "output": "../dist_win"
     },
+    "compression": "maximum",
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
       "icon": "assets/icon.ico"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ],
       "icon": "assets/AppIcon.icns",
       "category": "public.app-category.games",
       "artifactName": "VozduCraft-macOS-Setup.dmg"
