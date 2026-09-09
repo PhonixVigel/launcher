@@ -338,20 +338,30 @@ async function initDbSchema(db) {
     `);
     }
     // Удаляем устаревшие тестовые дубликаты версий
-    await db.run("DELETE FROM launcher_releases WHERE version IN ('3.3.0')");
-    await db.run("UPDATE project_config SET value = '3.5.6' WHERE key = 'launcher_version'");
-    const rel356 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.6'");
-    if (!rel356) {
+    await db.run("DELETE FROM launcher_releases WHERE version < '3.5.8'");
+    await db.run("UPDATE project_config SET value = '3.5.8' WHERE key = 'launcher_version'");
+    const rel358 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.8'");
+    if (!rel358) {
         await db.run(`
       INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
-      VALUES ('3.5.6', 'Релиз v3.5.6: Исправление запуска на Windows (argfile экранирование) и macOS (DMG автообновление)', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
+      VALUES ('3.5.8', '⚠️ Вышла новая версия 3.5.8! Установите новую версию через браузер по ссылке vozducraft.ru', 'https://vozducraft.ru', 'https://vozducraft.ru', 1, CURRENT_TIMESTAMP)
+    `);
+    }
+    else {
+        await db.run(`
+      UPDATE launcher_releases 
+      SET release_notes = '⚠️ Вышла новая версия 3.5.8! Установите новую версию через браузер по ссылке vozducraft.ru',
+          win_download_url = 'https://vozducraft.ru',
+          mac_download_url = 'https://vozducraft.ru',
+          is_mandatory = 1
+      WHERE version = '3.5.8'
     `);
     }
     // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
     await db.run("DELETE FROM modpack_files WHERE filepath LIKE '%vanishmod%' OR filepath LIKE '%Vanishmod%'");
     // Системные конфиги
     const defaultConfigs = {
-        'launcher_version': '3.5.3',
+        'launcher_version': '3.5.8',
         'neoforge_version': '21.1.248',
         'minecraft_version': '1.21.1',
         'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

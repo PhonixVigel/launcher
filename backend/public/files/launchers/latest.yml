@@ -1,8 +1,8 @@
-version: 3.5.7
+version: 3.5.8
 files:
   - url: VozduCraft-Windows-Setup.exe
-    sha512: Xyq1CQMJQxHBTIiAPhnQ72/AfvVIxFcuo63+9gS7owQqPRBmsshqJfcbyPZDbnCULUjuHtZ9pMaoqA07zjJxxg==
-    size: 79866115
+    sha512: /LsJZMtwKRNr9ktIAMzG8U43jsRNVzp4gcgf859likLHdw398O/CQxFNRvwIYfdNm3iK15isD2knoDUHam2lig==
+    size: 79865411
 path: VozduCraft-Windows-Setup.exe
-sha512: Xyq1CQMJQxHBTIiAPhnQ72/AfvVIxFcuo63+9gS7owQqPRBmsshqJfcbyPZDbnCULUjuHtZ9pMaoqA07zjJxxg==
-releaseDate: '2026-09-09T17:26:22.761Z'
+sha512: /LsJZMtwKRNr9ktIAMzG8U43jsRNVzp4gcgf859likLHdw398O/CQxFNRvwIYfdNm3iK15isD2knoDUHam2lig==
+releaseDate: '2026-09-09T17:48:39.766Z'

@@ -1,5 +1,5 @@
 // VozduCraft Client Engine v8.0 (Failover Mirrors, Window Drag, Screenshots Lightbox, Custom JVM & Carousel)
-const LAUNCHER_CURRENT_VERSION = '3.5.7';
+const LAUNCHER_CURRENT_VERSION = '3.5.8';
 const DEFAULT_PRIMARY_MIRROR = 'http://185.221.213.43:3000/api/v1';
 
 let KNOWN_MIRRORS = [DEFAULT_PRIMARY_MIRROR];
@@ -257,6 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDownloadListener();
   setupLightboxEvents();
   loadServerCarousel();
+  checkForLauncherUpdates();
 
   setInterval(() => {
     if (appState.servers.length > 0) {
@@ -273,6 +274,33 @@ document.addEventListener('DOMContentLoaded', () => {
     showAuth();
   }
 });
+
+// Проверка и показ окна обновления лаунчера
+async function checkForLauncherUpdates() {
+  try {
+    const data = await apiFetch('/launcher/check-update');
+    if (!data || !data.latestVersion) return;
+
+    if (data.latestVersion !== LAUNCHER_CURRENT_VERSION && isNewerVersion(data.latestVersion, LAUNCHER_CURRENT_VERSION)) {
+      showUpdateModal(data);
+    }
+  } catch (err) {
+    console.warn('Update check failed:', err);
+  }
+}
+
+function isNewerVersion(remote, local) {
+  const r = remote.split('.').map(n => parseInt(n, 10) || 0);
+  const l = local.split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(r.length, l.length); i++) {
+    const rv = r[i] || 0;
+    const lv = l[i] || 0;
+    if (rv > lv) return true;
+    if (rv < lv) return false;
+  }
+  return false;
+}
+
 // Подписка на нативные события electron-updater
 if (window.require) {
   try {
@@ -336,7 +364,6 @@ if (window.require) {
       if (progressZone) progressZone.classList.remove('hidden');
       if (buttonsZone) buttonsZone.classList.remove('hidden');
       if (btnDownload) {
-        btnDownload.style.display = 'inline-block';
         btnDownload.textContent = '🔄 Перезапустить и установить';
         btnDownload.onclick = (e) => {
           e.preventDefault();
@@ -372,10 +399,30 @@ function showUpdateModal(data) {
   if (badge) badge.textContent = `Новая версия: v${data.latestVersion} (текущая: v${LAUNCHER_CURRENT_VERSION})`;
   if (notes) notes.textContent = data.releaseNotes || 'Улучшена стабильность и добавлены обновления безопасности.';
 
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const downloadUrl = isMac ? (data.macDownloadUrl || data.downloadUrl || 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg') : (data.downloadUrl || 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe');
+
   if (btnDownload) {
-    // Скачивание идет автоматически в фоне, поэтому кнопка просто прячется 
-    // до момента, пока обновление не будет готово (событие updater-downloaded).
-    btnDownload.style.display = 'none';
+    btnDownload.textContent = '🚀 Обновить лаунчер';
+    btnDownload.onclick = (e) => {
+      e.preventDefault();
+
+      if (buttonsZone) buttonsZone.classList.add('hidden');
+      if (progressZone) progressZone.classList.remove('hidden');
+      if (statusText) statusText.textContent = 'Загрузка официального обновления...';
+
+      if (window.require) {
+        const electron = window.require('electron');
+        electron.ipcRenderer.invoke('download-and-apply-update', downloadUrl).catch((err) => {
+          console.error('Update invoke error:', err);
+          if (statusText) statusText.textContent = 'Ошибка загрузки обновления. Попробуйте перезапустить лаунчер.';
+        });
+      } else if (typeof window.nativeOpenUrl === 'function') {
+        window.nativeOpenUrl(downloadUrl);
+      } else {
+        window.open(downloadUrl, '_blank');
+      }
+    };
   }
 
   if (btnClose) {

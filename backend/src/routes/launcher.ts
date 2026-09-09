@@ -148,13 +148,13 @@ router.get('/check-update', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      latestVersion: latestRelease?.version || config?.value || '3.5.6',
-      releaseNotes: latestRelease?.release_notes || 'Релиз v3.5.6: Исправление запуска на Windows (argfile экранирование) и macOS (DMG автообновление)',
-      downloadUrl: winUrl,
-      macDownloadUrl: macUrl,
+      latestVersion: latestRelease?.version || config?.value || '3.5.8',
+      releaseNotes: latestRelease?.release_notes || '⚠️ Вышла новая версия 3.5.8! Пожалуйста, скачайте и установите новую версию через браузер по ссылке vozducraft.ru',
+      downloadUrl: winUrl || 'https://vozducraft.ru',
+      macDownloadUrl: macUrl || 'https://vozducraft.ru',
       patchUrl: `${baseHost}/files/launchers/app.asar`,
       asarDownloadUrl: `${baseHost}/files/launchers/app.asar`,
-      isMandatory: latestRelease ? latestRelease.is_mandatory === 1 : true
+      isMandatory: true
     });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка проверки обновлений' });

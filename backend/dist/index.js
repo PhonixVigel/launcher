@@ -222,7 +222,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <div class="card">
-    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.5.6</div>
+    <div class="badge">🟢 Сервер онлайн • NeoForge 1.21.1 • Лаунчер v3.5.8</div>
     <div><img src="/assets/logo.jpg" alt="VozduCraft Logo" class="logo-img" onerror="this.style.display='none'"></div>
     <div class="logo">VOZDUCRAFT</div>
     <div class="subtitle">Официальный игровой лаунчер с автоматической синхронизацией модов и Java</div>
@@ -230,9 +230,6 @@ app.get('/', (req, res) => {
     <div class="btn-group">
       <a href="/files/launchers/VozduCraft-Windows-Setup.exe" class="btn btn-win">
         🪟 Скачать для Windows (.exe Установщик)
-      </a>
-      <a href="/files/launchers/VozduCraft-Windows.zip" class="btn btn-mac" style="font-size: 14px; padding: 12px 20px;">
-        📦 Скачать для Windows (.zip Портативная версия)
       </a>
       <a href="/files/launchers/VozduCraft-macOS-Setup.dmg" class="btn btn-mac">
         🍏 Скачать для macOS (.dmg)
@@ -254,7 +251,7 @@ app.get('/', (req, res) => {
     res.json({
         status: 'ONLINE',
         service: 'VozduCraft Launcher Backend API',
-        version: '3.5.6',
+        version: '3.5.8',
         downloads: {
             windows: `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}/files/launchers/VozduCraft-Windows-Setup.exe`,
             macos: `${req.protocol}://${req.get('host') || '185.221.213.43:3000'}/files/launchers/VozduCraft-macOS-Setup.dmg`
