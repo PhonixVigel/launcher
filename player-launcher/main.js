@@ -1231,23 +1231,28 @@ function createWindow() {
         return `"${escaped}"`;
       }
 
-      // Все аргументы (JVM опции + MainClass + GameArgs) помещаем в @jvm_args.txt
-      const allLaunchArgs = [...jvmArgs, mainClass, ...gameArgs];
-      const jvmArgsFormatted = allLaunchArgs.map(formatArgForJava);
+      // Для Windows вырезаем абсолютный путь (gamePath) из аргументов JVM,
+      // делая пути относительными. Это полностью убирает кириллицу из @argfile,
+      // исключая баги с кодировками (CP1251/UTF-8) в Java парсере на Windows.
+      const jvmArgsRelative = jvmArgs.map(arg => {
+        let relativeArg = arg;
+        if (relativeArg.includes(gamePath)) {
+          relativeArg = relativeArg.split(gamePath + path.sep).join('');
+        }
+        return relativeArg;
+      });
+
+      const jvmArgsFormatted = jvmArgsRelative.map(formatArgForJava);
 
       const argFilePath = path.join(gamePath, 'jvm_args.txt');
       try {
-        if (isWin) {
-          // Windows Java explicitly supports UTF-16LE with BOM (FF FE) for @argfiles
-          fs.writeFileSync(argFilePath, '\uFEFF' + jvmArgsFormatted.join('\n'), 'utf16le');
-        } else {
-          // macOS/Linux Java assumes UTF-8 natively and does not support BOM properly
-          fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
-        }
+        fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
       } catch (_) {}
 
+      // mainClass и gameArgs передаем НАПРЯМУЮ в командной строке, чтобы кириллические имена
+      // пользователей (из gameArgs) обрабатывались нативно в Windows API (UTF-16) и не ломались.
       const finalArgs = isWin 
-        ? [`@${argFilePath}`]
+        ? [`@${argFilePath}`, mainClass, ...gameArgs]
         : [...jvmArgs, mainClass, ...gameArgs];
 
       logToDisk(`ЗАПУСК ИГРЫ (${isWin ? 'Windows ArgFile' : 'Unix Direct'}): ${javaBinaryPath} ${finalArgs.join(' ')}`);
