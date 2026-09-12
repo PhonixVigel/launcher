@@ -359,23 +359,23 @@ async function initDbSchema(db: Database) {
   }
 
   // Удаляем устаревшие тестовые дубликаты версий
-  await db.run("DELETE FROM launcher_releases WHERE version < '3.5.15'");
+  await db.run("DELETE FROM launcher_releases WHERE version < '3.5.16'");
 
-  await db.run("UPDATE project_config SET value = '3.5.15' WHERE key = 'launcher_version'");
-  const rel359 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.15'");
+  await db.run("UPDATE project_config SET value = '3.5.16' WHERE key = 'launcher_version'");
+  const rel359 = await db.get("SELECT id FROM launcher_releases WHERE version = '3.5.16'");
   if (!rel359) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
-      VALUES ('3.5.15', '🎉 Тестовое автообновление v3.5.15: Проверка фонового обновления лаунчера', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.15', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.15', 1, CURRENT_TIMESTAMP)
+      VALUES ('3.5.16', '🎉 Тестовое автообновление v3.5.16: Проверка фонового обновления лаунчера', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.16', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.16', 1, CURRENT_TIMESTAMP)
     `);
   } else {
     await db.run(`
       UPDATE launcher_releases 
-      SET release_notes = '🎉 Тестовое автообновление v3.5.15: Проверка фонового обновления лаунчера',
-          win_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.15',
-          mac_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.15',
+      SET release_notes = '🎉 Тестовое автообновление v3.5.16: Проверка фонового обновления лаунчера',
+          win_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.16',
+          mac_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.16',
           is_mandatory = 1
-      WHERE version = '3.5.15'
+      WHERE version = '3.5.16'
     `);
   }
   // Удаляем серверный мод Vanishmod из клиентского манифеста (вызывает краш в одиночной игре)
@@ -383,7 +383,7 @@ async function initDbSchema(db: Database) {
 
   // Системные конфиги
   const defaultConfigs: Record<string, string> = {
-    'launcher_version': '3.5.15',
+    'launcher_version': '3.5.16',
     'neoforge_version': '21.1.248',
     'minecraft_version': '1.21.1',
     'jvm_flags': '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem',

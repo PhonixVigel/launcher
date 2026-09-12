@@ -700,7 +700,7 @@ function createWindow() {
 
       const allLibsToDownload = [];
       
-      const processLib = (lib) => {
+      const processLib = (lib, isInstaller = false) => {
         if (!lib.downloads || !lib.downloads.artifact) return;
         
         if (lib.rules) {
@@ -728,13 +728,20 @@ function createWindow() {
             relativePath = `${group}/${artifact}/${version}/${artifact}-${version}${classifier}.jar`;
         }
 
-        allLibsToDownload.push({ url, dest: path.join(libsDir, relativePath), sha1, size });
+        allLibsToDownload.push({ url, dest: path.join(libsDir, relativePath), sha1, size, isInstaller });
       };
 
-      if (mcMeta.libraries) mcMeta.libraries.forEach(processLib);
-      if (nfMeta.libraries) nfMeta.libraries.forEach(processLib);
-      if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(processLib);
-      if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(processLib);
+      if (mcMeta.libraries) mcMeta.libraries.forEach(l => processLib(l, false));
+      if (nfMeta.libraries) nfMeta.libraries.forEach(l => processLib(l, false));
+      if (nfMeta.mavenFiles) nfMeta.mavenFiles.forEach(l => processLib(l, false));
+      if (lwjglMeta.libraries) lwjglMeta.libraries.forEach(l => processLib(l, false));
+      
+      try {
+        const installerLibs = JSON.parse(fs.readFileSync(path.join(metaDir, 'installertools.json'), 'utf-8'));
+        if (installerLibs.libraries) installerLibs.libraries.forEach(l => processLib(l, true));
+      } catch (e) {
+        logToDisk('[Warning] Failed to load installertools.json');
+      }
 
       // 3. Быстрая параллельная загрузка библиотек с проверкой SHA-1 контрольных сумм
       sendStatus(30, 'Синхронизация библиотек...');
@@ -1079,6 +1086,7 @@ function createWindow() {
       const jvmCpEntries = [];
 
       for (const lib of allLibsToDownload) {
+        if (lib.isInstaller) continue; // Исключаем служебные библиотеки инсталлятора (guava:20.0 и т.д.) из classpath игры
         const p = lib.dest;
         if (!fs.existsSync(p)) continue;
         const pLower = p.toLowerCase().replace(/\\/g, '/');
