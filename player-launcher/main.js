@@ -1237,7 +1237,13 @@ function createWindow() {
 
       const argFilePath = path.join(gamePath, 'jvm_args.txt');
       try {
-        fs.writeFileSync(argFilePath, '\uFEFF' + jvmArgsFormatted.join('\n'), 'utf8');
+        if (isWin) {
+          // Windows Java explicitly supports UTF-16LE with BOM (FF FE) for @argfiles
+          fs.writeFileSync(argFilePath, '\uFEFF' + jvmArgsFormatted.join('\n'), 'utf16le');
+        } else {
+          // macOS/Linux Java assumes UTF-8 natively and does not support BOM properly
+          fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
+        }
       } catch (_) {}
 
       const finalArgs = isWin 
