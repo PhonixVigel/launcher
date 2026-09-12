@@ -13,6 +13,15 @@ import java.nio.charset.StandardCharsets;
 public class VozduCraftAuthPlugin {
 
     private static final String BACKEND_URL = "http://185.221.213.43:3000/api/v1/auth/verify-session";
+    private static boolean requireLauncherAuth = true;
+
+    public static void setRequireLauncherAuth(boolean require) {
+        requireLauncherAuth = require;
+    }
+
+    public static boolean isRequireLauncherAuth() {
+        return requireLauncherAuth;
+    }
 
     /**
      * Вызывается при подключении игрока к Minecraft-серверу.
@@ -22,6 +31,9 @@ public class VozduCraftAuthPlugin {
      * @return VerificationResult (разрешен ли вход и причина)
      */
     public static VerificationResult verifyPlayer(String username, String accessToken, String hwid) {
+        if (!requireLauncherAuth) {
+            return new VerificationResult(true, "OK (Проверка лаунчера отключена)", false);
+        }
         try {
             URL url = new URL(BACKEND_URL);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();

@@ -790,19 +790,19 @@ function createWindow() {
 
       // Скачивание ForgeWrapper
       const fwJar = path.join(libsDir, 'io', 'github', 'zekerzhayard', 'ForgeWrapper', 'prism-2026-08-01', 'ForgeWrapper-prism-2026-08-01.jar');
-      if (!fs.existsSync(fwJar) || fs.statSync(fwJar).size < 1000) {
+      if (!fs.existsSync(fwJar) || fs.statSync(fwJar).size < 25000) {
         fs.mkdirSync(path.dirname(fwJar), { recursive: true });
-        await downloadFile('https://files.prismlauncher.org/maven/io/github/zekerzhayard/ForgeWrapper/prism-2026-08-01/ForgeWrapper-prism-2026-08-01.jar', fwJar, null).catch(async () => {
-          await downloadFile('http://185.221.213.43:3000/files/launchers/ForgeWrapper-prism-2026-08-01.jar', fwJar, null).catch(() => {});
+        await downloadFile('http://185.221.213.43:3000/files/launchers/ForgeWrapper-prism-2026-08-01.jar', fwJar, null).catch(async () => {
+          await downloadFile('https://files.prismlauncher.org/maven/io/github/zekerzhayard/ForgeWrapper/prism-2026-08-01/ForgeWrapper-prism-2026-08-01.jar', fwJar, null).catch(() => {});
         });
       }
 
       // Скачивание NeoForge Installer
       const forgewrapperInstallerJar = path.join(libsDir, 'net', 'neoforged', 'neoforge', targetNeoForgeVer, `neoforge-${targetNeoForgeVer}-installer.jar`);
-      if (!fs.existsSync(forgewrapperInstallerJar) || fs.statSync(forgewrapperInstallerJar).size < 1000) {
+      if (!fs.existsSync(forgewrapperInstallerJar) || fs.statSync(forgewrapperInstallerJar).size < 25000) {
         fs.mkdirSync(path.dirname(forgewrapperInstallerJar), { recursive: true });
-        await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-installer.jar`, forgewrapperInstallerJar, null).catch(async () => {
-          await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-installer.jar`, forgewrapperInstallerJar, null).catch(() => {});
+        await downloadFile(`http://185.221.213.43:3000/files/launchers/neoforge-${targetNeoForgeVer}-installer.jar`, forgewrapperInstallerJar, null).catch(async () => {
+          await downloadFile(`https://maven.neoforged.net/releases/net/neoforged/neoforge/${targetNeoForgeVer}/neoforge-${targetNeoForgeVer}-installer.jar`, forgewrapperInstallerJar, null).catch(() => {});
         });
       }
 
