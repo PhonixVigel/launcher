@@ -1237,7 +1237,7 @@ function createWindow() {
 
       const argFilePath = path.join(gamePath, 'jvm_args.txt');
       try {
-        fs.writeFileSync(argFilePath, jvmArgsFormatted.join('\n'), 'utf8');
+        fs.writeFileSync(argFilePath, '\uFEFF' + jvmArgsFormatted.join('\n'), 'utf8');
       } catch (_) {}
 
       const finalArgs = isWin 
