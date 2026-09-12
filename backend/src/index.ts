@@ -235,10 +235,10 @@ app.get('/', (req, res) => {
     <div class="subtitle">Официальный игровой лаунчер с автоматической синхронизацией модов и Java</div>
     
     <div class="btn-group">
-      <a href="/files/launchers/VozduCraft-Windows-Setup.exe" class="btn btn-win">
+      <a href="/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.10" class="btn btn-win">
         🪟 Скачать для Windows (.exe Установщик)
       </a>
-      <a href="/files/launchers/VozduCraft-macOS-Setup.dmg" class="btn btn-mac">
+      <a href="/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.10" class="btn btn-mac">
         🍏 Скачать для macOS (.dmg)
       </a>
       <div style="font-size: 12px; color: #94a3b8; margin-top: -4px; line-height: 1.4;">

@@ -366,14 +366,14 @@ async function initDbSchema(db: Database) {
   if (!rel359) {
     await db.run(`
       INSERT INTO launcher_releases (version, release_notes, win_download_url, mac_download_url, is_mandatory, created_at)
-      VALUES ('3.5.10', '🎉 Тестовое автообновление v3.5.10: Проверка фонового обновления лаунчера', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg', 1, CURRENT_TIMESTAMP)
+      VALUES ('3.5.10', '🎉 Тестовое автообновление v3.5.10: Проверка фонового обновления лаунчера', 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.10', 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.10', 1, CURRENT_TIMESTAMP)
     `);
   } else {
     await db.run(`
       UPDATE launcher_releases 
       SET release_notes = '🎉 Тестовое автообновление v3.5.10: Проверка фонового обновления лаунчера',
-          win_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe',
-          mac_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg',
+          win_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-Windows-Setup.exe?v=3.5.10',
+          mac_download_url = 'http://185.221.213.43:3000/files/launchers/VozduCraft-macOS-Setup.dmg?v=3.5.10',
           is_mandatory = 1
       WHERE version = '3.5.10'
     `);
