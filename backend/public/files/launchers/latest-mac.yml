@@ -1,8 +1,8 @@
-version: 3.5.11
+version: 3.5.12
 files:
   - url: VozduCraft-macOS-Setup.dmg
-    sha512: fWPmDmrx9chsTVjZgPYj0dGTJNYsmH1xq4j57QO0Vmn4Iuai0bgw9eFaiHBtS4g9tZhSOlbv23vI1mkHry1IPQ==
-    size: 94669742
+    sha512: mzdVlCTU1+a6BnfIkaZm0T9hUze2LYC/UZA1HUvIOgO9uzfoEw4+6Qukj0MSqknhAcCowmI2KQqaO2nnjdFtgA==
+    size: 94660550
 path: VozduCraft-macOS-Setup.dmg
-sha512: fWPmDmrx9chsTVjZgPYj0dGTJNYsmH1xq4j57QO0Vmn4Iuai0bgw9eFaiHBtS4g9tZhSOlbv23vI1mkHry1IPQ==
-releaseDate: '2026-09-12T17:13:16.142Z'
+sha512: mzdVlCTU1+a6BnfIkaZm0T9hUze2LYC/UZA1HUvIOgO9uzfoEw4+6Qukj0MSqknhAcCowmI2KQqaO2nnjdFtgA==
+releaseDate: '2026-09-12T17:25:01.127Z'
