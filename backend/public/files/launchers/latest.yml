@@ -1,8 +1,8 @@
 version: 3.5.10
 files:
-  - url: VozduCraft-Windows-Setup.exe
+  - url: VozduCraft-Windows-Setup-3.5.10.exe
     sha512: OBJ8sVmFV5sbcl8oU5txWMIqO2ijNERr2AEKsCDnGwGw0kusTK+0tsaW8+4T15hI8otQ+xmyVK3aaUkvMLxlsA==
     size: 79866977
-path: VozduCraft-Windows-Setup.exe
+path: VozduCraft-Windows-Setup-3.5.10.exe
 sha512: OBJ8sVmFV5sbcl8oU5txWMIqO2ijNERr2AEKsCDnGwGw0kusTK+0tsaW8+4T15hI8otQ+xmyVK3aaUkvMLxlsA==
 releaseDate: '2026-09-12T16:05:42.149Z'
