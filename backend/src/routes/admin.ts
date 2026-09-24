@@ -2514,4 +2514,39 @@ router.delete('/crash-reports/:id', requireAdmin, async (req: Request, res: Resp
   }
 });
 
+// GET /api/v1/admin/crashes/download-all - Скачать все краши игры и лаунчера архивом
+router.get('/crashes/download-all', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    
+    const gameCrashes = await db.all("SELECT id, username, crash_filename, report_content, created_at FROM launcher_crash_reports");
+    // Выбираем только ошибки лаунчера
+    const launcherCrashes = await db.all("SELECT id, username, event_type, log_content, created_at FROM launcher_debug_logs WHERE event_type = 'ERROR' OR event_type = 'CRASH' OR event_type = 'FATAL'");
+
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    
+    for (const crash of gameCrashes) {
+      const date = new Date(crash.created_at).toISOString().replace(/[:.]/g, '-');
+      const filename = `game_crashes/${crash.username}_${date}_${crash.crash_filename || 'crash.txt'}`;
+      zip.addFile(filename, Buffer.from(crash.report_content, 'utf8'));
+    }
+
+    for (const log of launcherCrashes) {
+      const date = new Date(log.created_at).toISOString().replace(/[:.]/g, '-');
+      const filename = `launcher_crashes/${log.username}_${date}_launcher_error.log`;
+      zip.addFile(filename, Buffer.from(log.log_content, 'utf8'));
+    }
+
+    const zipBuffer = zip.toBuffer();
+    
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="vozducraft-all-crashes.zip"`);
+    return res.send(zipBuffer);
+  } catch (error) {
+    console.error('Ошибка создания архива крашей:', error);
+    return res.status(500).json({ error: 'Ошибка генерации ZIP архива' });
+  }
+});
+
 export default router;

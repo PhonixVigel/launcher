@@ -1891,6 +1891,14 @@ function setupCrashReportsControls() {
 
   if (searchInput) searchInput.addEventListener('input', () => debounce(loadCrashReports, 300)());
   if (refreshBtn) refreshBtn.addEventListener('click', loadCrashReports);
+  
+  const downloadAllBtn = document.getElementById('btn-download-all-crashes');
+  if (downloadAllBtn) {
+    downloadAllBtn.addEventListener('click', () => {
+      const token = state.token || localStorage.getItem('vozducraft_admin_token') || '';
+      window.open(`${API_BASE}/api/v1/admin/crashes/download-all?token=${encodeURIComponent(token)}`, '_blank');
+    });
+  }
 }
 
 async function loadCrashReports() {
