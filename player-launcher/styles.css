@@ -939,6 +939,7 @@ body.has-custom-bg .titlebar {
   border-radius: var(--radius-md);
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
 }
 
 .mod-group-card:hover {
